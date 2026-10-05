@@ -140,9 +140,9 @@ class UI:
                     msg = res.message if res.message else "up to date"
                     print(f"      {Colors.DIM}[—]{Colors.RESET} {msg} {time_tag}")
                 elif res.status == "warning":
-                    print(f"      {Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET} {res.message} {time_tag}")
+                    print(f"      {Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET} failed {time_tag}")
                 else:  # error
-                    print(f"      {Colors.DIM}[{Colors.RESET}{Colors.BOLD_RED}✗{Colors.RESET}{Colors.DIM}]{Colors.RESET} {res.message or 'failed'} {time_tag}")
+                    print(f"      {Colors.DIM}[{Colors.RESET}{Colors.BOLD_RED}✗{Colors.RESET}{Colors.DIM}]{Colors.RESET} failed {time_tag}")
             else:
                 self._print_static_result(label, res)
 
@@ -238,9 +238,9 @@ class UI:
             msg = f": {res.message}" if res.message else ""
             print(f"  {Colors.DIM}[—]{Colors.RESET} {label}{msg}")
         elif res.status == "warning":
-            print(f"  {Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET} {label}: {res.message} {time_tag}")
+            print(f"  {Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET} {label}: failed {time_tag}")
         else:  # error
-            print(f"  {Colors.DIM}[{Colors.RESET}{Colors.BOLD_RED}✗{Colors.RESET}{Colors.DIM}]{Colors.RESET} {label}: {res.message or 'failed'} {time_tag}")
+            print(f"  {Colors.DIM}[{Colors.RESET}{Colors.BOLD_RED}✗{Colors.RESET}{Colors.DIM}]{Colors.RESET} {label}: failed {time_tag}")
 
     def print_result(self, label: str, result: StepResult):
         """Render an already completed result using the standard step style."""

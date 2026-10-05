@@ -78,9 +78,9 @@ class VersionAction(argparse.Action):
             if latest == local_commit:
                 ui.print_result("Latest version", StepResult("unchanged", f"{latest} (up to date)"))
             else:
-                ui.print_result("Latest version", StepResult("warning", f"{latest} (update available)"))
+                ui.print_result("Latest version", StepResult("unchanged", f"{latest} (update available)"))
         else:
-            ui.print_result("Latest version", StepResult("warning", "check unavailable"))
+            ui.print_result("Latest version", StepResult("unchanged", "check unavailable"))
         parser.exit()
 
 
