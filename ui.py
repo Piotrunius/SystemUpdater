@@ -242,6 +242,11 @@ class UI:
         else:  # error
             print(f"  {Colors.DIM}[{Colors.RESET}{Colors.BOLD_RED}✗{Colors.RESET}{Colors.DIM}]{Colors.RESET} {label}: {res.message or 'failed'} {time_tag}")
 
+    def print_result(self, label: str, result: StepResult):
+        """Render an already completed result using the standard step style."""
+        if not self.quiet:
+            self._print_static_result(label, result)
+
     def print_summary(self, results: List[Dict[str, Any]], total_elapsed: float):
         width = min(self.terminal_width, 80)
         minutes = int(total_elapsed // 60)

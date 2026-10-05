@@ -6,7 +6,7 @@ Provides parity with Topgrade configuration (custom commands, git repos, disable
 
 import os
 import sys
-from typing import Dict, List, Set, Any
+from typing import Dict, List, Set, Any, Optional
 
 if sys.version_info >= (3, 11):
     import tomllib

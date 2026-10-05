@@ -17,6 +17,7 @@ Built as a lightweight, zero-dependency Python 3 replacement for monolithic upda
 - **Deep Modular Ecosystem**: Over 55 built-in modules spanning system packages, containers, desktop apps, editors, and language runtimes.
 - **Dry-Run & Verbose Execution**: Full simulation mode (`-n`) and detailed live shell streaming (`-v`).
 - **Flexible Configuration**: Declarative configuration via `~/.config/sysupdate/config.toml`.
+- **Self-Updates**: Checks the configured Git upstream at startup and applies clean, fast-forward updates automatically.
 
 ---
 
@@ -72,7 +73,7 @@ Unified System Updater for Nobara Linux, Flatpaks, Homebrew, Containers, and Run
 
 options:
   -h, --help            show this help message and exit
-  -V, --version         show program's version number and exit
+  -V, --version         show installed version and latest upstream commit
   -n, --dry-run         Simulate update process without downloading or installing changes
   -f, --force           Force execution (e.g. bypass Btrfs snapshot cooldown)
   -q, --quiet           Suppress live step progress, display only the final summary and errors
@@ -113,7 +114,16 @@ sysupdate --edit-config
 
 # Inspect status of all supported modules on the current system
 sysupdate --list
+
+# Show installed version and the latest upstream commit
+sysupdate --version
 ```
+
+### Self-Updates and Versioning
+
+On normal runs, `sysupdate` fetches its configured Git upstream and fast-forwards the current branch when updates are available. It does this only for a clean checkout; local changes are preserved and reported, and divergent branches are left untouched. If the network is unavailable, the regular system update continues with the installed version.
+
+`sysupdate --version` reports the installed source version (release tag plus commit hash) and checks the upstream branch for its latest commit. This makes source changes visible without maintaining a manually edited version number. A Git checkout with no configured upstream cannot self-update and reports the upstream version as unavailable.
 
 ---
 

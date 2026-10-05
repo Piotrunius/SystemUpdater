@@ -14,10 +14,9 @@ from typing import List
 # Ensure script directory is in sys.path
 import shutil
 import subprocess
-import time
-from typing import List, Optional
+from typing import Optional
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 
@@ -27,41 +26,114 @@ from ui import UI, StepResult
 from config import get_config, DEFAULT_CONFIG_PATH
 import sudo
 
-def get_version():
-    """Return version string, trying to include git commit/tag."""
-    base = "1.0.0"
+def git_output(*args, timeout=3):
     try:
-        # Try to get short commit hash
         result = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],
+            ["git", *args],
             cwd=SCRIPT_DIR,
             capture_output=True,
             text=True,
-            timeout=1,
+            timeout=timeout,
         )
-        if result.returncode == 0:
-            commit = result.stdout.strip()
-            # Try to get tag if available
-            tag_result = subprocess.run(
-                ["git", "describe", "--tags", "--always"],
-                cwd=SCRIPT_DIR,
-                capture_output=True,
-                text=True,
-                timeout=1,
-            )
-            if tag_result.returncode == 0:
-                tag = tag_result.stdout.strip()
-                # If tag contains commit (describe), use it, else combine
-                if tag.startswith("v") or "-" in tag:
-                    return tag
-                return f"{base}-{commit}"
-            return f"{base}-{commit}"
+        return result.stdout.strip() if result.returncode == 0 else None
     except Exception:
-        pass
-    return base
+        return None
 
 
-VERSION = get_version()
+def get_version():
+    """Use the nearest release tag and exact source commit as the version."""
+    commit = git_output("rev-parse", "--short=12", "HEAD")
+    if not commit:
+        return "unknown"
+    description = git_output("describe", "--tags", "--long", "--always")
+    if description:
+        parts = description.rsplit("-", 2)
+        if len(parts) == 3 and parts[1].isdigit():
+            return f"{parts[0]}+{commit}" if parts[1] == "0" else f"{parts[0]}+{parts[1]}.g{commit}"
+    return commit
+
+
+def latest_remote_commit():
+    """Return the upstream branch commit, if the repository has a configured upstream."""
+    upstream = git_output("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
+    if not upstream or "/" not in upstream:
+        return None
+    remote, branch = upstream.split("/", 1)
+    result = git_output("ls-remote", remote, f"refs/heads/{branch}", timeout=8)
+    if result:
+        return result.split()[0][:12]
+    return None
+
+
+class VersionAction(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        current = get_version()
+        latest = latest_remote_commit()
+        ui = UI()
+        ui.print_header("System Updater")
+        ui.print_category("Version")
+        ui.print_result("Installed version", StepResult("unchanged", current))
+        if latest:
+            local_commit = git_output("rev-parse", "--short=12", "HEAD")
+            if latest == local_commit:
+                ui.print_result("Latest version", StepResult("unchanged", f"{latest} (up to date)"))
+            else:
+                ui.print_result("Latest version", StepResult("warning", f"{latest} (update available)"))
+        else:
+            ui.print_result("Latest version", StepResult("warning", "check unavailable"))
+        parser.exit()
+
+
+def self_update():
+    """Fast-forward a clean checkout and restart using the updated source."""
+    started = time.monotonic()
+
+    def result(status, message, details=None):
+        return status, message, max(0.1, time.monotonic() - started), details or []
+
+    updated_version = os.environ.pop("SYSUPDATE_UPDATED_VERSION", None)
+    if updated_version:
+        duration = float(os.environ.pop("SYSUPDATE_UPDATE_DURATION", "0.1"))
+        return "ok", f"Updated to {updated_version}", duration, []
+    if not git_output("rev-parse", "--is-inside-work-tree"):
+        return result("skipped", "not a Git checkout")
+    upstream = git_output("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
+    if not upstream:
+        return result("skipped", "no upstream configured")
+    if git_output("status", "--porcelain", timeout=5):
+        return result(
+            "warning",
+            "update skipped",
+            ["The working tree has uncommitted changes."],
+        )
+    remote = upstream.split("/", 1)[0]
+    try:
+        fetched = subprocess.run(["git", "fetch", "--quiet", remote], cwd=SCRIPT_DIR, capture_output=True, timeout=20)
+    except (OSError, subprocess.TimeoutExpired):
+        return result(
+            "warning",
+            "update skipped",
+            ["The upstream could not be reached to check for updates."],
+        )
+    if fetched.returncode != 0:
+        return result(
+            "warning",
+            "update skipped",
+            ["The upstream could not be reached to check for updates."],
+        )
+    behind = git_output("rev-list", "--count", f"HEAD..{upstream}")
+    if not behind or behind == "0":
+        return result("unchanged", "up to date")
+    merged = subprocess.run(["git", "merge", "--ff-only", "--quiet", upstream], cwd=SCRIPT_DIR, capture_output=True, timeout=10)
+    if merged.returncode != 0:
+        return result(
+            "warning",
+            "update skipped",
+            ["The local branch cannot be updated with a fast-forward."],
+        )
+    os.environ["SYSUPDATE_UPDATED_VERSION"] = get_version()
+    os.environ["SYSUPDATE_UPDATE_DURATION"] = str(max(0.1, time.monotonic() - started))
+    os.execv(sys.executable, [sys.executable, os.path.join(SCRIPT_DIR, "main.py"), *sys.argv[1:]])
 
 
 def edit_config(config_path: str):
@@ -114,8 +186,8 @@ Examples:
 
     parser.add_argument(
         "-V", "--version",
-        action="version",
-        version=f"%(prog)s {VERSION}",
+        action=VersionAction,
+        nargs=0,
     )
     parser.add_argument(
         "-n", "--dry-run",
@@ -191,6 +263,9 @@ def main():
     signal.signal(signal.SIGINT, handle_interrupt)
     signal.signal(signal.SIGTERM, handle_interrupt)
 
+    self_update_result = None
+    if not any(arg in ("-V", "--version", "-h", "--help") for arg in sys.argv[1:]):
+        self_update_result = self_update()
     args = parse_args()
 
     if args.edit_config:
@@ -253,14 +328,47 @@ def main():
     results = []
     total_start = time.time()
     current_category = None
+    self_update_printed = False
 
     try:
         for m in modules_to_run:
             if m.category != current_category:
                 current_category = m.category
                 ui.print_category(current_category)
+                if current_category == "Containers & Packages" and self_update_result:
+                    self_update_step = StepResult(
+                        *self_update_result[:2],
+                        duration=self_update_result[2],
+                        details=self_update_result[3],
+                    )
+                    ui.print_result(
+                        "Self Update",
+                        self_update_step,
+                    )
+                    results.append({
+                        "name": "Self Update",
+                        "key": "self_update",
+                        "result": self_update_step,
+                    })
+                    self_update_printed = True
             step_res = ui.run_step(m.name, lambda mod=m: mod.run(ctx), ctx=ctx, module=m)
             results.append({"name": m.name, "key": m.key, "result": step_res})
+        if self_update_result and not self_update_printed:
+            ui.print_category("Containers & Packages")
+            self_update_step = StepResult(
+                *self_update_result[:2],
+                duration=self_update_result[2],
+                details=self_update_result[3],
+            )
+            ui.print_result(
+                "Self Update",
+                self_update_step,
+            )
+            results.append({
+                "name": "Self Update",
+                "key": "self_update",
+                "result": self_update_step,
+            })
     finally:
         sudo.stop_sudo_keeper()
 
