@@ -12,12 +12,31 @@ class DockerModule(BaseModule):
     category = "Containers & Packages"
     description = "Pulls latest versions of all locally tracked Docker container images"
 
-    def is_available(self, ctx: UpdateContext) -> bool:
+    def _availability(self, ctx: UpdateContext) -> str:
         if ctx.which("docker") is None:
-            return False
-        # Check if docker daemon is reachable
-        code, _, _ = ctx.run_cmd(["docker", "info"], timeout=5, read_only=True)
-        return code == 0
+            return "not-installed"
+        # Skip the module when Docker is reachable but has no images to update.
+        code, out, _ = ctx.run_cmd(
+            ["docker", "images", "--format", "{{.Repository}}:{{.Tag}}"],
+            timeout=5,
+            read_only=True,
+        )
+        if code != 0:
+            return "unavailable"
+        images = [line.strip() for line in out.splitlines()]
+        has_images = any(image and not image.startswith("<none>") for image in images)
+        return "active" if has_images else "no-targets"
+
+    def is_available(self, ctx: UpdateContext) -> bool:
+        return self._availability(ctx) in ("active", "unavailable")
+
+    def availability_status(self, ctx: UpdateContext) -> str:
+        return {
+            "not-installed": "[Not Installed]",
+            "no-targets": "[No Targets]",
+            "unavailable": "[Unavailable]",
+            "active": "[Active]",
+        }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
         if ctx.dry_run:

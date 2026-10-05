@@ -30,6 +30,9 @@ class SnapshotModule(BaseModule):
     description = "Creates a protective Btrfs root snapshot via Snapper before updates"
     requires_sudo = True
 
+    def __init__(self, cooldown_hours: int = 12):
+        self.cooldown_hours = cooldown_hours
+
     def is_available(self, ctx: UpdateContext) -> bool:
         return (
             ctx.which("snapper") is not None
@@ -42,7 +45,7 @@ class SnapshotModule(BaseModule):
         stamp_file = os.path.join(cache_dir, "topgrade_snapper_stamp")
         os.makedirs(cache_dir, exist_ok=True)
 
-        cooldown_minutes = int(os.environ.get("TOPGRADE_SNAPSHOT_COOLDOWN", 720))
+        cooldown_minutes = self.cooldown_hours * 60
 
         if os.path.exists(stamp_file) and not ctx.force:
             try:

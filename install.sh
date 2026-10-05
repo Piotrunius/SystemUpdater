@@ -8,7 +8,7 @@ CONFIG_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/sysupdate"
 
 echo "Installing SystemUpdater..."
 
-# 1. Verify Python 3.10+
+# 1. Verify Python 3.11+
 if ! command -v python3 >/dev/null 2>&1; then
     echo "Error: python3 is required but not installed." >&2
     exit 1
@@ -18,8 +18,8 @@ PY_VER="$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_
 PY_MAJOR="$(echo "${PY_VER}" | cut -d. -f1)"
 PY_MINOR="$(echo "${PY_VER}" | cut -d. -f2)"
 
-if [ "${PY_MAJOR}" -lt 3 ] || { [ "${PY_MAJOR}" -eq 3 ] && [ "${PY_MINOR}" -lt 10 ]; }; then
-    echo "Error: Python 3.10 or newer is required (detected Python ${PY_VER})." >&2
+if [ "${PY_MAJOR}" -lt 3 ] || { [ "${PY_MAJOR}" -eq 3 ] && [ "${PY_MINOR}" -lt 11 ]; }; then
+    echo "Error: Python 3.11 or newer is required (detected Python ${PY_VER})." >&2
     exit 1
 fi
 

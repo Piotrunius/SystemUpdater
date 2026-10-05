@@ -5,7 +5,7 @@ Pulls fast-forward updates for git repositories configured in config.toml [git].
 
 import os
 from modules.base import BaseModule, UpdateContext
-from config import get_config
+from config import Config
 from ui import StepResult
 
 
@@ -15,32 +15,32 @@ class GitReposModule(BaseModule):
     category = "Development Environment"
     description = "Pulls latest commits for repositories configured in config.toml"
 
+    def __init__(self, config: Config):
+        self.config = config
+
     def is_available(self, ctx: UpdateContext) -> bool:
         if ctx.which("git") is None:
             return False
-        cfg = get_config()
-        return len(cfg.git_repos) > 0
+        return len(self.config.git_repos) > 0
 
     def availability_status(self, ctx: UpdateContext) -> str:
         if ctx.which("git") is None:
             return "[Not Installed]"
-        cfg = get_config()
-        if not cfg.git_repos:
+        if not self.config.git_repos:
             return "[Unconfigured]"
         return "[Active]"
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        cfg = get_config()
-        if not cfg.git_repos:
+        if not self.config.git_repos:
             return StepResult("unchanged")
 
         if ctx.dry_run:
-            return StepResult("ok", f"[DRY-RUN] Would pull {len(cfg.git_repos)} configured git repositories")
+            return StepResult("ok", f"[DRY-RUN] Would pull {len(self.config.git_repos)} configured git repositories")
 
         updated = []
         errors = []
 
-        for repo_dir in cfg.git_repos:
+        for repo_dir in self.config.git_repos:
             repo_name = os.path.basename(repo_dir)
             code, out, err = ctx.run_cmd(["git", "-C", repo_dir, "pull", "--ff-only"], timeout=60)
             if code != 0:

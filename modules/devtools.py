@@ -122,16 +122,36 @@ class PnpmModule(BaseModule):
     category = "Development Environment"
     description = "Updates globally installed pnpm packages"
 
+    def _availability(self, ctx: UpdateContext) -> str:
+        if ctx.which("pnpm") is None:
+            return "not-installed"
+        code, out, err = ctx.run_cmd(["pnpm", "ls", "-g"], timeout=10, read_only=True)
+        output = f"{out}\n{err}".strip().lower()
+        if "no global packages found" in output or not output:
+            return "no-targets"
+        return "active" if code == 0 else "unavailable"
+
     def is_available(self, ctx: UpdateContext) -> bool:
-        return ctx.which("pnpm") is not None
+        return self._availability(ctx) in ("active", "unavailable")
+
+    def availability_status(self, ctx: UpdateContext) -> str:
+        return {
+            "not-installed": "[Not Installed]",
+            "no-targets": "[No Targets]",
+            "unavailable": "[Unavailable]",
+            "active": "[Active]",
+        }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
         if ctx.dry_run:
             return StepResult("ok", "[DRY-RUN] Would update PNPM packages")
 
-        ls_code, ls_out, _ = ctx.run_cmd(["pnpm", "ls", "-g"])
-        if "no global packages found" in ls_out.lower() or not ls_out.strip():
+        ls_code, ls_out, ls_err = ctx.run_cmd(["pnpm", "ls", "-g"])
+        ls_output = f"{ls_out}\n{ls_err}"
+        if "no global packages found" in ls_output.lower() or not ls_output.strip():
             return StepResult("unchanged")
+        if ls_code != 0:
+            return StepResult("error", "pnpm package list failed", error_output=ls_err or ls_out)
 
         # Query outdated packages to capture versions
         outdated_code, outdated_out, _ = ctx.run_cmd(["pnpm", "outdated", "-g", "--format", "json"])
@@ -164,16 +184,46 @@ class BunModule(BaseModule):
     category = "Development Environment"
     description = "Updates globally installed Bun packages"
 
+    def _availability(self, ctx: UpdateContext) -> str:
+        if ctx.which("bun") is None:
+            return "not-installed"
+        code, out, err = ctx.run_cmd(["bun", "pm", "ls", "-g"], timeout=10, read_only=True)
+        output = f"{out}\n{err}".strip().lower()
+        if (
+            "no package.json was found" in output
+            or "no global packages" in output
+            or not output
+            or output == "node_modules"
+        ):
+            return "no-targets"
+        return "active" if code == 0 else "unavailable"
+
     def is_available(self, ctx: UpdateContext) -> bool:
-        return ctx.which("bun") is not None
+        return self._availability(ctx) in ("active", "unavailable")
+
+    def availability_status(self, ctx: UpdateContext) -> str:
+        return {
+            "not-installed": "[Not Installed]",
+            "no-targets": "[No Targets]",
+            "unavailable": "[Unavailable]",
+            "active": "[Active]",
+        }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
         if ctx.dry_run:
             return StepResult("ok", "[DRY-RUN] Would run bun update -g")
 
-        ls_code, ls_out, _ = ctx.run_cmd(["bun", "pm", "ls", "-g"])
-        if "no global packages" in ls_out.lower() or not ls_out.strip() or ls_out.strip() == "node_modules":
+        ls_code, ls_out, ls_err = ctx.run_cmd(["bun", "pm", "ls", "-g"])
+        ls_output = f"{ls_out}\n{ls_err}"
+        if (
+            "no package.json was found" in ls_output.lower()
+            or "no global packages" in ls_output.lower()
+            or not ls_output.strip()
+            or ls_output.strip() == "node_modules"
+        ):
             return StepResult("unchanged")
+        if ls_code != 0:
+            return StepResult("error", "Bun global package list failed", error_output=ls_err or ls_out)
 
         code, out, err = ctx.run_cmd(["bun", "update", "-g"])
         combined = (out or "") + "\n" + (err or "")

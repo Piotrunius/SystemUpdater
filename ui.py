@@ -43,19 +43,22 @@ class StepResult:
         details: Optional[List[str]] = None,
         duration: float = 0.0,
         error_output: str = "",
+        warnings: Optional[List[str]] = None,
     ):
         self.status = status
         self.message = message
         self.details = details or []
         self.duration = duration
         self.error_output = error_output
+        self.warnings = warnings or []
 
 
 class UI:
-    def __init__(self, is_interactive: Optional[bool] = None, quiet: bool = False):
+    def __init__(self, is_interactive: Optional[bool] = None, quiet: bool = False, verbose: bool = False):
         self.is_tty = is_interactive if is_interactive is not None else sys.stdout.isatty()
         self.terminal_width = self._get_width()
         self.quiet = quiet
+        self.verbose = verbose
 
     def _get_width(self) -> int:
         try:
@@ -140,9 +143,15 @@ class UI:
                     msg = res.message if res.message else "up to date"
                     print(f"      {Colors.DIM}[—]{Colors.RESET} {msg} {time_tag}")
                 elif res.status == "skipped":
-                    print(f"      {Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET} skipped {time_tag}")
+                    if self.verbose:
+                        print(f"      {Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET} skipped {time_tag}")
+                    else:
+                        print(f"      {Colors.DIM}[—]{Colors.RESET} up to date {time_tag}")
                 elif res.status == "warning":
-                    print(f"      {Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET} warning {time_tag}")
+                    if self.verbose:
+                        print(f"      {Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET} warning {time_tag}")
+                    else:
+                        print(f"      {Colors.DIM}[—]{Colors.RESET} up to date {time_tag}")
                 else:  # error
                     print(f"      {Colors.DIM}[{Colors.RESET}{Colors.BOLD_RED}✗{Colors.RESET}{Colors.DIM}]{Colors.RESET} failed {time_tag}")
             else:
@@ -237,9 +246,15 @@ class UI:
             msg = res.message if res.message else "up to date"
             print(f"  {Colors.DIM}[—]{Colors.RESET} {label}: {msg} {time_tag}")
         elif res.status == "skipped":
-            print(f"  {Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET} {label}: skipped {time_tag}")
+            if self.verbose:
+                print(f"  {Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET} {label}: skipped {time_tag}")
+            else:
+                print(f"  {Colors.DIM}[—]{Colors.RESET} {label}: up to date {time_tag}")
         elif res.status == "warning":
-            print(f"  {Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET} {label}: warning {time_tag}")
+            if self.verbose:
+                print(f"  {Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET} {label}: warning {time_tag}")
+            else:
+                print(f"  {Colors.DIM}[—]{Colors.RESET} {label}: up to date {time_tag}")
         else:  # error
             print(f"  {Colors.DIM}[{Colors.RESET}{Colors.BOLD_RED}✗{Colors.RESET}{Colors.DIM}]{Colors.RESET} {label}: failed {time_tag}")
 
@@ -269,8 +284,9 @@ class UI:
         )
 
         warning_items = [
-            r for r in results if r["result"].status in ("warning", "skipped")
-        ]
+            r for r in results
+            if r["result"].status in ("warning", "skipped") or r["result"].warnings
+        ] if self.verbose else []
         error_items = [r for r in results if r["result"].status == "error"]
 
         # ── 1. Summary Section ────────────────────────────────────────────────
@@ -303,9 +319,15 @@ class UI:
                     if res.message:
                         print(f"    - {res.message}")
                 else:
-                    print(f"  • {item['name']}: {res.message or 'warning'}")
+                    if res.status == "warning":
+                        print(f"  • {item['name']}: {res.message or 'warning'}")
+                    elif res.warnings:
+                        for warning in res.warnings:
+                            print(f"  • {item['name']}: {warning}")
                 for d in res.details:
                     print(f"    - {d}")
+                for warning in res.warnings if res.status in ("warning", "skipped") else []:
+                    print(f"    - {warning}")
                 if res.error_output:
                     lines = res.error_output.strip().splitlines()
                     if len(lines) > 20:

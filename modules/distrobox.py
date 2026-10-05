@@ -9,8 +9,32 @@ class DistroboxModule(BaseModule):
     category = "Applications & Gaming"
     description = "Upgrades packages inside all active Distrobox containers (Arch, Fedora, etc.)"
 
+    def _availability(self, ctx: UpdateContext) -> str:
+        if ctx.which("distrobox") is None:
+            return "not-installed"
+        code, out, _ = ctx.run_cmd(
+            ["distrobox", "list", "--no-color"],
+            timeout=5,
+            read_only=True,
+        )
+        if code != 0:
+            return "unavailable"
+        has_containers = any(
+            "|" in line and not line.strip().lower().startswith("id")
+            for line in out.splitlines()
+        )
+        return "active" if has_containers else "no-targets"
+
     def is_available(self, ctx: UpdateContext) -> bool:
-        return ctx.which("distrobox") is not None
+        return self._availability(ctx) in ("active", "unavailable")
+
+    def availability_status(self, ctx: UpdateContext) -> str:
+        return {
+            "not-installed": "[Not Installed]",
+            "no-targets": "[No Targets]",
+            "unavailable": "[Unavailable]",
+            "active": "[Active]",
+        }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
         if ctx.dry_run:

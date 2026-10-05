@@ -22,6 +22,7 @@ class FlatpakModule(BaseModule):
 
         updated_items = []
         errors = []
+        support_warnings = []
 
         # 1. User updates
         u_code, u_out, u_err = ctx.run_cmd(["flatpak", "update", "--user", "-y", "--noninteractive"])
@@ -29,6 +30,7 @@ class FlatpakModule(BaseModule):
             errors.append(f"User Flatpaks: {u_err or u_out}")
         else:
             updated_items.extend(self._parse_updates(u_out))
+            support_warnings.extend(self._find_support_warnings(u_out))
 
         # 2. System updates (polkit handles authorization)
         s_code, s_out, s_err = ctx.run_cmd(["flatpak", "update", "--system", "-y", "--noninteractive"])
@@ -36,14 +38,21 @@ class FlatpakModule(BaseModule):
             errors.append(f"System Flatpaks: {s_err or s_out}")
         else:
             updated_items.extend(self._parse_updates(s_out))
+            support_warnings.extend(self._find_support_warnings(s_out))
 
         if errors:
-            return StepResult("error", "Flatpak update encountered errors", error_output="\n".join(errors))
+            return StepResult(
+                "error",
+                "Flatpak update encountered errors",
+                error_output="\n".join(errors),
+                warnings=list(dict.fromkeys(support_warnings)),
+            )
 
         # Deduplicate
         unique_updated = list(dict.fromkeys(updated_items))
+        support_warnings = list(dict.fromkeys(support_warnings))
         if not unique_updated:
-            return StepResult("unchanged")
+            return StepResult("unchanged", warnings=support_warnings)
 
         count = len(unique_updated)
         # Resolve version for updated flatpaks for consistent "name -> version" formatting
@@ -62,7 +71,20 @@ class FlatpakModule(BaseModule):
         if count > 10:
             formatted_details.append(f"... and {count - 10} more")
 
-        return StepResult("ok", f"{count} package{'s' if count != 1 else ''} updated", details=formatted_details)
+        return StepResult(
+            "ok",
+            f"{count} package{'s' if count != 1 else ''} updated",
+            details=formatted_details,
+            warnings=support_warnings,
+        )
+
+    def _find_support_warnings(self, output: str):
+        warnings = []
+        for line in output.splitlines():
+            line = line.strip()
+            if "end-of-life" in line.lower() or "no longer receiving fixes and security updates" in line.lower():
+                warnings.append(line)
+        return warnings
 
     def _parse_updates(self, output: str):
         items = []

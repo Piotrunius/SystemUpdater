@@ -6,7 +6,7 @@ Provides parity with Topgrade configuration (custom commands, git repos, disable
 
 import os
 import sys
-from typing import Dict, List, Set, Any, Optional
+from typing import Dict, List, Set, Optional
 
 if sys.version_info >= (3, 11):
     import tomllib
@@ -25,13 +25,20 @@ class Config:
         self.post_commands: Dict[str, str] = {}
         self.git_repos: List[str] = []
         self.snapshot_cooldown_hours: int = 12
+        self._explicit_config_path = config_path is not None
         self.config_path: str = os.path.expanduser(config_path) if config_path else DEFAULT_CONFIG_PATH
+        self.load_error: Optional[str] = None
 
         self._load_config()
 
     def _load_config(self):
         target_path = self.config_path
-        if not os.path.isfile(target_path) or tomllib is None:
+        if not os.path.isfile(target_path):
+            if self._explicit_config_path:
+                self.load_error = "Configuration file does not exist or is not a regular file."
+            return
+        if tomllib is None:
+            self.load_error = "TOML configuration requires Python 3.11 or newer."
             return
 
         try:
@@ -39,31 +46,51 @@ class Config:
                 data = tomllib.load(f)
 
             misc = data.get("misc", {})
-            if "disable" in misc and isinstance(misc["disable"], list):
-                self.disabled_keys = {str(k).lower().strip() for k in misc["disable"]}
+            if not isinstance(misc, dict):
+                raise ValueError("[misc] must be a TOML table")
+
+            if "disable" in misc:
+                disabled = misc["disable"]
+                if not isinstance(disabled, list) or not all(isinstance(key, str) for key in disabled):
+                    raise ValueError("misc.disable must be a list of strings")
+                self.disabled_keys = {key.lower().strip() for key in disabled}
 
             if "cooldown_hours" in misc:
-                self.snapshot_cooldown_hours = int(misc["cooldown_hours"])
+                cooldown = misc["cooldown_hours"]
+                if isinstance(cooldown, bool) or not isinstance(cooldown, int) or cooldown < 0:
+                    raise ValueError("misc.cooldown_hours must be a non-negative integer")
+                self.snapshot_cooldown_hours = cooldown
 
             # Custom commands sections
-            if "pre_commands" in data and isinstance(data["pre_commands"], dict):
-                self.pre_commands = {str(k): str(v) for k, v in data["pre_commands"].items()}
-
-            if "commands" in data and isinstance(data["commands"], dict):
-                self.commands = {str(k): str(v) for k, v in data["commands"].items()}
-
-            if "post_commands" in data and isinstance(data["post_commands"], dict):
-                self.post_commands = {str(k): str(v) for k, v in data["post_commands"].items()}
+            for section_name in ("pre_commands", "commands", "post_commands"):
+                section = data.get(section_name, {})
+                if not isinstance(section, dict) or not all(
+                    isinstance(name, str) and isinstance(command, str)
+                    for name, command in section.items()
+                ):
+                    raise ValueError(f"[{section_name}] must contain string commands")
+                setattr(self, section_name, section)
 
             # Git repositories to pull
             git_sec = data.get("git", {})
-            if "repos" in git_sec and isinstance(git_sec["repos"], list):
+            if not isinstance(git_sec, dict):
+                raise ValueError("[git] must be a TOML table")
+            if "repos" in git_sec:
+                repos = git_sec["repos"]
+                if not isinstance(repos, list) or not all(isinstance(path, str) for path in repos):
+                    raise ValueError("git.repos must be a list of paths")
                 self.git_repos = [
-                    os.path.expanduser(p) for p in git_sec["repos"]
-                    if os.path.isdir(os.path.expanduser(p))
+                    os.path.expanduser(path) for path in repos
+                    if os.path.isdir(os.path.expanduser(path))
                 ]
-        except Exception:
-            pass
+        except (OSError, ValueError) as error:
+            self.disabled_keys.clear()
+            self.pre_commands.clear()
+            self.commands.clear()
+            self.post_commands.clear()
+            self.git_repos.clear()
+            self.snapshot_cooldown_hours = 12
+            self.load_error = str(error)
 
 
 _global_config = None

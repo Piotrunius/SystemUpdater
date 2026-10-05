@@ -6,7 +6,7 @@ Also loads user custom commands and git repositories from ~/.config/sysupdate/co
 
 from typing import List
 from modules.base import BaseModule
-from config import get_config
+from config import Config, get_config
 
 # System Protection
 from modules.snapshot import SnapshotModule
@@ -73,8 +73,8 @@ from modules.git_repos import GitReposModule
 from modules.custom import CustomCommandModule
 
 
-def get_all_modules() -> List[BaseModule]:
-    cfg = get_config()
+def get_all_modules(cfg: Config | None = None) -> List[BaseModule]:
+    cfg = cfg or get_config()
     modules: List[BaseModule] = []
 
     # 1. Custom Pre-Commands (if defined in config.toml)
@@ -82,7 +82,7 @@ def get_all_modules() -> List[BaseModule]:
         modules.append(CustomCommandModule(name, cmd, category="Custom Pre-Commands", key=f"pre_{name.lower().replace(' ', '_')}"))
 
     # 2. System Protection
-    modules.append(SnapshotModule())
+    modules.append(SnapshotModule(cooldown_hours=cfg.snapshot_cooldown_hours))
 
     # 3. System Core (Distro-specific repository sync and package manager)
     modules.append(RepoSyncModule())      # Active exclusively on Nobara Linux
@@ -164,7 +164,7 @@ def get_all_modules() -> List[BaseModule]:
     ])
 
     # 9. Development Environment - Local Git Repositories
-    modules.append(GitReposModule())
+    modules.append(GitReposModule(cfg))
 
     # 10. Custom Commands (if defined in config.toml)
     for name, cmd in cfg.commands.items():

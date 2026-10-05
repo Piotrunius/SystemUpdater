@@ -2,6 +2,7 @@
 Extended container update modules (Podman auto-update, Vagrant).
 """
 
+import os
 from modules.base import BaseModule, UpdateContext
 from ui import StepResult
 
@@ -12,21 +13,29 @@ class PodmanModule(BaseModule):
     category = "Containers & Packages"
     description = "Updates containers using podman auto-update"
 
-    def is_available(self, ctx: UpdateContext) -> bool:
+    def _availability(self, ctx: UpdateContext) -> str:
         if ctx.which("podman") is None:
-            return False
+            return "not-installed"
         # Only available if user actually has containers configured with auto-update
         code, out, _ = ctx.run_cmd(
             ["podman", "ps", "-a", "--filter", "label=io.containers.autoupdate", "-q"],
             timeout=5,
             read_only=True,
         )
-        return code == 0 and bool(out.strip())
+        if code != 0:
+            return "unavailable"
+        return "active" if out.strip() else "no-targets"
+
+    def is_available(self, ctx: UpdateContext) -> bool:
+        return self._availability(ctx) in ("active", "unavailable")
 
     def availability_status(self, ctx: UpdateContext) -> str:
-        if ctx.which("podman") is None:
-            return "[Not Installed]"
-        return "[Active]" if self.is_available(ctx) else "[No Targets]"
+        return {
+            "not-installed": "[Not Installed]",
+            "no-targets": "[No Targets]",
+            "unavailable": "[Unavailable]",
+            "active": "[Active]",
+        }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
         if ctx.dry_run:
@@ -49,7 +58,27 @@ class VagrantModule(BaseModule):
     description = "Checks and updates installed Vagrant boxes"
 
     def is_available(self, ctx: UpdateContext) -> bool:
-        return ctx.which("vagrant") is not None
+        return self._availability(ctx) == "active"
+
+    def _availability(self, ctx: UpdateContext) -> str:
+        if ctx.which("vagrant") is None:
+            return "not-installed"
+        # `vagrant box update` operates on the project selected by the current directory.
+        project_dir = os.getcwd()
+        while True:
+            if os.path.isfile(os.path.join(project_dir, "Vagrantfile")):
+                return "active"
+            parent_dir = os.path.dirname(project_dir)
+            if parent_dir == project_dir:
+                return "no-project"
+            project_dir = parent_dir
+
+    def availability_status(self, ctx: UpdateContext) -> str:
+        return {
+            "not-installed": "[Not Installed]",
+            "no-project": "[No Project]",
+            "active": "[Active]",
+        }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
         if ctx.dry_run:

@@ -11,6 +11,7 @@ SystemUpdater runs supported system package managers, application sources, conta
 - **Terminal Progress**: ANSI status lines and summaries show each module's result and duration.
 - **Btrfs Snapshots**: Creates Snapper snapshots before system updates, with a configurable cooldown.
 - **Package Change Details**: Reports upgraded package names and versions when the package manager provides them.
+- **Target-Aware Modules**: Container updates run only when there are local Docker images, Distrobox containers, or a Vagrant project to update.
 - **Sudo Keepalive**: Maintains the sudo timestamp during long update runs.
 - **Dry Run and Verbose Modes**: Preview commands with `-n` or stream command output with `-v`.
 - **Configuration**: Disable modules, set custom commands, and list Git repositories in `~/.config/sysupdate/config.toml`.
@@ -38,7 +39,7 @@ Choose one installation method. Both provide the `sysupdate` command and use the
 
 ### Git checkout
 
-This method is suitable when you want the source checkout under your home directory. It requires Python 3.10 or newer and `git`.
+This method is suitable when you want the source checkout under your home directory. It requires Python 3.11 or newer and `git`.
 
 ```bash
 git clone https://github.com/Piotrunius/SystemUpdater.git ~/.local/share/sysupdate
@@ -199,30 +200,36 @@ SystemUpdater/
 ├── install.sh                           # Git-checkout installer
 ├── LICENSE                              # MIT license
 ├── README.md                            # Installation, usage, and configuration guide
-└── modules/
-    ├── __init__.py       # Registers modules and assigns update categories
-    ├── base.py           # Shared module API, command runner, and warning detection
-    ├── nobara.py         # DNF repository sync and system package updates
-    ├── system_pm.py      # APT, Pacman/AUR, Zypper, APK, and XBPS
-    ├── firmware.py       # Device firmware updates through fwupd
-    ├── snapshot.py       # Btrfs snapshots through Snapper
-    ├── maintenance.py    # Manual-page index updates through mandb
-    ├── flatpak.py        # Flatpak applications
-    ├── nuvio.py          # Nuvio Desktop releases
-    ├── gearlever.py      # Gear Lever AppImages
-    ├── proton.py         # ProtonPlus compatibility tools
-    ├── distrobox.py      # Distrobox containers
-    ├── brew.py           # Homebrew formulae and casks
-    ├── docker.py         # Docker images
-    ├── containers_ext.py # Podman and Vagrant
-    ├── universal.py      # Snap and Nix
-    ├── devtools.py       # Language runtimes, package managers, and extensions
-    ├── languages_ext.py  # Additional language toolchains
-    ├── editors.py        # VS Code, Cursor, VSCodium, and Helix
-    ├── terminal_tools.py # Shell plugins and Tealdeer
-    ├── dotfiles.py       # Chezmoi and Yadm repositories
-    ├── git_repos.py      # User-configured Git repositories
-    └── custom.py         # User-configured pre-, update, and post-commands
+├── modules/
+│   ├── __init__.py       # Registers modules and assigns update categories
+│   ├── base.py           # Shared module API, command runner, and warning detection
+│   ├── nobara.py         # DNF repository sync and system package updates
+│   ├── system_pm.py      # APT, Pacman/AUR, Zypper, APK, and XBPS
+│   ├── firmware.py       # Device firmware updates through fwupd
+│   ├── snapshot.py       # Btrfs snapshots through Snapper
+│   ├── maintenance.py    # Manual-page index updates through mandb
+│   ├── flatpak.py        # Flatpak applications
+│   ├── nuvio.py          # Nuvio Desktop releases
+│   ├── gearlever.py      # Gear Lever AppImages
+│   ├── proton.py         # ProtonPlus compatibility tools
+│   ├── distrobox.py      # Distrobox containers
+│   ├── brew.py           # Homebrew formulae and casks
+│   ├── docker.py         # Docker images
+│   ├── containers_ext.py # Podman and Vagrant
+│   ├── universal.py      # Snap and Nix
+│   ├── devtools.py       # Language runtimes, package managers, and extensions
+│   ├── languages_ext.py  # Additional language toolchains
+│   ├── editors.py        # VS Code, Cursor, VSCodium, and Helix
+│   ├── terminal_tools.py # Shell plugins and Tealdeer
+│   ├── dotfiles.py       # Chezmoi and Yadm repositories
+│   ├── git_repos.py      # User-configured Git repositories
+│   └── custom.py         # User-configured pre-, update, and post-commands
+└── tests/
+    ├── test_config.py              # Configuration parsing and validation
+    ├── test_flatpak.py             # Preserving and displaying advisory warnings
+    ├── test_module_availability.py # Installed tools and update target detection
+    ├── test_module_registry.py     # Custom configuration passed to modules
+    └── test_snapshot.py            # Btrfs detection and snapshot cooldown
 ```
 
 ---

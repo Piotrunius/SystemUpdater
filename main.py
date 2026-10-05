@@ -139,8 +139,7 @@ def self_update():
     if git_output("status", "--porcelain", timeout=5):
         return result(
             "warning",
-            "update skipped",
-            ["The working tree has uncommitted changes."],
+            "Update skipped, the working tree has uncommitted changes.",
         )
     upstream = git_output("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
     remote_names = (git_output("remote", timeout=5) or "").splitlines()
@@ -352,9 +351,15 @@ def main():
         edit_config(args.config or DEFAULT_CONFIG_PATH)
 
     ctx = UpdateContext(dry_run=args.dry_run, force=args.force, verbose=args.verbose)
-    all_modules: List[BaseModule] = get_all_modules()
-
     cfg = get_config(config_path=args.config)
+    all_modules: List[BaseModule] = get_all_modules(cfg)
+
+    if cfg.load_error:
+        print(
+            f"Warning: Could not load configuration from {cfg.config_path}; "
+            f"using defaults. {cfg.load_error}",
+            file=sys.stderr,
+        )
 
     # List modules mode
     if args.list:
@@ -402,7 +407,7 @@ def main():
             print("Error: Administrator privileges (sudo) required but could not be obtained.")
             sys.exit(1)
 
-    ui = UI(quiet=args.quiet)
+    ui = UI(quiet=args.quiet, verbose=args.verbose)
     ui.print_header("System Updater")
 
     results = []

@@ -3,6 +3,7 @@ Firmware upgrades module using fwupdmgr.
 """
 
 import json
+import re
 from modules.base import BaseModule, UpdateContext
 from ui import StepResult
 
@@ -20,26 +21,48 @@ class FirmwareModule(BaseModule):
         if ctx.dry_run:
             return StepResult("ok", "[DRY-RUN] Would refresh and apply firmware updates")
 
-        # Refresh metadata
-        ctx.run_cmd(["fwupdmgr", "refresh", "--force"], timeout=30)
+        # Refresh metadata, but retain refresh failures when cached data is still usable.
+        _, refresh_out, refresh_err = ctx.run_cmd(
+            ["fwupdmgr", "refresh", "--force"], timeout=30
+        )
+        refresh_output = "\n".join(part for part in (refresh_out, refresh_err) if part)
+        warnings = list(dict.fromkeys(
+            line.strip()
+            for line in refresh_output.splitlines()
+            if re.search(
+                r"(?:failed|error|unable|could not).*metadata|metadata.*(?:failed|error|unable|could not)",
+                line,
+                re.I,
+            )
+        ))
 
         # Check updates
         code, out, err = ctx.run_cmd(["fwupdmgr", "get-updates", "--json"], timeout=30)
         if code == 2 or "No updates available" in out:
-            return StepResult("unchanged")
-
-        devices = []
-        if code == 0:
-            try:
-                data = json.loads(out)
-                devices = data.get("Devices", [])
-                if not devices:
-                    return StepResult("unchanged")
-            except Exception:
-                pass
-
+            return StepResult("unchanged", warnings=warnings)
         if code != 0:
-            return StepResult("unchanged")
+            return StepResult(
+                "error",
+                "Firmware update check failed",
+                error_output=err or out,
+                warnings=warnings,
+            )
+
+        try:
+            data = json.loads(out)
+            devices = data.get("Devices", [])
+            if not isinstance(devices, list) or any(not isinstance(device, dict) for device in devices):
+                raise ValueError("Devices must be a JSON list of objects")
+        except (json.JSONDecodeError, AttributeError, TypeError, ValueError) as error:
+            return StepResult(
+                "error",
+                "Firmware update check returned invalid data",
+                error_output=f"{error}\n{out}".strip(),
+                warnings=warnings,
+            )
+
+        if not devices:
+            return StepResult("unchanged", warnings=warnings)
 
         # Apply updates if available
         up_code, up_out, up_err = ctx.run_cmd(["fwupdmgr", "update", "-y"])
@@ -50,6 +73,19 @@ class FirmwareModule(BaseModule):
                 if d.get("Name") and d.get("Version")
             ]
             count = len(details) or len(devices)
-            return StepResult("ok", f"{count} device firmware update{'s' if count != 1 else ''} applied" if count else "updated", details=details)
+            return StepResult(
+                "ok",
+                f"{count} device firmware update{'s' if count != 1 else ''} applied" if count else "updated",
+                details=details,
+                warnings=warnings,
+            )
 
-        return StepResult("unchanged")
+        if up_code != 0:
+            return StepResult(
+                "error",
+                "Firmware update failed",
+                error_output=up_err or up_out,
+                warnings=warnings,
+            )
+
+        return StepResult("unchanged", warnings=warnings)
