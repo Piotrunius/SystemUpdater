@@ -24,6 +24,7 @@ htmlcov/
 *.swo
 *~
 .DS_Store
+.opencode/memory/
 
 # Local runtime stamps / caches
 *.stamp
