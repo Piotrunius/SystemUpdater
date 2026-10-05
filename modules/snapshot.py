@@ -9,6 +9,20 @@ from modules.base import BaseModule, UpdateContext
 from ui import StepResult
 
 
+def _root_filesystem_type() -> str | None:
+    """Return the filesystem type mounted at /, as reported by mountinfo."""
+    try:
+        with open("/proc/self/mountinfo", "r", encoding="utf-8") as mountinfo:
+            for line in mountinfo:
+                fields = line.split()
+                separator = fields.index("-")
+                if fields[4] == "/":
+                    return fields[separator + 1]
+    except (OSError, ValueError, IndexError):
+        return None
+    return None
+
+
 class SnapshotModule(BaseModule):
     name = "Btrfs Snapshot"
     key = "snapshot"
@@ -17,7 +31,11 @@ class SnapshotModule(BaseModule):
     requires_sudo = True
 
     def is_available(self, ctx: UpdateContext) -> bool:
-        return ctx.which("snapper") is not None
+        return (
+            ctx.which("snapper") is not None
+            and _root_filesystem_type() == "btrfs"
+            and os.path.isfile("/etc/snapper/configs/root")
+        )
 
     def run(self, ctx: UpdateContext) -> StepResult:
         cache_dir = os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache"))

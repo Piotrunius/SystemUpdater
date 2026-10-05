@@ -1,23 +1,20 @@
 # SystemUpdater (sysupdate)
 
-A modern, fast, modular system updater for Linux.
-
-Built as a lightweight, zero-dependency Python 3 replacement for monolithic updaters. Features automatic distribution detection, a flicker-free ANSI terminal interface, automated pre-update Btrfs root snapshots, unified version diffing, and fine-grained module control.
+SystemUpdater runs supported system package managers, application sources, containers, and developer tools from one command. It detects which tools are available, reports their results, and can create a Snapper snapshot before system updates.
 
 ---
 
 ## Key Features
 
-- **Automatic Distribution Detection**: Dynamically inspects `/etc/os-release` and activates the native package manager (DNF, APT, Pacman, Zypper, APK, XBPS).
-- **Zero External Dependencies**: Pure Python 3 standard library implementation.
-- **Flicker-Free Terminal UI**: Minimalist ANSI rendering without screen clearing or rotating spinner artifacts.
-- **Pre-Update Safety**: Automated Btrfs root snapshotting via Snapper with configurable cooldown tracking.
-- **Unified Version Reporting**: Standardized `package -> new_version` reporting across all package managers without duplicate entries.
-- **Sudo Session Preservation**: Non-blocking background credentials keepalive prevents mid-run authentication prompts.
-- **Deep Modular Ecosystem**: Over 55 built-in modules spanning system packages, containers, desktop apps, editors, and language runtimes.
-- **Dry-Run & Verbose Execution**: Full simulation mode (`-n`) and detailed live shell streaming (`-v`).
-- **Flexible Configuration**: Declarative configuration via `~/.config/sysupdate/config.toml`.
-- **Self-Updates**: Checks the configured Git upstream at startup and applies clean, fast-forward updates automatically.
+- **Distribution Detection**: Reads `/etc/os-release` and selects the matching system package manager.
+- **No Python Packages to Install**: The Git installation uses only the Python standard library. Homebrew supplies its own Python runtime.
+- **Terminal Progress**: ANSI status lines and summaries show each module's result and duration.
+- **Btrfs Snapshots**: Creates Snapper snapshots before system updates, with a configurable cooldown.
+- **Package Change Details**: Reports upgraded package names and versions when the package manager provides them.
+- **Sudo Keepalive**: Maintains the sudo timestamp during long update runs.
+- **Dry Run and Verbose Modes**: Preview commands with `-n` or stream command output with `-v`.
+- **Configuration**: Disable modules, set custom commands, and list Git repositories in `~/.config/sysupdate/config.toml`.
+- **Managed Updates**: Git installs update clean checkouts; Homebrew installs are updated by Homebrew.
 
 ---
 
@@ -25,7 +22,7 @@ Built as a lightweight, zero-dependency Python 3 replacement for monolithic upda
 
 | Category | Modules & Integrations |
 | :--- | :--- |
-| **System Core** | Automatic Distro Detection, DNF / DNF5 (Fedora / Nobara / RHEL), APT (Debian / Ubuntu / Mint / Pop!_OS), Pacman & AUR (Arch / Manjaro / CachyOS via `yay` / `paru`), Zypper (openSUSE Tumbleweed & Leap), APK (Alpine), XBPS (Void), Device Firmware (`fwupdmgr`), Btrfs Snapper |
+| **System Core** |DNF / DNF5 (Fedora / Nobara / RHEL), APT (Debian / Ubuntu / Mint / Pop!_OS), Pacman & AUR (Arch / Manjaro / CachyOS via `yay` / `paru`), Zypper (openSUSE Tumbleweed & Leap), APK (Alpine), XBPS (Void), Device Firmware (`fwupdmgr`), Btrfs Snapper |
 | **Applications & Gaming** | Flatpak (User & System), ProtonPlus Runners, Gear Lever AppImages, Nuvio Desktop |
 | **Containers** | Distrobox (`upgrade --all`), Docker (`docker pull`), Podman (`auto-update`), Vagrant |
 | **Package Managers** | Homebrew (Formulae & Casks), Snap, Nix |
@@ -37,39 +34,48 @@ Built as a lightweight, zero-dependency Python 3 replacement for monolithic upda
 
 ## Installation
 
-### Quick Install
+Choose one installation method. Both provide the `sysupdate` command and use the same configuration file.
 
-Clone the repository and run the automated installer:
+### Git checkout
+
+This method is suitable when you want the source checkout under your home directory. It requires Python 3.10 or newer and `git`.
 
 ```bash
-git clone https://github.com/piotrunius/SystemUpdater.git ~/.local/share/sysupdate
+git clone https://github.com/Piotrunius/SystemUpdater.git ~/.local/share/sysupdate
 cd ~/.local/share/sysupdate
 ./install.sh
 ```
 
+The installer links `~/.local/bin/sysupdate` to the checkout and creates the default configuration at `~/.config/sysupdate/config.toml`. Add `~/.local/bin` to your `PATH` if needed:
+
+```bash
+export PATH="${HOME}/.local/bin:${PATH}"
+```
+
+On normal runs, this installation checks its Git remote and updates itself when the checkout is clean. Local edits are preserved; the updater reports why it skipped a self-update if it cannot safely fast-forward.
+
 ### Homebrew
 
-Add the project repository as a tap, then install the formula:
+Use Homebrew if you want it to manage the program version. The project repository is also the tap, so add it with its Git URL:
 
 ```bash
 brew tap Piotrunius/SystemUpdater https://github.com/Piotrunius/SystemUpdater.git
 brew install systemupdater
 ```
 
-Homebrew manages this installation, so the built-in Git self-updater is disabled. The tap formula is refreshed automatically after changes reach `main`. Update the installed command with:
+The formula update workflow refreshes its source URL, checksum, and version after changes reach `main`. To install those formula changes:
 
 ```bash
 brew update && brew upgrade systemupdater
 ```
 
-Ensure `~/.local/bin` is in your `PATH`:
+Homebrew-managed installations do not run the Git self-updater. A normal `sysupdate` run also runs the Homebrew module, which can upgrade SystemUpdater along with other formulae.
 
-```bash
-# Add to ~/.bashrc or ~/.zshrc if not already present
-export PATH="${HOME}/.local/bin:${PATH}"
-```
+Avoid installing both methods at once unless you manage which `sysupdate` comes first in your `PATH`.
 
-Optional shell alias (in `~/.bashrc` or `~/.zshrc`):
+### Optional shell alias
+
+To use `update` as a shorter command, add this to `~/.bashrc` or `~/.zshrc`:
 
 ```bash
 alias update="sysupdate"
@@ -88,7 +94,7 @@ Unified System Updater for Nobara Linux, Flatpaks, Homebrew, Containers, and Run
 
 options:
   -h, --help            show this help message and exit
-  -V, --version         show installed version and latest upstream commit
+  -V, --version         show installed version and latest available version
   -n, --dry-run         Simulate update process without downloading or installing changes
   -f, --force           Force execution (e.g. bypass Btrfs snapshot cooldown)
   -q, --quiet           Suppress live step progress, display only the final summary and errors
@@ -134,11 +140,11 @@ sysupdate --list
 sysupdate --version
 ```
 
-### Self-Updates and Versioning
+### Updates and Versioning
 
-On normal runs, `sysupdate` detects the current Git upstream or the project's default repository and fast-forwards when updates are available. It does this only for a clean checkout; local changes are preserved and reported, and divergent branches are left untouched. If the network is unavailable, the regular system update continues with the installed version. Homebrew installations are updated by Homebrew and skip this check.
+Git installs check their remote at startup and fast-forward only when the working tree is clean. Homebrew installs are updated through the Homebrew module or with `brew upgrade systemupdater`.
 
-`sysupdate --version` reports the installed source version and the latest available upstream or Homebrew formula version.
+`sysupdate --version` reports the installed version and the latest available Git commit or Homebrew formula version.
 
 ---
 
@@ -180,22 +186,43 @@ repos = [
 
 ```text
 SystemUpdater/
-├── main.py              # CLI entry point, argument parsing, execution pipeline
-├── config.py            # TOML configuration loader (standard library tomllib)
-├── sudo.py              # Non-blocking sudo session management and keepalive thread
-├── ui.py                # Flicker-free ANSI terminal UI, timing, and report formatting
-├── install.sh           # Automated installer and PATH checker
+├── .github/
+│   └── workflows/
+│       └── update-homebrew-formula.yml  # Refreshes the tap formula after changes to main
+├── Formula/
+│   └── systemupdater.rb                 # Homebrew package definition
+├── main.py                              # CLI, module selection, and update lifecycle
+├── config.py                            # Loads user settings from TOML
+├── config.example.toml                  # Default configuration template
+├── sudo.py                              # Sudo credentials and keepalive
+├── ui.py                                # Terminal status, progress, and summaries
+├── install.sh                           # Git-checkout installer
+├── LICENSE                              # MIT license
+├── README.md                            # Installation, usage, and configuration guide
 └── modules/
-    ├── base.py          # BaseModule, UpdateContext, process execution and warning detection
-    ├── nobara.py        # Nobara / Fedora DNF repositories and system package upgrades
-    ├── flatpak.py       # Flatpak user and system application updates
-    ├── brew.py          # Homebrew formulae and cask upgrades with version mapping
-    ├── snapshot.py      # Snapper Btrfs root snapshotting with cooldown management
-    ├── proton.py        # ProtonPlus compatibility runners
-    ├── nuvio.py         # Nuvio Desktop GitHub release management
-    ├── docker.py        # Docker image pulls
-    ├── devtools.py      # Node, Python, Rust, shell, and editor runtime modules
-    └── ...
+    ├── __init__.py       # Registers modules and assigns update categories
+    ├── base.py           # Shared module API, command runner, and warning detection
+    ├── nobara.py         # DNF repository sync and system package updates
+    ├── system_pm.py      # APT, Pacman/AUR, Zypper, APK, and XBPS
+    ├── firmware.py       # Device firmware updates through fwupd
+    ├── snapshot.py       # Btrfs snapshots through Snapper
+    ├── maintenance.py    # Manual-page index updates through mandb
+    ├── flatpak.py        # Flatpak applications
+    ├── nuvio.py          # Nuvio Desktop releases
+    ├── gearlever.py      # Gear Lever AppImages
+    ├── proton.py         # ProtonPlus compatibility tools
+    ├── distrobox.py      # Distrobox containers
+    ├── brew.py           # Homebrew formulae and casks
+    ├── docker.py         # Docker images
+    ├── containers_ext.py # Podman and Vagrant
+    ├── universal.py      # Snap and Nix
+    ├── devtools.py       # Language runtimes, package managers, and extensions
+    ├── languages_ext.py  # Additional language toolchains
+    ├── editors.py        # VS Code, Cursor, VSCodium, and Helix
+    ├── terminal_tools.py # Shell plugins and Tealdeer
+    ├── dotfiles.py       # Chezmoi and Yadm repositories
+    ├── git_repos.py      # User-configured Git repositories
+    └── custom.py         # User-configured pre-, update, and post-commands
 ```
 
 ---
