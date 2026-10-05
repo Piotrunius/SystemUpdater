@@ -139,8 +139,10 @@ class UI:
                 elif res.status == "unchanged":
                     msg = res.message if res.message else "up to date"
                     print(f"      {Colors.DIM}[—]{Colors.RESET} {msg} {time_tag}")
+                elif res.status == "skipped":
+                    print(f"      {Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET} skipped {time_tag}")
                 elif res.status == "warning":
-                    print(f"      {Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET} failed {time_tag}")
+                    print(f"      {Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET} warning {time_tag}")
                 else:  # error
                     print(f"      {Colors.DIM}[{Colors.RESET}{Colors.BOLD_RED}✗{Colors.RESET}{Colors.DIM}]{Colors.RESET} failed {time_tag}")
             else:
@@ -235,10 +237,9 @@ class UI:
             msg = res.message if res.message else "up to date"
             print(f"  {Colors.DIM}[—]{Colors.RESET} {label}: {msg} {time_tag}")
         elif res.status == "skipped":
-            msg = f": {res.message}" if res.message else ""
-            print(f"  {Colors.DIM}[—]{Colors.RESET} {label}{msg}")
+            print(f"  {Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET} {label}: skipped {time_tag}")
         elif res.status == "warning":
-            print(f"  {Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET} {label}: failed {time_tag}")
+            print(f"  {Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET} {label}: warning {time_tag}")
         else:  # error
             print(f"  {Colors.DIM}[{Colors.RESET}{Colors.BOLD_RED}✗{Colors.RESET}{Colors.DIM}]{Colors.RESET} {label}: failed {time_tag}")
 
@@ -267,7 +268,9 @@ class UI:
             and "created" in (snapshot_result["result"].message or "").lower()
         )
 
-        warning_items = [r for r in results if r["result"].status == "warning"]
+        warning_items = [
+            r for r in results if r["result"].status in ("warning", "skipped")
+        ]
         error_items = [r for r in results if r["result"].status == "error"]
 
         # ── 1. Summary Section ────────────────────────────────────────────────
@@ -295,9 +298,20 @@ class UI:
             print(f"{Colors.BOLD}{Colors.CYAN}── {title} " + "─" * max(0, width - len(title) - 4) + Colors.RESET)
             for item in warning_items:
                 res = item["result"]
-                print(f"  • {item['name']}: {res.message}")
+                if res.status == "skipped":
+                    print(f"  • {item['name']}: skipped")
+                    if res.message:
+                        print(f"    - {res.message}")
+                else:
+                    print(f"  • {item['name']}: {res.message or 'warning'}")
                 for d in res.details:
                     print(f"    - {d}")
+                if res.error_output:
+                    lines = res.error_output.strip().splitlines()
+                    if len(lines) > 20:
+                        lines = ["... (previous output omitted) ..."] + lines[-20:]
+                    for line in lines:
+                        print(f"    {Colors.DIM}{line}{Colors.RESET}")
             print(f"{Colors.CYAN}" + "─" * width + f"{Colors.RESET}")
 
         # ── 3. Errors Section (only if failures occurred) ─────────────────────

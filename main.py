@@ -17,6 +17,7 @@ import subprocess
 from typing import Optional
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
+SELF_UPDATE_REPOSITORY = "https://github.com/Piotrunius/SystemUpdater.git"
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 
@@ -97,18 +98,52 @@ def self_update():
         return "ok", f"Updated to {updated_version}", duration, []
     if not git_output("rev-parse", "--is-inside-work-tree"):
         return result("skipped", "not a Git checkout")
-    upstream = git_output("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
-    if not upstream:
-        return result("skipped", "no upstream configured")
     if git_output("status", "--porcelain", timeout=5):
         return result(
             "warning",
             "update skipped",
             ["The working tree has uncommitted changes."],
         )
-    remote = upstream.split("/", 1)[0]
+    upstream = git_output("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
+    remote_names = (git_output("remote", timeout=5) or "").splitlines()
+    current_branch = git_output("symbolic-ref", "--quiet", "--short", "HEAD")
+
+    if upstream and "/" in upstream:
+        remote, branch = upstream.split("/", 1)
+        update_ref = upstream
+        fetch_refspec = f"+refs/heads/{branch}:refs/remotes/{remote}/{branch}"
+    elif "origin" in remote_names:
+        remote = "origin"
+        default_branch = git_output(
+            "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"
+        )
+        if default_branch:
+            branch = default_branch.removeprefix("origin/")
+        else:
+            remote_head = git_output("ls-remote", "--symref", remote, "HEAD", timeout=8)
+            branch = next(
+                (
+                    line.split("refs/heads/", 1)[1].split("\t", 1)[0]
+                    for line in (remote_head or "").splitlines()
+                    if line.startswith("ref: refs/heads/") and line.endswith("\tHEAD")
+                ),
+                current_branch or "main",
+            )
+        update_ref = f"refs/remotes/{remote}/{branch}"
+        fetch_refspec = f"+refs/heads/{branch}:refs/remotes/{remote}/{branch}"
+    else:
+        remote = SELF_UPDATE_REPOSITORY
+        branch = current_branch or "main"
+        update_ref = "FETCH_HEAD"
+        fetch_refspec = branch
+
     try:
-        fetched = subprocess.run(["git", "fetch", "--quiet", remote], cwd=SCRIPT_DIR, capture_output=True, timeout=20)
+        fetched = subprocess.run(
+            ["git", "fetch", "--quiet", remote, fetch_refspec],
+            cwd=SCRIPT_DIR,
+            capture_output=True,
+            timeout=20,
+        )
     except (OSError, subprocess.TimeoutExpired):
         return result(
             "warning",
@@ -121,10 +156,15 @@ def self_update():
             "update skipped",
             ["The upstream could not be reached to check for updates."],
         )
-    behind = git_output("rev-list", "--count", f"HEAD..{upstream}")
+    behind = git_output("rev-list", "--count", f"HEAD..{update_ref}")
     if not behind or behind == "0":
         return result("unchanged", "up to date")
-    merged = subprocess.run(["git", "merge", "--ff-only", "--quiet", upstream], cwd=SCRIPT_DIR, capture_output=True, timeout=10)
+    merged = subprocess.run(
+        ["git", "merge", "--ff-only", "--quiet", update_ref],
+        cwd=SCRIPT_DIR,
+        capture_output=True,
+        timeout=10,
+    )
     if merged.returncode != 0:
         return result(
             "warning",
