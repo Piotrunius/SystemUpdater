@@ -1,0 +1,78 @@
+name: Update Homebrew formula
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - Formula/systemupdater.rb
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-homebrew-formula
+  cancel-in-progress: true
+
+jobs:
+  update-formula:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Calculate source archive checksum
+        id: source
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          archive_url="https://github.com/${REPOSITORY}/archive/${SOURCE_SHA}.tar.gz"
+          archive_sha="$(curl --fail --silent --show-error --location "${archive_url}" | sha256sum | cut -d ' ' -f 1)"
+          formula_version="0.1.${GITHUB_RUN_NUMBER}"
+          {
+            echo "archive_url=${archive_url}"
+            echo "archive_sha=${archive_sha}"
+            echo "formula_version=${formula_version}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Update formula metadata
+        env:
+          ARCHIVE_URL: ${{ steps.source.outputs.archive_url }}
+          ARCHIVE_SHA: ${{ steps.source.outputs.archive_sha }}
+          FORMULA_VERSION: ${{ steps.source.outputs.formula_version }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          formula = Path("Formula/systemupdater.rb")
+          content = formula.read_text()
+          replacements = (
+              (r'(?m)^  url ".*"$', f'  url "{os.environ["ARCHIVE_URL"]}"'),
+              (r'(?m)^  sha256 ".*"$', f'  sha256 "{os.environ["ARCHIVE_SHA"]}"'),
+              (r'(?m)^  version ".*"$', f'  version "{os.environ["FORMULA_VERSION"]}"'),
+          )
+          for pattern, replacement in replacements:
+              content, count = re.subn(pattern, replacement, content, count=1)
+              if count != 1:
+                  raise SystemExit(f"Could not update formula field: {pattern}")
+          formula.write_text(content)
+          PY
+
+      - name: Commit formula update
+        env:
+          FORMULA_VERSION: ${{ steps.source.outputs.formula_version }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/systemupdater.rb
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "chore(homebrew): bump formula to ${FORMULA_VERSION}"
+          git push origin HEAD:main

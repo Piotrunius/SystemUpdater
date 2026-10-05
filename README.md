@@ -47,6 +47,20 @@ cd ~/.local/share/sysupdate
 ./install.sh
 ```
 
+### Homebrew
+
+Install from the project tap:
+
+```bash
+brew install Piotrunius/SystemUpdater/systemupdater
+```
+
+Homebrew manages this installation, so the built-in Git self-updater is disabled. The tap formula is refreshed automatically after changes reach `main`. Update the installed command with:
+
+```bash
+brew update && brew upgrade systemupdater
+```
+
 Ensure `~/.local/bin` is in your `PATH`:
 
 ```bash
@@ -121,9 +135,9 @@ sysupdate --version
 
 ### Self-Updates and Versioning
 
-On normal runs, `sysupdate` fetches its configured Git upstream and fast-forwards the current branch when updates are available. It does this only for a clean checkout; local changes are preserved and reported, and divergent branches are left untouched. If the network is unavailable, the regular system update continues with the installed version.
+On normal runs, `sysupdate` detects the current Git upstream or the project's default repository and fast-forwards when updates are available. It does this only for a clean checkout; local changes are preserved and reported, and divergent branches are left untouched. If the network is unavailable, the regular system update continues with the installed version. Homebrew installations are updated by Homebrew and skip this check.
 
-`sysupdate --version` reports the installed source version (release tag plus commit hash) and checks the upstream branch for its latest commit. This makes source changes visible without maintaining a manually edited version number. A Git checkout with no configured upstream cannot self-update and reports the upstream version as unavailable.
+`sysupdate --version` reports the installed source version and the latest available upstream or Homebrew formula version.
 
 ---
 
