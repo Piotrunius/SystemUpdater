@@ -1,0 +1,30 @@
+# ~/.config/sysupdate/config.toml
+# SystemUpdater Configuration File
+
+[misc]
+# List of module keys to disable permanently
+# Run `sysupdate --list` to inspect all available module keys.
+# disable = ["snap", "docker", "antigravity"]
+
+# Minimum hours between protective Btrfs root snapshots (default: 12)
+cooldown_hours = 12
+
+[git]
+# List of local git repositories to pull during the update
+# repos = [
+#     "~/dotfiles",
+#     "~/Projects/my-app",
+#     "~/.config/nvim"
+# ]
+
+[pre_commands]
+# Custom shell commands executed before system update starts
+# "Clean temporary files" = "rm -rf /tmp/build-cache-*"
+
+[commands]
+# Custom update commands executed alongside modules
+# "Update custom tool" = "my-custom-cli update"
+
+[post_commands]
+# Custom shell commands executed after all updates finish
+# "Update desktop database" = "update-desktop-database ~/.local/share/applications"

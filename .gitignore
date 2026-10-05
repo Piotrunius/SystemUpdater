@@ -1,0 +1,30 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Environments & virtualenvs
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Testing & type checking
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Editor & IDE artifacts
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Local runtime stamps / caches
+*.stamp
+*.log
