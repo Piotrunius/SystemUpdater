@@ -49,10 +49,11 @@ cd ~/.local/share/sysupdate
 
 ### Homebrew
 
-Install from the project tap:
+Add the project repository as a tap, then install the formula:
 
 ```bash
-brew install Piotrunius/SystemUpdater/systemupdater
+brew tap Piotrunius/SystemUpdater https://github.com/Piotrunius/SystemUpdater.git
+brew install systemupdater
 ```
 
 Homebrew manages this installation, so the built-in Git self-updater is disabled. The tap formula is refreshed automatically after changes reach `main`. Update the installed command with:
