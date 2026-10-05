@@ -5,11 +5,13 @@ Crafted for Nobara Linux with modular architecture and flicker-free TUI.
 """
 
 import argparse
-import json
 import os
+import re
 import signal
 import sys
 import time
+import urllib.error
+import urllib.request
 from typing import List
 
 # Ensure script directory is in sys.path
@@ -68,25 +70,16 @@ def is_homebrew_install():
 
 
 def latest_homebrew_version():
-    """Read the latest version available in the installed Homebrew tap."""
-    brew = shutil.which("brew")
-    if not brew:
-        return None
+    """Read the current formula version directly from the upstream repository."""
+    url = "https://raw.githubusercontent.com/Piotrunius/SystemUpdater/main/Formula/systemupdater.rb"
+    request = urllib.request.Request(url, headers={"User-Agent": "SystemUpdater"})
     try:
-        result = subprocess.run(
-            [brew, "info", "--json=v2", "--formula", "piotrunius/systemupdater/systemupdater"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        if result.returncode != 0:
-            return None
-        formulae = json.loads(result.stdout).get("formulae", [])
-        if formulae:
-            return formulae[0].get("versions", {}).get("stable")
-    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError):
+        with urllib.request.urlopen(request, timeout=8) as response:
+            formula = response.read().decode("utf-8")
+        match = re.search(r'(?m)^\s*version\s+["\']([^"\']+)["\']\s*$', formula)
+        return match.group(1) if match else None
+    except (OSError, TimeoutError, urllib.error.URLError, UnicodeDecodeError):
         return None
-    return None
 
 
 def latest_remote_commit():
