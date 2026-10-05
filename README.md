@@ -1,6 +1,6 @@
 # SystemUpdater (sysupdate)
 
-A modern, fast, modular system updater for Linux (Fedora, Nobara, Debian, Ubuntu, Arch Linux, openSUSE, Alpine, Void), Flatpaks, Homebrew, Containers, and Development Runtimes.
+A modern, fast, modular system updater for Linux.
 
 Built as a lightweight, zero-dependency Python 3 replacement for monolithic updaters. Features automatic distribution detection, a flicker-free ANSI terminal interface, automated pre-update Btrfs root snapshots, unified version diffing, and fine-grained module control.
 
