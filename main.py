@@ -5,6 +5,7 @@ Crafted for Nobara Linux with modular architecture and flicker-free TUI.
 """
 
 import argparse
+import json
 import os
 import signal
 import sys
@@ -43,6 +44,13 @@ def git_output(*args, timeout=3):
 
 def get_version():
     """Use the nearest release tag and exact source commit as the version."""
+    if is_homebrew_install():
+        try:
+            with open(os.path.join(SCRIPT_DIR, "VERSION"), encoding="utf-8") as version_file:
+                return version_file.read().strip() or "unknown"
+        except OSError:
+            return "unknown"
+
     commit = git_output("rev-parse", "--short=12", "HEAD")
     if not commit:
         return "unknown"
@@ -52,6 +60,33 @@ def get_version():
         if len(parts) == 3 and parts[1].isdigit():
             return f"{parts[0]}+{commit}" if parts[1] == "0" else f"{parts[0]}+{parts[1]}.g{commit}"
     return commit
+
+
+def is_homebrew_install():
+    """Detect a Homebrew-managed installation created by its formula."""
+    return os.path.isfile(os.path.join(SCRIPT_DIR, ".homebrew-install"))
+
+
+def latest_homebrew_version():
+    """Read the latest version available in the installed Homebrew tap."""
+    brew = shutil.which("brew")
+    if not brew:
+        return None
+    try:
+        result = subprocess.run(
+            [brew, "info", "--json=v2", "--formula", "piotrunius/systemupdater/systemupdater"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode != 0:
+            return None
+        formulae = json.loads(result.stdout).get("formulae", [])
+        if formulae:
+            return formulae[0].get("versions", {}).get("stable")
+    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError):
+        return None
+    return None
 
 
 def latest_remote_commit():
@@ -69,14 +104,14 @@ def latest_remote_commit():
 class VersionAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         current = get_version()
-        latest = latest_remote_commit()
+        latest = latest_homebrew_version() if is_homebrew_install() else latest_remote_commit()
         ui = UI()
         ui.print_header("System Updater")
         ui.print_category("Version")
         ui.print_result("Installed version", StepResult("unchanged", current))
         if latest:
-            local_commit = git_output("rev-parse", "--short=12", "HEAD")
-            if latest == local_commit:
+            installed = current if is_homebrew_install() else git_output("rev-parse", "--short=12", "HEAD")
+            if latest == installed:
                 ui.print_result("Latest version", StepResult("unchanged", f"{latest} (up to date)"))
             else:
                 ui.print_result("Latest version", StepResult("unchanged", f"{latest} (update available)"))
@@ -88,6 +123,9 @@ class VersionAction(argparse.Action):
 def self_update():
     """Fast-forward a clean checkout and restart using the updated source."""
     started = time.monotonic()
+
+    if is_homebrew_install():
+        return None
 
     def result(status, message, details=None):
         return status, message, max(0.1, time.monotonic() - started), details or []
@@ -304,7 +342,9 @@ def main():
     signal.signal(signal.SIGTERM, handle_interrupt)
 
     self_update_result = None
-    if not any(arg in ("-V", "--version", "-h", "--help") for arg in sys.argv[1:]):
+    if not is_homebrew_install() and not any(
+        arg in ("-V", "--version", "-h", "--help") for arg in sys.argv[1:]
+    ):
         self_update_result = self_update()
     args = parse_args()
 
