@@ -17,7 +17,7 @@ def is_sudo_active() -> bool:
     try:
         res = subprocess.run(["sudo", "-n", "true"], capture_output=True)
         return res.returncode == 0
-    except Exception:
+    except OSError:
         return False
 
 
@@ -37,7 +37,7 @@ def init_sudo(interactive: bool = True) -> bool:
             res = subprocess.run(["sudo", "-v"])
             if res.returncode != 0:
                 return False
-        except Exception:
+        except OSError:
             return False
 
     start_sudo_keeper()
@@ -50,8 +50,9 @@ def _keeper_worker():
             break
         try:
             subprocess.run(["sudo", "-n", "-v"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        except Exception:
-            pass
+        except OSError:
+            _stop_event.set()
+            return
 
 
 def start_sudo_keeper():

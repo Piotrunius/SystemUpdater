@@ -64,8 +64,13 @@ class DockerModule(BaseModule):
             elif "Downloaded newer image" in p_out or "Pull complete" in p_out:
                 updated.append(img)
 
-        if errors and not updated:
-            return StepResult("error", "Docker pull encountered errors", error_output="\n".join(errors))
+        if errors:
+            return StepResult(
+                "error",
+                "Docker pull encountered errors",
+                details=updated,
+                error_output="\n".join(errors),
+            )
 
         if updated:
             return StepResult("ok", f"{len(updated)} image{'s' if len(updated) != 1 else ''} updated", details=updated)

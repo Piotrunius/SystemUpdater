@@ -35,7 +35,6 @@ class FirmwareModule(BaseModule):
                 re.I,
             )
         ))
-
         # Check updates
         code, out, err = ctx.run_cmd(["fwupdmgr", "get-updates", "--json"], timeout=30)
         if code == 2 or "No updates available" in out:

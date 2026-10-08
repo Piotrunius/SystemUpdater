@@ -87,27 +87,30 @@ alias update="sysupdate"
 ## Usage
 
 ```text
-usage: sysupdate [-h] [-V] [-n] [-f] [-q] [-v] [--only ONLY] [--skip SKIP]
-                 [-C CATEGORY] [--no-sudo] [--no-snapshot] [-c CONFIG]
-                 [--edit-config] [-l]
+usage: sysupdate [-h] [--version] [-n] [-f] [-q] [-v] [--only ONLY] [--skip SKIP]
+                 [-c CATEGORY] [--no-sudo] [--no-snapshot] [--config PATH]
+                 [--edit-config] [-l] [--history [COUNT] | --show-log RUN_ID]
 
-Unified System Updater for Nobara Linux, Flatpaks, Homebrew, Containers, and Runtimes.
+Unified System Updater for Linux (Fedora, Nobara, Debian, Ubuntu, Arch, openSUSE), Flatpaks, Homebrew, Containers, and Runtimes.
 
 options:
   -h, --help            show this help message and exit
-  -V, --version         show installed version and latest available version
+  --version             Show installed version and latest available version
   -n, --dry-run         Simulate update process without downloading or installing changes
   -f, --force           Force execution (e.g. bypass Btrfs snapshot cooldown)
   -q, --quiet           Suppress live step progress, display only the final summary and errors
-  -v, --verbose         Enable detailed logging output with live command streaming
+  -v, --verbose         Stream update output live while keeping internal probes quiet
   --only ONLY           Comma-separated list of module keys or aliases to run (e.g. 'dnf,flatpak,brew')
   --skip SKIP           Comma-separated list of module keys to skip
-  -C, --category CAT    Comma-separated list of categories to run (e.g. 'system', 'containers', 'dev', 'gaming')
+  -c, --category CATEGORY
+                        Comma-separated list of categories to run (e.g. 'system', 'containers', 'dev', 'gaming')
   --no-sudo             Skip all modules requiring administrator (sudo) privileges
   --no-snapshot         Skip protective Btrfs snapshot
-  -c, --config CONFIG   Path to custom configuration TOML file
+  --config PATH         Path to custom configuration TOML file
   --edit-config         Open configuration file in $EDITOR
   -l, --list            List all registered modules and check their availability
+  --history [COUNT]     List recent update runs (default: 10, maximum: 30)
+  --show-log RUN_ID     Show saved command output for a selected run
 ```
 
 ### Examples
@@ -128,11 +131,20 @@ sysupdate --category dev --no-sudo
 # Run in quiet mode (suitable for cron or systemd timers)
 sysupdate -q
 
-# Run update with live shell command streaming
+# Show command activity and warnings in the final summary
 sysupdate -v
+
+# List the latest update runs
+sysupdate --history
+
+# Show the full log for one selected run
+sysupdate --show-log 20261008T052420Z-a1b2c3d4
 
 # Open configuration file in default editor ($EDITOR)
 sysupdate --edit-config
+
+# Use a configuration file at a custom path
+sysupdate --config /path/to/config.toml
 
 # Inspect status of all supported modules on the current system
 sysupdate --list
@@ -146,6 +158,14 @@ sysupdate --version
 Git installs check their remote at startup and fast-forward only when the working tree is clean. Homebrew installs are updated through the Homebrew module or with `brew upgrade systemupdater`.
 
 `sysupdate --version` reports the installed version and the latest available Git commit or Homebrew formula version.
+
+### Run History
+
+Completed runs are stored in `~/.local/state/sysupdate/history/` (or `$XDG_STATE_HOME/sysupdate/history/`) with private file permissions. The last 30 runs are retained. Command output is redacted for common token and password patterns, capped at 100 KB per command and 2 MB per run, and omitted for read-only commands because it can contain credentials.
+
+Use `sysupdate --history [COUNT]` to list saved runs, then pass the chosen run ID to `sysupdate --show-log RUN_ID` to inspect its module statuses, commands, exit codes, and captured output. Warning details are shown in the relevant module output.
+
+The history status is `warning` only when a module reports warning text not present in that module's latest previous run. Repeated warnings remain available in the saved log but do not keep changing every run's status to `warning`.
 
 ---
 
@@ -195,6 +215,7 @@ SystemUpdater/
 ├── main.py                              # CLI, module selection, and update lifecycle
 ├── config.py                            # Loads user settings from TOML
 ├── config.example.toml                  # Default configuration template
+├── history_store.py                     # Private, redacted run-history storage and viewer
 ├── sudo.py                              # Sudo credentials and keepalive
 ├── ui.py                                # Terminal status, progress, and summaries
 ├── install.sh                           # Git-checkout installer
@@ -225,11 +246,22 @@ SystemUpdater/
 │   ├── git_repos.py      # User-configured Git repositories
 │   └── custom.py         # User-configured pre-, update, and post-commands
 └── tests/
+    ├── test_command_logging.py      # Capturing commands and withholding read-only output
     ├── test_config.py              # Configuration parsing and validation
+    ├── test_distrobox.py           # Distrobox update detection and results
+    ├── test_firmware.py            # Firmware update states and metadata warnings
     ├── test_flatpak.py             # Preserving and displaying advisory warnings
+    ├── test_history_store.py       # Private run history, selection, and redaction
     ├── test_module_availability.py # Installed tools and update target detection
     ├── test_module_registry.py     # Custom configuration passed to modules
-    └── test_snapshot.py            # Btrfs detection and snapshot cooldown
+    ├── test_npm_module.py          # Reporting npm registry check failures
+    ├── test_nuvio.py               # Architecture-aware RPM selection
+    ├── test_package_signature_checks.py # Keeping package signature checks enabled
+    ├── test_partial_failures.py    # Reporting failures after partial updates
+    ├── test_snapshot.py            # Btrfs detection and snapshot cooldown
+    ├── test_ui_summary.py          # Consistent warning and error summaries
+    ├── test_universal.py           # Stopping Nix updates when channel refresh fails
+    └── test_version.py             # Version output and source metadata
 ```
 
 ---

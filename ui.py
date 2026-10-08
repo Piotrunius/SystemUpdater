@@ -4,6 +4,7 @@ Strictly adheres to flicker-free ANSI standards and zero-emoji policy.
 """
 
 import os
+import re
 import sys
 import time
 import threading
@@ -33,6 +34,14 @@ RUNNING_FRAMES = [
     f"{Colors.DIM}[{Colors.RESET}{Colors.BLUE}:{Colors.RESET}{Colors.DIM}]{Colors.RESET}",
     f"{Colors.DIM}[{Colors.RESET}{Colors.CYAN}:{Colors.RESET}{Colors.DIM}]{Colors.RESET}",
 ]
+
+DIAGNOSTIC_LINE_PATTERN = re.compile(
+    r"\b(warn(?:ing)?|deprecated|error|failed|failure|unable|could not|cannot|denied|"
+    r"refused|rejected|invalid|unsupported|not supported|not found|not registered|rate limit|"
+    r"end[- ]of[- ]life|no longer|timed?[- ]out|timeout|known issue|"
+    r"please report this issue)\b|/Casks/[^:\s]+:\d+",
+    re.I,
+)
 
 
 class StepResult:
@@ -84,6 +93,9 @@ class UI:
     ) -> StepResult:
         from modules.base import detect_warning
 
+        command_start = len(getattr(ctx, "command_log", [])) if ctx is not None else 0
+        note_start = len(getattr(ctx, "deferred_notes", [])) if ctx is not None else 0
+
         if self.quiet:
             start_time = time.time()
             try:
@@ -98,6 +110,7 @@ class UI:
                         res.status = "warning"
                         res.message = warn_reason
             res.duration = time.time() - start_time
+            self._complete_step(res, ctx, command_start, note_start=note_start)
             return res
 
         is_verbose = ctx is not None and getattr(ctx, "verbose", False)
@@ -132,6 +145,13 @@ class UI:
                         res.message = warn_reason
 
             res.duration = time.time() - start_time
+            self._complete_step(
+                res,
+                ctx,
+                command_start,
+                note_start=note_start,
+                show_command_output=is_verbose,
+            )
 
             if commands_printed:
                 dur_val = max(0.1, res.duration)
@@ -139,17 +159,19 @@ class UI:
                 if res.status == "ok":
                     msg_text = self._clean_ok_message(label, res.message)
                     print(f"      {Colors.DIM}[{Colors.RESET}{Colors.BOLD_GREEN}✓{Colors.RESET}{Colors.DIM}]{Colors.RESET} {msg_text or 'updated'} {time_tag}")
+                elif res.status == "warning" or (
+                    is_verbose and res.status == "unchanged" and res.warnings
+                ):
+                    if self.verbose:
+                        print(f"      {Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET} warning {time_tag}")
+                    else:
+                        print(f"      {Colors.DIM}[—]{Colors.RESET} up to date {time_tag}")
                 elif res.status == "unchanged":
                     msg = res.message if res.message else "up to date"
                     print(f"      {Colors.DIM}[—]{Colors.RESET} {msg} {time_tag}")
                 elif res.status == "skipped":
                     if self.verbose:
                         print(f"      {Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET} skipped {time_tag}")
-                    else:
-                        print(f"      {Colors.DIM}[—]{Colors.RESET} up to date {time_tag}")
-                elif res.status == "warning":
-                    if self.verbose:
-                        print(f"      {Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET} warning {time_tag}")
                     else:
                         print(f"      {Colors.DIM}[—]{Colors.RESET} up to date {time_tag}")
                 else:  # error
@@ -185,6 +207,7 @@ class UI:
             spinner_thread.join()
 
         res.duration = time.time() - start_time
+        self._complete_step(res, ctx, command_start, note_start=note_start)
         # Clear the status line
         sys.stdout.write("\r\033[K")
         sys.stdout.flush()
@@ -199,6 +222,58 @@ class UI:
 
         self._print_static_result(label, res)
         return res
+
+    def _complete_step(
+        self,
+        result: StepResult,
+        ctx: Optional[Any],
+        command_start: int,
+        note_start: int = 0,
+        show_command_output: bool = False,
+    ) -> None:
+        from history_store import redact_text
+
+        records = getattr(ctx, "command_log", [])[command_start:] if ctx is not None else []
+        notes = getattr(ctx, "deferred_notes", [])[note_start:] if ctx is not None else []
+        warning_lines = list(result.warnings) + list(notes)
+        failed_output = []
+
+        for record in records:
+            outputs = [record.get("stdout", ""), record.get("stderr", "")]
+            if record.get("returncode", 0) != 0:
+                failed_output.extend(
+                    line for output in outputs for line in output.splitlines() if line.strip()
+                )
+                if result.status == "warning":
+                    warning_lines.extend(failed_output)
+                continue
+
+            for output in outputs:
+                for line in output.splitlines():
+                    if DIAGNOSTIC_LINE_PATTERN.search(line):
+                        warning_lines.append(line.strip())
+
+        if result.status == "error" and failed_output:
+            existing = result.error_output.strip()
+            combined = "\n".join(failed_output)
+            if combined and combined not in existing:
+                result.error_output = f"{existing}\n{combined}".strip()
+
+        result.message = redact_text(result.message)
+        result.details = [redact_text(str(detail)) for detail in result.details]
+        result.error_output = redact_text(result.error_output)
+        result.warnings = list(
+            dict.fromkeys(redact_text(line) for line in warning_lines if line.strip())
+        )
+
+        if show_command_output and not self.quiet:
+            for record in records:
+                if record.get("output_withheld") or record.get("output_streamed"):
+                    continue
+                for stream_name in ("stdout", "stderr"):
+                    for line in record.get(stream_name, "").splitlines():
+                        if line.strip():
+                            print(f"        {Colors.DIM}{line.rstrip()}{Colors.RESET}")
 
     def _spinner_worker(self, stop_event: threading.Event, status: Dict[str, str]):
         frame_idx = 0
@@ -242,17 +317,19 @@ class UI:
             msg_text = self._clean_ok_message(label, res.message)
             msg = f": {msg_text}" if msg_text else ""
             print(f"  {Colors.DIM}[{Colors.RESET}{Colors.BOLD_GREEN}✓{Colors.RESET}{Colors.DIM}]{Colors.RESET} {label}{msg} {time_tag}")
+        elif res.status == "warning" or (
+            self.verbose and res.status == "unchanged" and res.warnings
+        ):
+            if self.verbose:
+                print(f"  {Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET} {label}: warning {time_tag}")
+            else:
+                print(f"  {Colors.DIM}[—]{Colors.RESET} {label}: up to date {time_tag}")
         elif res.status == "unchanged":
             msg = res.message if res.message else "up to date"
             print(f"  {Colors.DIM}[—]{Colors.RESET} {label}: {msg} {time_tag}")
         elif res.status == "skipped":
             if self.verbose:
                 print(f"  {Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET} {label}: skipped {time_tag}")
-            else:
-                print(f"  {Colors.DIM}[—]{Colors.RESET} {label}: up to date {time_tag}")
-        elif res.status == "warning":
-            if self.verbose:
-                print(f"  {Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET} {label}: warning {time_tag}")
             else:
                 print(f"  {Colors.DIM}[—]{Colors.RESET} {label}: up to date {time_tag}")
         else:  # error
@@ -276,80 +353,79 @@ class UI:
             and getattr(r.get("module"), "category", "") != "System Protection"
             and r.get("key") != "snapshot"
         ]
-        snapshot_result = next((r for r in results if r.get("key") == "snapshot"), None)
-        snapshot_created = (
-            snapshot_result is not None
-            and snapshot_result["result"].status == "ok"
-            and "created" in (snapshot_result["result"].message or "").lower()
-        )
-
-        warning_items = [
+        all_warning_items = [
             r for r in results
             if r["result"].status in ("warning", "skipped") or r["result"].warnings
-        ] if self.verbose else []
+        ]
+        warning_items = all_warning_items if self.verbose else []
         error_items = [r for r in results if r["result"].status == "error"]
+
+        def print_details(lines: List[str], indent: str = "      "):
+            printed = set()
+            for detail in lines:
+                for line in str(detail).strip().splitlines():
+                    normalized = line.strip()
+                    if normalized and normalized not in printed:
+                        printed.add(normalized)
+                        print(f"{indent}- {normalized}")
+
+        def diagnostic_lines(output: str) -> List[str]:
+            lines = [line.rstrip() for line in output.strip().splitlines() if line.strip()]
+            if len(lines) > 20:
+                lines = ["... (previous output omitted) ..."] + lines[-20:]
+            return lines
+
+        def print_diagnostic_heading(title: str):
+            fill = "─" * max(0, width - len(title) - 4)
+            print(f"{Colors.BOLD_CYAN}── {title} {fill}{Colors.RESET}")
 
         # ── 1. Summary Section ────────────────────────────────────────────────
         print()
         print(f"{Colors.BOLD}{Colors.CYAN}── Summary ─ {duration_str} " + "─" * max(0, width - len(duration_str) - 14) + Colors.RESET)
-
         if package_updates:
             print("  Updates applied:")
             for item in package_updates:
                 msg_text = self._clean_ok_message(item['name'], item['result'].message)
                 print(f"    • {item['name']}: {msg_text}")
-                for d in item['result'].details:
-                    print(f"      - {d}")
-        elif not warning_items and not error_items:
+                print_details(item['result'].details)
+        elif not all_warning_items and not error_items:
             print("  All components are fully up to date.")
         else:
-            print("  No package updates were applied.")
+            print(f"  {Colors.DIM}[-]{Colors.RESET} No package updates were applied.")
 
-        print(f"{Colors.CYAN}" + "─" * width + f"{Colors.RESET}")
-
-        # ── 2. Warnings Section (only if warnings occurred) ───────────────────
+        # Warning details stay hidden in normal mode; keep this existing contract.
         if warning_items:
             print()
-            title = "Warnings"
-            print(f"{Colors.BOLD}{Colors.CYAN}── {title} " + "─" * max(0, width - len(title) - 4) + Colors.RESET)
+            print_diagnostic_heading("Warnings")
             for item in warning_items:
                 res = item["result"]
                 if res.status == "skipped":
-                    print(f"  • {item['name']}: skipped")
-                    if res.message:
-                        print(f"    - {res.message}")
+                    message = "skipped"
+                    details = ([res.message] if res.message else []) + list(res.details)
                 else:
-                    if res.status == "warning":
-                        print(f"  • {item['name']}: {res.message or 'warning'}")
-                    elif res.warnings:
-                        for warning in res.warnings:
-                            print(f"  • {item['name']}: {warning}")
-                for d in res.details:
-                    print(f"    - {d}")
-                for warning in res.warnings if res.status in ("warning", "skipped") else []:
-                    print(f"    - {warning}")
-                if res.error_output:
-                    lines = res.error_output.strip().splitlines()
-                    if len(lines) > 20:
-                        lines = ["... (previous output omitted) ..."] + lines[-20:]
-                    for line in lines:
-                        print(f"    {Colors.DIM}{line}{Colors.RESET}")
-            print(f"{Colors.CYAN}" + "─" * width + f"{Colors.RESET}")
+                    message = "warning"
+                    details = list(res.details)
+                details.extend(res.warnings)
+                details.extend(diagnostic_lines(res.error_output))
+                if res.status == "warning" and res.message and res.message.lower() != "warning":
+                    details.insert(0, res.message)
+                print(f"  {Colors.BOLD_YELLOW}[!]{Colors.RESET} {item['name']}: {message}")
+                print_details(details, indent="    ")
 
-        # ── 3. Errors Section (only if failures occurred) ─────────────────────
         if error_items:
             print()
-            title = "Errors"
-            print(f"{Colors.BOLD}{Colors.CYAN}── {title} " + "─" * max(0, width - len(title) - 4) + Colors.RESET)
+            print_diagnostic_heading("Errors")
             for item in error_items:
                 res = item["result"]
-                print(f"  • {item['name']}: {res.message or 'failed'}")
-                if res.error_output:
-                    lines = res.error_output.strip().splitlines()
-                    if len(lines) > 20:
-                        lines = ["... (previous output omitted) ..."] + lines[-20:]
-                    for l in lines:
-                        print(f"    {Colors.DIM}{l}{Colors.RESET}")
-            print(f"{Colors.CYAN}" + "─" * width + f"{Colors.RESET}")
+                details = (
+                    list(res.details)
+                    + list(res.warnings)
+                    + diagnostic_lines(res.error_output)
+                )
+                if not details and res.message and res.message.lower() != "failed":
+                    details.append(res.message)
+                print(f"  {Colors.BOLD_RED}[✗]{Colors.RESET} {item['name']}: failed")
+                print_details(details, indent="    ")
 
+        print(f"{Colors.CYAN}" + "─" * width + f"{Colors.RESET}")
         print()

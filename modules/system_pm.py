@@ -33,8 +33,15 @@ class AptModule(BaseModule):
 
         # 1. Update package lists
         u_code, u_out, u_err = ctx.run_cmd(["sudo", "apt-get", "update", "-q"], env_extra=env)
-        if u_code != 0 and "Failed to fetch" in (u_err or u_out):
-            return StepResult("warning", "APT repository refresh encountered network warnings")
+        if u_code != 0:
+            refresh_output = u_err or u_out
+            if "Failed to fetch" in refresh_output:
+                return StepResult(
+                    "warning",
+                    "APT repository refresh encountered network warnings",
+                    error_output=refresh_output,
+                )
+            return StepResult("error", "APT repository refresh failed", error_output=refresh_output)
 
         # 2. Upgrade packages
         up_code, up_out, up_err = ctx.run_cmd(
@@ -61,19 +68,29 @@ class AptModule(BaseModule):
         upgraded = list(dict.fromkeys(upgraded))
 
         # 3. Clean up obsolete packages
-        ctx.run_cmd(["sudo", "apt-get", "autoremove", "-y", "-q"], env_extra=env, timeout=120)
+        cleanup_code, _, _ = ctx.run_cmd(
+            ["sudo", "apt-get", "autoremove", "-y", "-q"], env_extra=env, timeout=120
+        )
+        cleanup_warnings = []
+        if cleanup_code != 0:
+            cleanup_warnings.append("APT autoremove failed")
 
         if upgraded:
             count = len(upgraded)
             details = upgraded[:10]
             if count > 10:
                 details.append(f"... and {count - 10} more")
-            return StepResult("ok", f"{count} package{'s' if count != 1 else ''} upgraded", details=details)
+            return StepResult(
+                "ok",
+                f"{count} package{'s' if count != 1 else ''} upgraded",
+                details=details,
+                warnings=cleanup_warnings,
+            )
 
         if "0 upgraded, 0 newly installed" in up_out:
-            return StepResult("unchanged")
+            return StepResult("unchanged", warnings=cleanup_warnings)
 
-        return StepResult("unchanged")
+        return StepResult("unchanged", warnings=cleanup_warnings)
 
 
 class PacmanModule(BaseModule):
@@ -82,7 +99,7 @@ class PacmanModule(BaseModule):
     aliases = ["arch", "aur", "yay", "paru", "system"]
     category = "System Core"
     description = "Updates system and AUR packages via Pacman / Yay / Paru (Arch / Manjaro / CachyOS)"
-    requires_sudo = False  # Yay and paru handle sudo escalation internally
+    requires_sudo = True
 
     def is_available(self, ctx: UpdateContext) -> bool:
         return ctx.which("pacman") is not None
@@ -148,11 +165,17 @@ class ZypperModule(BaseModule):
         if ctx.dry_run:
             return StepResult("ok", f"[DRY-RUN] Would run zypper --non-interactive {subcmd}")
 
-        # Refresh repositories
-        ctx.run_cmd(["sudo", "zypper", "--non-interactive", "refresh"], timeout=180)
+        # Do not proceed with stale repository metadata if refresh fails.
+        refresh_code, refresh_out, refresh_err = ctx.run_cmd(
+            ["sudo", "zypper", "--non-interactive", "refresh"], timeout=180
+        )
+        if refresh_code != 0:
+            return StepResult(
+                "error", "zypper repository refresh failed", error_output=refresh_err or refresh_out
+            )
 
         code, out, err = ctx.run_cmd(
-            ["sudo", "zypper", "--non-interactive", "--no-gpg-checks", subcmd, "--auto-agree-with-licenses"],
+            ["sudo", "zypper", "--non-interactive", subcmd, "--auto-agree-with-licenses"],
             timeout=600,
         )
 

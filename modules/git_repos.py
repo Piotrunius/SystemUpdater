@@ -48,8 +48,13 @@ class GitReposModule(BaseModule):
             elif "Already up to date" not in out:
                 updated.append(repo_name)
 
-        if errors and not updated:
-            return StepResult("error", "Git pull encountered errors", error_output="\n".join(errors))
+        if errors:
+            return StepResult(
+                "error",
+                "Git pull encountered errors",
+                details=updated,
+                error_output="\n".join(errors),
+            )
 
         if updated:
             return StepResult("ok", f"{len(updated)} repo{'s' if len(updated) != 1 else ''} updated", details=updated)

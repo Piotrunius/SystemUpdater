@@ -5,6 +5,7 @@ Base classes and execution context for SystemUpdater modules.
 import os
 import re
 import shutil
+import shlex
 import subprocess
 import time
 import threading
@@ -52,8 +53,8 @@ def get_os_release() -> Dict[str, str]:
                             k, v = line.split("=", 1)
                             info[k.strip()] = v.strip().strip('"').strip("'")
                 break
-            except Exception:
-                pass
+            except (OSError, UnicodeError):
+                continue
 
     _os_release_cache = info
     return info
@@ -71,6 +72,9 @@ class UpdateContext:
         self.env["CI"] = "1"
         self.env["NONINTERACTIVE"] = "1"
         self.status_updater = None
+        self.command_log: List[Dict[str, object]] = []
+        self.deferred_notes: List[str] = []
+        self._logged_output_chars = 0
 
     def set_substatus(self, msg: str):
         if self.status_updater:
@@ -83,8 +87,7 @@ class UpdateContext:
 
     def print_verbose(self, text: str):
         if self.verbose:
-            self.notify_command_started()
-            print(f"      \033[2m{text}\033[0m")
+            self.deferred_notes.append(str(text))
 
     def run_cmd(
         self,
@@ -94,10 +97,14 @@ class UpdateContext:
         read_only: bool = False,
         retries: int = 0,
         retry_delay: float = 2.0,
+        sensitive_output: bool = False,
+        display_output: Optional[bool] = None,
     ) -> Tuple[int, str, str]:
         """
         Runs a command safely and captures output with stdin=DEVNULL to prevent hangs.
         If read_only is True, executes even during dry_run (for system queries).
+        Read-only probes are hidden in verbose output unless explicitly enabled.
+        Mark credential-producing commands with sensitive_output to suppress terminal echo.
         Includes automatic retry for transient glitches if retries > 0.
         """
         if self.dry_run and not read_only:
@@ -108,46 +115,55 @@ class UpdateContext:
             run_env.update(env_extra)
 
         attempts = 1 + max(0, retries)
-        last_code = 1
-        last_out = ""
-        last_err = ""
-
-        is_verbose = self.verbose and not read_only
+        show_live_output = not read_only if display_output is None else display_output
+        is_verbose = self.verbose and show_live_output and not sensitive_output
         if is_verbose:
             self.notify_command_started()
-            print(f"      \033[2m$ {' '.join(cmd)}\033[0m")
+            from history_store import redact_text
+
+            printable_command = shlex.join([redact_text(str(arg)) for arg in cmd])
+            print(f"      \033[2m$ {printable_command}\033[0m")
 
         for attempt in range(attempts):
+            started = time.monotonic()
+            last_code = 1
+            last_out = ""
+            last_err = ""
+            output_was_streamed = False
             if is_verbose:
                 try:
                     proc = subprocess.Popen(
                         cmd,
                         stdin=subprocess.DEVNULL,
                         stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
                         text=True,
+                        errors="replace",
                         bufsize=1,
                         env=run_env,
                     )
                     out_chunks = []
-                    err_chunks = []
 
                     def stream_reader(pipe, accumulator):
+                        from history_store import redact_text
+
                         try:
                             for line in iter(pipe.readline, ""):
                                 accumulator.append(line)
-                                clean = line.rstrip("\r\n")
-                                if clean:
-                                    print(f"        \033[2m{clean}\033[0m")
-                        except Exception:
-                            pass
+                                if is_verbose:
+                                    display_line = redact_text(line.rstrip("\r\n"))
+                                    print(
+                                        f"        \033[2m{display_line}\033[0m",
+                                        flush=True,
+                                    )
+                        except OSError:
+                            return
                         finally:
                             pipe.close()
 
                     t_out = threading.Thread(target=stream_reader, args=(proc.stdout, out_chunks), daemon=True)
-                    t_err = threading.Thread(target=stream_reader, args=(proc.stderr, err_chunks), daemon=True)
                     t_out.start()
-                    t_err.start()
+                    output_was_streamed = True
 
                     try:
                         proc.wait(timeout=timeout)
@@ -155,16 +171,19 @@ class UpdateContext:
                         proc.kill()
                         proc.wait()
                         t_out.join(timeout=0.5)
-                        t_err.join(timeout=0.5)
-                        return 124, "".join(out_chunks), f"Command timed out after {timeout}s: {' '.join(cmd)}"
+                        last_code = 124
+                        last_out = "".join(out_chunks)
+                        last_err = f"Command timed out after {timeout}s: {shlex.join(cmd)}"
+                        self._record_command(
+                            cmd, last_code, last_out, last_err, read_only, attempt, started,
+                            output_streamed=True,
+                        )
+                        return last_code, last_out, last_err
 
                     t_out.join(timeout=1.0)
-                    t_err.join(timeout=1.0)
                     last_code = proc.returncode
                     last_out = "".join(out_chunks)
-                    last_err = "".join(err_chunks)
-                    if last_code == 0:
-                        return 0, last_out, last_err
+                    last_err = ""
                 except Exception as e:
                     last_code = 1
                     last_out = ""
@@ -177,27 +196,85 @@ class UpdateContext:
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
                         text=True,
+                        errors="replace",
                         env=run_env,
                         timeout=timeout,
                     )
                     last_code = proc.returncode
                     last_out = proc.stdout
                     last_err = proc.stderr
-                    if last_code == 0:
-                        return 0, last_out, last_err
                 except subprocess.TimeoutExpired:
                     last_code = 124
                     last_out = ""
-                    last_err = f"Command timed out after {timeout}s: {' '.join(cmd)}"
+                    last_err = f"Command timed out after {timeout}s: {shlex.join(cmd)}"
                 except Exception as e:
                     last_code = 1
                     last_out = ""
                     last_err = str(e)
 
-            if attempt < attempts - 1:
+            self._record_command(
+                cmd,
+                last_code,
+                last_out,
+                last_err,
+                read_only,
+                attempt,
+                started,
+                output_streamed=output_was_streamed,
+            )
+            if last_code == 0:
+                return 0, last_out, last_err
+
+            failure_text = f"{last_out}\n{last_err}"
+            retryable = last_code == 124 or detect_warning(failure_text) is not None
+            if attempt < attempts - 1 and retryable:
                 time.sleep(retry_delay)
+                continue
+            break
 
         return last_code, last_out, last_err
+
+    def _record_command(
+        self,
+        cmd: List[str],
+        returncode: int,
+        stdout: str,
+        stderr: str,
+        read_only: bool,
+        attempt: int,
+        started: float,
+        output_streamed: bool = False,
+    ) -> None:
+        from history_store import redact_text
+
+        def limited_output(value: str) -> str:
+            redacted = redact_text(value)
+            per_command_limit = 100_000
+            total_run_limit = 2_000_000
+            remaining = max(0, total_run_limit - self._logged_output_chars)
+            max_chars = min(per_command_limit, remaining)
+            if len(redacted) > max_chars:
+                omitted = len(redacted) - max_chars
+                redacted = (
+                    f"[... {omitted} characters omitted ...]\n" + redacted[-max_chars:]
+                    if max_chars
+                    else f"[... {len(redacted)} characters omitted; run log limit reached ...]"
+                )
+            self._logged_output_chars += min(len(redacted), max_chars)
+            return redacted
+
+        self.command_log.append(
+            {
+                "command": [redact_text(str(arg)) for arg in cmd],
+                "returncode": returncode,
+                "stdout": "" if read_only else limited_output(stdout),
+                "stderr": "" if read_only else limited_output(stderr),
+                "output_withheld": read_only,
+                "output_streamed": output_streamed,
+                "attempt": attempt + 1,
+                "duration": round(time.monotonic() - started, 3),
+            }
+        )
 
     def which(self, binary_name: str) -> Optional[str]:
         return shutil.which(binary_name)

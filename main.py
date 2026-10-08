@@ -5,6 +5,7 @@ Crafted for Nobara Linux with modular architecture and flicker-free TUI.
 """
 
 import argparse
+from datetime import datetime, timezone
 import os
 import re
 import signal
@@ -28,6 +29,13 @@ from modules.base import UpdateContext, BaseModule
 from modules import get_all_modules
 from ui import UI, StepResult
 from config import get_config, DEFAULT_CONFIG_PATH
+from history_store import (
+    HistoryStore,
+    classify_run_status,
+    print_history,
+    print_run_log,
+    redact_text,
+)
 import sudo
 
 def git_output(*args, timeout=3):
@@ -40,7 +48,7 @@ def git_output(*args, timeout=3):
             timeout=timeout,
         )
         return result.stdout.strip() if result.returncode == 0 else None
-    except Exception:
+    except (OSError, subprocess.SubprocessError):
         return None
 
 
@@ -132,7 +140,7 @@ def self_update():
     if git_output("status", "--porcelain", timeout=5):
         return result(
             "warning",
-            "Update skipped, the working tree has uncommitted changes.",
+            "Update skipped because local changes were detected.",
         )
     upstream = git_output("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
     remote_names = (git_output("remote", timeout=5) or "").splitlines()
@@ -251,13 +259,16 @@ Examples:
   {prog_name} --skip docker   Run everything except Docker containers
   {prog_name} --edit-config   Open configuration file in $EDITOR
   {prog_name} --list          List all supported modules and system availability
+  {prog_name} --history       List recent update runs
+  {prog_name} --show-log ID   Show a saved update run
 """,
     )
 
     parser.add_argument(
-        "-V", "--version",
+        "--version",
         action=VersionAction,
         nargs=0,
+        help="Show installed version and latest available version",
     )
     parser.add_argument(
         "-n", "--dry-run",
@@ -277,7 +288,7 @@ Examples:
     parser.add_argument(
         "-v", "--verbose",
         action="store_true",
-        help="Enable detailed logging output with live command streaming",
+        help="Stream update command output live; keep internal probes quiet",
     )
     parser.add_argument(
         "--only",
@@ -290,7 +301,7 @@ Examples:
         help="Comma-separated list of module keys to skip",
     )
     parser.add_argument(
-        "-C", "--category",
+        "-c", "--category",
         type=str,
         help="Comma-separated list of categories to run (e.g. 'system', 'containers', 'dev', 'gaming')",
     )
@@ -305,8 +316,9 @@ Examples:
         help="Skip protective Btrfs snapshot",
     )
     parser.add_argument(
-        "-c", "--config",
+        "--config",
         type=str,
+        metavar="PATH",
         help="Path to custom configuration TOML file",
     )
     parser.add_argument(
@@ -318,6 +330,20 @@ Examples:
         "-l", "--list",
         action="store_true",
         help="List all registered modules and check their availability",
+    )
+    history_group = parser.add_mutually_exclusive_group()
+    history_group.add_argument(
+        "--history",
+        nargs="?",
+        const=10,
+        type=int,
+        metavar="COUNT",
+        help="List the most recent update runs (default: 10, maximum: 30)",
+    )
+    history_group.add_argument(
+        "--show-log",
+        metavar="RUN_ID",
+        help="Show the saved command output for a run listed by --history",
     )
 
     return parser.parse_args()
@@ -333,12 +359,35 @@ def main():
     signal.signal(signal.SIGINT, handle_interrupt)
     signal.signal(signal.SIGTERM, handle_interrupt)
 
-    self_update_result = None
-    if not is_homebrew_install() and not any(
-        arg in ("-V", "--version", "-h", "--help") for arg in sys.argv[1:]
-    ):
-        self_update_result = self_update()
     args = parse_args()
+    history_store = HistoryStore()
+    if args.history is not None:
+        if args.history < 1 or args.history > 30:
+            print("Error: --history count must be between 1 and 30.", file=sys.stderr)
+            sys.exit(2)
+        print_history(history_store.list_runs(30), limit=args.history)
+        sys.exit(0)
+    if args.show_log:
+        run_data = history_store.load(args.show_log)
+        if run_data is None:
+            print(f"Error: No saved update run found for ID {args.show_log!r}.", file=sys.stderr)
+            sys.exit(1)
+        previous_runs = history_store.list_runs(30)
+        matching_index = next(
+            (index for index, item in enumerate(previous_runs) if item.get("id") == args.show_log),
+            None,
+        )
+        if matching_index is not None:
+            run_data = dict(run_data)
+            run_data["status"] = classify_run_status(
+                run_data, previous_runs[matching_index + 1 :]
+            )
+        print_run_log(run_data)
+        sys.exit(0)
+
+    self_update_result = None
+    if not is_homebrew_install() and not (args.dry_run or args.list or args.edit_config):
+        self_update_result = self_update()
 
     if args.edit_config:
         edit_config(args.config or DEFAULT_CONFIG_PATH)
@@ -347,15 +396,14 @@ def main():
     cfg = get_config(config_path=args.config)
     all_modules: List[BaseModule] = get_all_modules(cfg)
 
-    if cfg.load_error:
-        print(
-            f"Warning: Could not load configuration from {cfg.config_path}; "
-            f"using defaults. {cfg.load_error}",
-            file=sys.stderr,
-        )
-
     # List modules mode
     if args.list:
+        if cfg.load_error:
+            print(
+                f"Warning: Could not load configuration from {cfg.config_path}; "
+                f"using defaults. {cfg.load_error}",
+                file=sys.stderr,
+            )
         print("\nRegistered Update Modules:")
         print(f"{'Key':<14} {'Name':<28} {'Status':<16} {'Description'}")
         print("─" * 85)
@@ -393,6 +441,10 @@ def main():
         print("No matching or available modules selected to run.")
         sys.exit(0)
 
+    # Availability checks can run read-only queries; history records update work only.
+    ctx.command_log.clear()
+    ctx._logged_output_chars = 0
+
     # Check if any selected module requires sudo upfront
     needs_sudo = any(getattr(m, "requires_sudo", False) for m in modules_to_run)
     if needs_sudo and not args.dry_run:
@@ -404,7 +456,20 @@ def main():
     ui.print_header("System Updater")
 
     results = []
+    if cfg.load_error:
+        results.append(
+            {
+                "name": "Configuration",
+                "key": "config",
+                "result": StepResult(
+                    "warning",
+                    f"Could not load configuration; using defaults: {cfg.load_error}",
+                ),
+            }
+        )
     total_start = time.time()
+    started_at = datetime.now(timezone.utc)
+    run_id = history_store.new_run_id(started_at)
     current_category = None
     self_update_printed = False
 
@@ -429,8 +494,17 @@ def main():
                         "result": self_update_step,
                     })
                     self_update_printed = True
+            command_start = len(ctx.command_log)
             step_res = ui.run_step(m.name, lambda mod=m: mod.run(ctx), ctx=ctx, module=m)
-            results.append({"name": m.name, "key": m.key, "result": step_res})
+            results.append(
+                {
+                    "name": m.name,
+                    "key": m.key,
+                    "module": m,
+                    "result": step_res,
+                    "commands": ctx.command_log[command_start:],
+                }
+            )
         if self_update_result and not self_update_printed:
             ui.print_category("Containers & Packages")
             self_update_step = StepResult(
@@ -451,9 +525,53 @@ def main():
         sudo.stop_sudo_keeper()
 
     total_elapsed = time.time() - total_start
+    finished_at = datetime.now(timezone.utc)
+    has_failures = any(r["result"].status == "error" for r in results)
+    update_count = sum(
+        r["result"].status == "ok"
+        and r.get("key") != "snapshot"
+        and getattr(r.get("module"), "category", "") != "System Protection"
+        for r in results
+    )
+    history_modules = [
+        {
+            "name": item["name"],
+            "key": item.get("key", ""),
+            "status": item["result"].status,
+            "message": redact_text(item["result"].message),
+            "duration": round(item["result"].duration, 2),
+            "details": [redact_text(str(detail)) for detail in item["result"].details],
+            "warnings": [redact_text(str(warning)) for warning in item["result"].warnings],
+            "error_output": redact_text(item["result"].error_output),
+            "commands": item.get("commands", []),
+        }
+        for item in results
+    ]
+    history_data = {
+        "id": run_id,
+        "started_at": started_at.isoformat(),
+        "finished_at": finished_at.isoformat(),
+        "duration": round(total_elapsed, 2),
+        "status": "unknown",
+        "update_count": update_count,
+        "modules": history_modules,
+    }
+    history_data["status"] = classify_run_status(
+        history_data, history_store.list_runs(30)
+    )
+    try:
+        history_store.save(history_data)
+    except OSError as error:
+        results.append(
+            {
+                "name": "Run History",
+                "key": "history",
+                "result": StepResult("warning", "Could not save update history", error_output=str(error)),
+            }
+        )
+
     ui.print_summary(results, total_elapsed)
 
-    has_failures = any(r["result"].status == "error" for r in results)
     sys.exit(1 if has_failures else 0)
 
 

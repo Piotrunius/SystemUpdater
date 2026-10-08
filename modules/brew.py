@@ -25,16 +25,14 @@ class BrewModule(BaseModule):
 
         # 1. brew update
         u_code, u_out, u_err = ctx.run_cmd([brew_bin, "update"])
-        if u_code != 0 and "Already up-to-date" not in u_out:
-            # We don't fail immediately, continue to upgrade
-            pass
+        if u_code != 0:
+            return StepResult("error", "Homebrew repository update failed", error_output=u_err or u_out)
 
         # 2. brew upgrade (formulae and casks)
         up_code, up_out, up_err = ctx.run_cmd([brew_bin, "upgrade"])
         cask_code, cask_out, cask_err = ctx.run_cmd([brew_bin, "upgrade", "--cask"])
 
         combined_out = (up_out or "") + "\n" + (cask_out or "")
-        combined_err = (up_err or "") + "\n" + (cask_err or "")
 
         upgraded = []
         for line in combined_out.splitlines():
@@ -43,15 +41,18 @@ class BrewModule(BaseModule):
             if m:
                 upgraded.append(m.group(1))
 
-        if up_code != 0 and not upgraded:
-            # Check if actual error or just warnings
-            filtered_err = "\n".join(
-                l for l in combined_err.splitlines()
-                if "Warning: Calling `postflight` is deprecated" not in l
-                and "Warning: Schema" not in l
-            ).strip()
-            if filtered_err:
-                return StepResult("error", "Homebrew upgrade failed", error_output=filtered_err)
+        failed_commands = []
+        if up_code != 0:
+            failed_commands.append(f"Formulae: {up_err or up_out or 'command failed'}")
+        if cask_code != 0:
+            failed_commands.append(f"Casks: {cask_err or cask_out or 'command failed'}")
+        if failed_commands:
+            return StepResult(
+                "error",
+                "Homebrew upgrade failed",
+                details=upgraded,
+                error_output="\n".join(failed_commands),
+            )
 
         if upgraded:
             count = len(upgraded)

@@ -99,10 +99,18 @@ class NpmModule(BaseModule):
             return StepResult("ok", "[DRY-RUN] Would check and update NPM packages")
 
         code, out, err = ctx.run_cmd(["npm", "outdated", "-g", "--json"])
+        if code not in (0, 1):
+            return StepResult("error", "npm outdated check failed", error_output=err or out)
+
         try:
             outdated = json.loads(out) if out.strip() else {}
-        except Exception:
-            outdated = {}
+        except json.JSONDecodeError:
+            return StepResult("error", "npm outdated returned invalid JSON", error_output=err or out)
+
+        if not isinstance(outdated, dict):
+            return StepResult("error", "npm outdated returned unexpected data", error_output=out)
+        if code == 1 and not outdated:
+            return StepResult("error", "npm outdated check failed", error_output=err or out)
 
         if not outdated:
             return StepResult("unchanged")
@@ -156,11 +164,18 @@ class PnpmModule(BaseModule):
         # Query outdated packages to capture versions
         outdated_code, outdated_out, _ = ctx.run_cmd(["pnpm", "outdated", "-g", "--format", "json"])
         outdated = {}
+        metadata_warning = None
         if outdated_code == 0 and outdated_out.strip():
             try:
                 outdated = json.loads(outdated_out)
-            except Exception:
-                outdated = {}
+                if not isinstance(outdated, dict):
+                    raise json.JSONDecodeError("Expected a JSON object", outdated_out, 0)
+            except json.JSONDecodeError:
+                metadata_warning = "Could not parse pnpm outdated package metadata"
+        elif outdated_code != 0:
+            metadata_warning = "Could not check pnpm package versions before updating"
+        if metadata_warning:
+            ctx.print_verbose(metadata_warning)
 
         code, out, err = ctx.run_cmd(["pnpm", "update", "-g"])
         combined = ((out or "") + "\n" + (err or "")).lower()
@@ -173,7 +188,11 @@ class PnpmModule(BaseModule):
 
         if outdated:
             details = [f"{pkg} -> {info.get('latest', 'latest')}" for pkg, info in outdated.items()]
-            return StepResult("ok", f"{len(details)} package{'s' if len(details) != 1 else ''} updated", details=details[:10])
+            return StepResult(
+                "ok",
+                f"{len(details)} package{'s' if len(details) != 1 else ''} updated",
+                details=details[:10],
+            )
 
         return StepResult("ok", "updated")
 

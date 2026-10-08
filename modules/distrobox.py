@@ -73,10 +73,4 @@ class DistroboxModule(BaseModule):
             count = len(updated_containers)
             return StepResult("ok", f"{count} container{'s' if count != 1 else ''} updated", details=updated_containers)
 
-        # Fallback check
-        has_pacman_upgrades = "upgrading " in out.lower()
-        has_dnf_upgrades = "upgrading:" in out.lower() or "installing:" in out.lower()
-        if has_pacman_upgrades or has_dnf_upgrades:
-            return StepResult("ok", "updated")
-
         return StepResult("unchanged")

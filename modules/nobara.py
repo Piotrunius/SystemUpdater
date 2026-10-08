@@ -56,7 +56,7 @@ class RepoSyncModule(BaseModule):
         sync_cmd = [
             "sudo", "dnf", "update",
             "nobara-repos", "nobara-gpg-keys", "fedora-repos", "fedora-gpg-keys", "nobara-updater",
-            "--refresh", "--nogpgcheck", "-y", "-q"
+            "--refresh", "-y", "-q"
         ]
         # Allow 1 retry in case of transient repository network glitch or lock
         code, out, err = ctx.run_cmd(sync_cmd, timeout=300, retries=1, retry_delay=3.0)

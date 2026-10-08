@@ -3,12 +3,13 @@ Unified Nuvio Desktop updater and high-quality image bytecode patcher.
 Consolidates check_update.py, update_nuvio.sh, and patch_nuvio.py.
 """
 
+import contextlib
 import glob
 import json
 import os
+import platform
 import re
-import shutil
-import subprocess
+import tempfile
 import urllib.request
 import zipfile
 from typing import Optional, Tuple
@@ -27,6 +28,7 @@ class NuvioModule(BaseModule):
     key = "nuvio"
     category = "Applications & Gaming"
     description = "Checks GitHub releases for Nuvio, installs RPM, and applies Coil3 Linux image patch"
+    requires_sudo = True
 
     def is_available(self, ctx: UpdateContext) -> bool:
         return os.path.exists("/opt/nuvio") or ctx.which("nuvio") is not None
@@ -49,6 +51,13 @@ class NuvioModule(BaseModule):
 
         # Check if update is available
         if installed_tag and latest_key <= installed_key:
+            target_jar = self._find_target_jar()
+            if not target_jar:
+                return StepResult("warning", "Nuvio application JAR was not found; image patch was skipped")
+            if ctx.dry_run:
+                if not self._is_jar_patched(target_jar):
+                    return StepResult("ok", "[DRY-RUN] Would re-apply image patch")
+                return StepResult("unchanged")
             # Verify and ensure patch is applied on current jar
             patch_applied = self._ensure_patched(ctx)
             if patch_applied:
@@ -56,14 +65,15 @@ class NuvioModule(BaseModule):
             return StepResult("unchanged")
 
         # Update is available
-        rpm_url, rpm_size = self._find_rpm_asset(release.get("assets", []))
+        rpm_url, _ = self._find_rpm_asset(release.get("assets", []))
         if not rpm_url:
             return StepResult("warning", f"New version {latest_tag} found, but no compatible RPM asset found")
 
         if ctx.dry_run:
             return StepResult("ok", f"[DRY-RUN] Would update to {latest_tag}")
 
-        temp_rpm = f"/tmp/Nuvio-update-{latest_tag}.rpm"
+        fd, temp_rpm = tempfile.mkstemp(prefix="Nuvio-update-", suffix=".rpm")
+        os.close(fd)
         try:
             # 1. Download RPM
             dl_code, _, dl_err = ctx.run_cmd(["curl", "-sSL", "--fail", "-o", temp_rpm, rpm_url])
@@ -77,25 +87,28 @@ class NuvioModule(BaseModule):
                 if up_code != 0:
                     return StepResult("error", f"Failed to install RPM {latest_tag}", error_output=up_err or up_out)
 
-            # 3. Apply image patch
-            self._ensure_patched(ctx, force=True)
-
-            # 4. Save installed tag
+            # Record the installed release before patching so a patch failure does not
+            # cause the next run to reinstall the same RPM.
             try:
                 os.makedirs(os.path.dirname(TAG_FILE), exist_ok=True)
                 with open(TAG_FILE, "w") as f:
                     f.write(latest_tag + "\n")
-            except Exception:
-                pass
+            except OSError as error:
+                raise RuntimeError(f"Could not save installed Nuvio release tag: {error}") from error
+
+            # Apply the image patch after recording the package upgrade.
+            if not self._ensure_patched(ctx, force=True):
+                return StepResult(
+                    "warning",
+                    f"Updated Nuvio to {latest_tag}, but its application JAR was not found; image patch was skipped",
+                    details=[f"nuvio -> {latest_tag}"],
+                )
 
             return StepResult("ok", "updated", details=[f"nuvio -> {latest_tag}"])
 
         finally:
-            if os.path.exists(temp_rpm):
-                try:
-                    os.remove(temp_rpm)
-                except Exception:
-                    pass
+            with contextlib.suppress(FileNotFoundError):
+                os.remove(temp_rpm)
 
     def _get_installed_tag(self, ctx: UpdateContext) -> str:
         if os.path.exists(TAG_FILE):
@@ -104,8 +117,8 @@ class NuvioModule(BaseModule):
                     val = f.read().strip()
                     if val:
                         return val
-            except Exception:
-                pass
+            except OSError as error:
+                ctx.print_verbose(f"Could not read the stored Nuvio release tag: {error}")
 
         code, out, _ = ctx.run_cmd(["rpm", "-q", "--qf", "%{VERSION}", "nuvio"], read_only=True)
         if code == 0 and out.strip():
@@ -113,12 +126,10 @@ class NuvioModule(BaseModule):
             m = re.match(r"^1\.(\d+\.\d+)", rpm_ver)
             if m:
                 tag = f"0.{m.group(1)}-alpha"
-                try:
+                if not ctx.dry_run:
                     os.makedirs(os.path.dirname(TAG_FILE), exist_ok=True)
                     with open(TAG_FILE, "w") as f:
                         f.write(tag + "\n")
-                except Exception:
-                    pass
                 return tag
         return ""
 
@@ -153,28 +164,37 @@ class NuvioModule(BaseModule):
         if not rpm_assets:
             return None, ""
 
-        arch_filtered = [
-            a for a in rpm_assets
-            if not any(bad in a.get("name", "").lower() for bad in ["aarch64", "arm64", "armv7", "armhf"])
-        ]
-        if not arch_filtered:
-            arch_filtered = rpm_assets
+        machine = platform.machine().lower()
+        architecture_aliases = {
+            "x86_64": ("x86_64", "amd64", "x64"),
+            "aarch64": ("aarch64", "arm64"),
+            "armv7l": ("armv7", "armhf"),
+            "i686": ("i686", "i386"),
+        }
+        supported_arches = architecture_aliases.get(machine)
+        matching_assets = []
+        generic_assets = []
+        for asset in rpm_assets:
+            asset_name = asset.get("name", "").lower()
+            declared_arches = {
+                alias
+                for aliases in architecture_aliases.values()
+                for alias in aliases
+                if alias in asset_name
+            }
+            if supported_arches and declared_arches.intersection(supported_arches):
+                matching_assets.append(asset)
+            elif not declared_arches:
+                generic_assets.append(asset)
 
-        target = None
-        for a in arch_filtered:
-            name = a.get("name", "").lower()
-            if "x86_64" in name or "amd64" in name:
-                target = a
-                break
-
-        if not target:
-            for a in arch_filtered:
-                if "linux" in a.get("name", "").lower():
-                    target = a
-                    break
-
-        if not target and arch_filtered:
-            target = arch_filtered[0]
+        target = next(iter(matching_assets), None)
+        if target is None and len(generic_assets) == 1:
+            target = generic_assets[0]
+        if target is None:
+            target = next(
+                (asset for asset in generic_assets if "linux" in asset.get("name", "").lower()),
+                None,
+            )
 
         if target:
             url = target.get("browser_download_url")
@@ -192,7 +212,9 @@ class NuvioModule(BaseModule):
         }
         token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
         if not token:
-            code, out, _ = ctx.run_cmd(["gh", "auth", "token"], read_only=True)
+            code, out, _ = ctx.run_cmd(
+                ["gh", "auth", "token"], read_only=True, sensitive_output=True
+            )
             if code == 0 and out.strip():
                 token = out.strip()
 
@@ -206,14 +228,14 @@ class NuvioModule(BaseModule):
     def _find_target_jar(self) -> Optional[str]:
         matches = glob.glob(os.path.join(TARGET_DIR, "composeApp-desktop-*.jar"))
         matches = [m for m in matches if not m.endswith(".bak")]
-        return sorted(matches)[0] if matches else None
+        return max(matches, key=os.path.getmtime) if matches else None
 
     def _is_jar_patched(self, jar_path: str) -> bool:
         try:
             with zipfile.ZipFile(jar_path, "r") as z:
                 data = z.read(CLASS_PATH)
                 return PATCH_SIGNATURE in data
-        except Exception:
+        except (OSError, KeyError, zipfile.BadZipFile):
             return False
 
     def _patch_bytecode(self, data: bytearray) -> bytearray:
@@ -223,7 +245,7 @@ class NuvioModule(BaseModule):
             idx = data.find(b"\xb1", pos)
             if idx == -1:
                 break
-            if idx >= 3 and data[idx - 3] == 0xb3 and idx >= 4 and data[idx - 4] == 0x03:
+            if idx >= 26 and data[idx - 3] == 0xb3 and data[idx - 4] == 0x03:
                 clinit_start = idx - 26
                 data[clinit_start + 15 : clinit_start + 23] = bytes([0x57, 0x57, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04])
                 found = True
@@ -243,35 +265,39 @@ class NuvioModule(BaseModule):
         if not force and self._is_jar_patched(target_jar):
             return False
 
-        # Generate patched jar in /tmp
-        jar_name = os.path.basename(target_jar)
-        temp_patched = f"/tmp/{jar_name}.patched"
+        if ctx.dry_run:
+            return False
 
-        with zipfile.ZipFile(target_jar, "r") as zin:
-            raw_class = bytearray(zin.read(CLASS_PATH))
-            patched_class = self._patch_bytecode(raw_class)
-
-            with zipfile.ZipFile(temp_patched, "w", compression=zipfile.ZIP_DEFLATED) as zout:
-                for item in zin.infolist():
-                    if item.filename == CLASS_PATH:
-                        zout.writestr(item, patched_class)
-                    else:
-                        zout.writestr(item, zin.read(item.filename))
+        # Generate a private temporary jar instead of using a predictable /tmp path.
+        fd, temp_patched = tempfile.mkstemp(prefix="nuvio-patched-", suffix=".jar")
+        os.close(fd)
 
         try:
+            with zipfile.ZipFile(target_jar, "r") as zin:
+                raw_class = bytearray(zin.read(CLASS_PATH))
+                patched_class = self._patch_bytecode(raw_class)
+
+                with zipfile.ZipFile(temp_patched, "w", compression=zipfile.ZIP_DEFLATED) as zout:
+                    for item in zin.infolist():
+                        if item.filename == CLASS_PATH:
+                            zout.writestr(item, patched_class)
+                        else:
+                            zout.writestr(item, zin.read(item.filename))
+
             # Backup original if not backed up
             backup_path = f"{target_jar}.bak"
             if not os.path.exists(backup_path):
-                ctx.run_cmd(["sudo", "cp", "-p", target_jar, backup_path])
+                code, out, err = ctx.run_cmd(["sudo", "cp", "-p", target_jar, backup_path])
+                if code != 0:
+                    raise RuntimeError(f"Could not back up Nuvio jar: {err or out}")
 
             # Replace with patched jar
-            ctx.run_cmd(["sudo", "cp", "-f", temp_patched, target_jar])
+            code, out, err = ctx.run_cmd(["sudo", "cp", "-f", temp_patched, target_jar])
+            if code != 0:
+                raise RuntimeError(f"Could not install patched Nuvio jar: {err or out}")
             # Clear coil cache
             ctx.run_cmd(["rm", "-rf", "/tmp/coil3_disk_cache"])
             return True
         finally:
-            if os.path.exists(temp_patched):
-                try:
-                    os.remove(temp_patched)
-                except Exception:
-                    pass
+            with contextlib.suppress(FileNotFoundError):
+                os.remove(temp_patched)
