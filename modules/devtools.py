@@ -140,13 +140,18 @@ class PipModule(BaseModule):
                 # If managed externally (e.g. Homebrew, PEP 668), check if standalone pip binary exists
                 pip_standalone = ctx.which("pip3") or ctx.which("pip")
                 if pip_standalone and (not py_bin or pip_standalone != py_bin):
-                    code_user, out_user, err_user = ctx.run_cmd([pip_standalone, "install", "--upgrade", "pip"])
-                    if code_user == 0:
-                        code, out, err = code_user, out_user, err_user
-                    elif "externally-managed-environment" in f"{out_user}\n{err_user}".lower():
-                        return StepResult("unchanged")
+                    # Verify standalone pip can actually be invoked (shebang interpreter might be absent in container)
+                    code_chk, _, _ = ctx.run_cmd([pip_standalone, "--version"], read_only=True)
+                    if code_chk == 0:
+                        code_user, out_user, err_user = ctx.run_cmd([pip_standalone, "install", "--upgrade", "pip"])
+                        if code_user == 0:
+                            code, out, err = code_user, out_user, err_user
+                        elif "externally-managed-environment" in f"{out_user}\n{err_user}".lower():
+                            return StepResult("unchanged")
+                        else:
+                            return StepResult("error", "pip upgrade failed", error_output=err_user or out_user)
                     else:
-                        return StepResult("error", "pip upgrade failed", error_output=err_user or out_user)
+                        return StepResult("unchanged")
                 else:
                     return StepResult("unchanged")
             else:
