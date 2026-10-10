@@ -108,18 +108,32 @@ class PipModule(BaseModule):
     is_single_entity = True
 
     def is_available(self, ctx: UpdateContext) -> bool:
-        return ctx.which("pip3") is not None or ctx.which("python3") is not None
+        if ctx.which("pip3") is not None or ctx.which("pip") is not None:
+            return True
+        py_bin = ctx.which("python3") or ctx.which("python")
+        if py_bin:
+            code, _, _ = ctx.run_cmd([py_bin, "-m", "pip", "--version"], read_only=True)
+            return code == 0
+        return False
 
     def run(self, ctx: UpdateContext) -> StepResult:
         if ctx.dry_run:
             return StepResult("ok", "[DRY-RUN] Would upgrade pip")
 
-        pip_bin = ctx.which("pip3") or ctx.which("pip") or "pip3"
-        _, pre_v, _ = ctx.run_cmd([pip_bin, "--version"], read_only=True)
+        py_bin = ctx.which("python3") or ctx.which("python")
+        pip_bin = ctx.which("pip3") or ctx.which("pip")
+        if py_bin:
+            cmd_prefix = [py_bin, "-m", "pip"]
+        elif pip_bin:
+            cmd_prefix = [pip_bin]
+        else:
+            return StepResult("skipped", "pip not available")
+
+        _, pre_v, _ = ctx.run_cmd(cmd_prefix + ["--version"], read_only=True)
         m_old = re.search(r"pip\s+([^\s]+)", pre_v or "")
         old_ver = m_old.group(1) if m_old else ""
 
-        code, out, err = ctx.run_cmd([pip_bin, "install", "--upgrade", "pip"])
+        code, out, err = ctx.run_cmd(cmd_prefix + ["install", "--upgrade", "pip"])
         if code != 0:
             return StepResult("error", "pip upgrade failed", error_output=err or out)
 
@@ -130,7 +144,7 @@ class PipModule(BaseModule):
         new_ver = m_new.group(1) if m_new else ""
 
         if not new_ver:
-            _, post_v, _ = ctx.run_cmd([pip_bin, "--version"], read_only=True)
+            _, post_v, _ = ctx.run_cmd(cmd_prefix + ["--version"], read_only=True)
             m_post = re.search(r"pip\s+([^\s]+)", post_v or "")
             new_ver = m_post.group(1) if m_post else ""
 
@@ -452,7 +466,14 @@ class SkillsModule(BaseModule):
     description = "Updates global Agent Skills via npx skills"
 
     def is_available(self, ctx: UpdateContext) -> bool:
-        return ctx.which("npx") is not None
+        if ctx.which("npx") is None:
+            return False
+        # Only activate if agent skills are actually installed locally or globally
+        lock_file = os.path.expanduser("~/.agents/.skill-lock.json")
+        skills_dir = os.path.expanduser("~/.agents/skills")
+        return os.path.isfile(lock_file) or (
+            os.path.isdir(skills_dir) and bool(os.listdir(skills_dir))
+        )
 
     def run(self, ctx: UpdateContext) -> StepResult:
         if ctx.dry_run:
@@ -462,7 +483,11 @@ class SkillsModule(BaseModule):
         if code != 0:
             return StepResult("error", "Skills update failed", error_output=err or out)
 
-        if "All global skills are up to date" in out:
+        if (
+            "All global skills are up to date" in out
+            or "No global skills tracked in lock file" in out
+            or "No global skills found" in out
+        ):
             return StepResult("unchanged")
 
         skills = []
@@ -478,8 +503,9 @@ class SkillsModule(BaseModule):
         count = len(skills)
         if count == 0:
             m_cnt = re.search(r"[Uu]pdated\s+(\d+)\s+skill", out)
-            count = int(m_cnt.group(1)) if m_cnt else (0 if "0 skill" in out else 1)
-            if count == 0 and "found 0" in out.lower():
+            if m_cnt:
+                count = int(m_cnt.group(1))
+            else:
                 return StepResult("unchanged")
             return StepResult("ok", f"{count} skill{'s' if count != 1 else ''} updated")
 

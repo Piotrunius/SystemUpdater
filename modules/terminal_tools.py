@@ -8,7 +8,7 @@ from ui import StepResult
 
 
 class TealdeerModule(BaseModule):
-    name = "Tealdeer (tldr)"
+    name = "Tealdeer"
     key = "tldr"
     category = "Development Environment"
     description = "Updates offline tldr pages database via tealdeer"
@@ -28,7 +28,7 @@ class TealdeerModule(BaseModule):
 
 
 class FisherModule(BaseModule):
-    name = "Fisher (Fish Shell)"
+    name = "Fisher"
     key = "fisher"
     category = "Development Environment"
     description = "Updates Fish shell plugins via Fisher"
@@ -51,7 +51,7 @@ class FisherModule(BaseModule):
 
 
 class ZinitModule(BaseModule):
-    name = "Zinit (Zsh)"
+    name = "Zinit"
     key = "zinit"
     category = "Development Environment"
     description = "Updates Zsh plugins via Zinit"

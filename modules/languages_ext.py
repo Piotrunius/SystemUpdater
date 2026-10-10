@@ -60,7 +60,7 @@ class PyenvModule(BaseModule):
 
 
 class SdkmanModule(BaseModule):
-    name = "SDKMAN (Java/JVM)"
+    name = "SDKMAN"
     key = "sdkman"
     category = "Development Environment"
     description = "Updates SDKMAN tool and installed candidate versions"
@@ -86,7 +86,7 @@ class SdkmanModule(BaseModule):
 
 
 class GhcupModule(BaseModule):
-    name = "GHCup (Haskell)"
+    name = "GHCup"
     key = "ghcup"
     category = "Development Environment"
     description = "Updates Haskell GHCup toolchain manager"

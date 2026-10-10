@@ -7,7 +7,7 @@ from ui import StepResult
 
 
 class MandbModule(BaseModule):
-    name = "Manual Pages DB (mandb)"
+    name = "Manual Pages DB"
     key = "mandb"
     category = "System Core"
     description = "Updates the manual page index caches via mandb -q"

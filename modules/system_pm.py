@@ -15,11 +15,11 @@ from ui import StepResult
 
 
 class AptModule(BaseModule):
-    name = "System Packages (APT)"
+    name = "System Packages"
     key = "apt"
     aliases = ["deb", "debian", "ubuntu", "system"]
     category = "System Core"
-    description = "Updates system packages via APT (Debian / Ubuntu / Mint / Pop!_OS)"
+    description = "Updates system packages via APT"
     requires_sudo = True
 
     def is_available(self, ctx: UpdateContext) -> bool:
@@ -111,11 +111,11 @@ class AptModule(BaseModule):
 
 
 class PacmanModule(BaseModule):
-    name = "System Packages (Pacman)"
+    name = "System Packages"
     key = "pacman"
     aliases = ["arch", "aur", "yay", "paru", "system"]
     category = "System Core"
-    description = "Updates system and AUR packages via Pacman / Yay / Paru (Arch / Manjaro / CachyOS)"
+    description = "Updates system and AUR packages via Pacman / Yay / Paru"
     requires_sudo = True
 
     def is_available(self, ctx: UpdateContext) -> bool:
@@ -176,11 +176,11 @@ class PacmanModule(BaseModule):
 
 
 class ZypperModule(BaseModule):
-    name = "System Packages (Zypper)"
+    name = "System Packages"
     key = "zypper"
     aliases = ["suse", "opensuse", "system"]
     category = "System Core"
-    description = "Updates system packages via Zypper (openSUSE Tumbleweed / Leap)"
+    description = "Updates system packages via Zypper"
     requires_sudo = True
 
     def is_available(self, ctx: UpdateContext) -> bool:
@@ -251,11 +251,11 @@ class ZypperModule(BaseModule):
 
 
 class ApkModule(BaseModule):
-    name = "System Packages (APK)"
+    name = "System Packages"
     key = "apk"
     aliases = ["alpine", "system"]
     category = "System Core"
-    description = "Updates system packages via APK (Alpine Linux)"
+    description = "Updates system packages via APK"
     requires_sudo = True
 
     def is_available(self, ctx: UpdateContext) -> bool:
@@ -294,11 +294,11 @@ class ApkModule(BaseModule):
 
 
 class XbpsModule(BaseModule):
-    name = "System Packages (XBPS)"
+    name = "System Packages"
     key = "xbps"
     aliases = ["void", "system"]
     category = "System Core"
-    description = "Updates system packages via XBPS (Void Linux)"
+    description = "Updates system packages via XBPS"
     requires_sudo = True
 
     def is_available(self, ctx: UpdateContext) -> bool:
