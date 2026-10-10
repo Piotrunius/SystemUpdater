@@ -8,7 +8,7 @@ class DistroboxModule(BaseModule):
     key = "distrobox"
     category = "Applications & Gaming"
     description = (
-        "Upgrades packages inside all active Distrobox containers (Arch, Fedora, etc.)"
+        "Upgrades packages inside all active Distrobox containers across distributions"
     )
 
     def _availability(self, ctx: UpdateContext) -> str:

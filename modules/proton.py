@@ -13,7 +13,7 @@ class ProtonPlusModule(BaseModule):
     key = "proton"
     category = "Applications & Gaming"
     description = (
-        "Updates compatibility tools (Proton-GE, CachyOS, Wine) via ProtonPlus"
+        "Updates compatibility tools like Proton-GE, CachyOS, and Wine via ProtonPlus"
     )
 
     def is_available(self, ctx: UpdateContext) -> bool:

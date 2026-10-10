@@ -280,6 +280,7 @@ SystemUpdater/
     ├── test_nuvio.py               # Architecture-aware RPM selection
     ├── test_package_signature_checks.py # Keeping package signature checks enabled
     ├── test_partial_failures.py    # Reporting failures after partial updates
+    ├── test_pip_module.py          # Reporting pip registry check failures
     ├── test_snapshot.py            # Btrfs detection and snapshot cooldown
     ├── test_ui_summary.py          # Consistent warning and error summaries
     ├── test_universal.py           # Stopping Nix updates when channel refresh fails
