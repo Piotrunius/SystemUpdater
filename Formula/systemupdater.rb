@@ -1,9 +1,9 @@
 class Systemupdater < Formula
   desc "Modular Linux system updater"
   homepage "https://github.com/Piotrunius/SystemUpdater"
-  url "https://github.com/Piotrunius/SystemUpdater/archive/064d6b715ca79ea3957a7b68ec4f9d620c2beca8.tar.gz"
-  sha256 "1a63c5d4455f7b9cbdb6cae507b4bd4f570b85cbb21adf80fe91fcf42c3b2538"
-  version "0.1.7"
+  url "https://github.com/Piotrunius/SystemUpdater/archive/c7a00744b7192d78668d17547de5f1f641da5d56.tar.gz"
+  sha256 "8472720c63cb9c3ef0ebd19246215115e3980f17b712147e3f939acbb8e85ddb"
+  version "0.1.8"
   license "MIT"
 
   depends_on "python@3.14"
