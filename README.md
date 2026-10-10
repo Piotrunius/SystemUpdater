@@ -62,7 +62,8 @@ On normal runs, this installation checks its Git remote and updates itself when 
 Use Homebrew if you want it to manage the program version. The project repository is also the tap, so add it with its Git URL:
 
 ```bash
-brew tap Piotrunius/SystemUpdater https://github.com/Piotrunius/SystemUpdater.git
+brew tap piotrunius/systemupdater https://github.com/Piotrunius/SystemUpdater.git
+brew trust --formula piotrunius/systemupdater/systemupdater
 brew install systemupdater
 ```
 
