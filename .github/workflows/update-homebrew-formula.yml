@@ -21,7 +21,7 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
-      - name: Calculate source archive checksum
+      - name: Calculate source archive checksum and next SemVer version
         id: source
         env:
           SOURCE_SHA: ${{ github.sha }}
@@ -30,12 +30,65 @@ jobs:
           set -euo pipefail
           archive_url="https://github.com/${REPOSITORY}/archive/${SOURCE_SHA}.tar.gz"
           archive_sha="$(curl --fail --silent --show-error --location "${archive_url}" | sha256sum | cut -d ' ' -f 1)"
-          formula_version="0.1.${GITHUB_RUN_NUMBER}"
-          {
-            echo "archive_url=${archive_url}"
-            echo "archive_sha=${archive_sha}"
-            echo "formula_version=${formula_version}"
-          } >> "${GITHUB_OUTPUT}"
+
+          # Read current version strictly from Formula/systemupdater.rb
+          current_ver="$(grep -m1 -oE 'version "[0-9]+\.[0-9]+\.[0-9]+"' Formula/systemupdater.rb | cut -d'"' -f2)"
+          if [ -z "${current_ver}" ]; then
+            echo "Error: Could not read current version from Formula/systemupdater.rb" >&2
+            exit 1
+          fi
+
+          # Inspect commit message for SemVer bump type
+          commit_subject="$(git log -1 --pretty=%s)"
+          commit_body="$(git log -1 --pretty=%b)"
+
+          export ARCHIVE_URL="${archive_url}"
+          export ARCHIVE_SHA="${archive_sha}"
+          export CURRENT_VER="${current_ver}"
+          export COMMIT_SUBJECT="${commit_subject}"
+          export COMMIT_BODY="${commit_body}"
+
+          python3 - <<'PY'
+          import re, sys, os
+
+          cur_ver = os.environ["CURRENT_VER"]
+          subject = os.environ.get("COMMIT_SUBJECT", "")
+          body = os.environ.get("COMMIT_BODY", "")
+          full_commit = f"{subject}\n{body}"
+
+          m = re.match(r"^(\d+)\.(\d+)\.(\d+)$", cur_ver)
+          if not m:
+              raise SystemExit(f"Invalid SemVer format in Formula: {cur_ver}")
+
+          major, minor, patch = map(int, m.groups())
+
+          # Check for Breaking Change (MAJOR)
+          is_major = (
+              bool(re.search(r"^[a-zA-Z]+(\([^\)]+\))?!:", subject))
+              or "BREAKING CHANGE:" in full_commit
+              or "BREAKING-CHANGE:" in full_commit
+          )
+          # Check for Feature (MINOR)
+          is_minor = bool(re.search(r"^feat(\([^\)]+\))?:", subject))
+
+          if is_major:
+              major += 1
+              minor = 0
+              patch = 0
+          elif is_minor:
+              minor += 1
+              patch = 0
+          else:
+              # Any other commit (fix, chore, style, refactor, perf, docs, etc.) is a PATCH
+              patch += 1
+
+          next_ver = f"{major}.{minor}.{patch}"
+          print(f"Calculated next version: {next_ver} (from {cur_ver})")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"archive_url={os.environ['ARCHIVE_URL']}\n")
+              f.write(f"archive_sha={os.environ['ARCHIVE_SHA']}\n")
+              f.write(f"formula_version={next_ver}\n")
+          PY
 
       - name: Update formula metadata
         env:
