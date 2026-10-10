@@ -742,6 +742,12 @@ class GemModule(BaseModule):
         if ctx.dry_run:
             return StepResult("ok", "[DRY-RUN] Would run gem update --system")
 
+        # Capture old RubyGems version
+        old_ver_code, old_ver_out, _ = ctx.run_cmd(["gem", "--version"], read_only=True)
+        old_system_ver = (
+            old_ver_out.strip() if old_ver_code == 0 and old_ver_out.strip() else None
+        )
+
         code, out, err = ctx.run_cmd(["gem", "update", "--system"], timeout=180)
         if code != 0:
             return StepResult("error", "gem update failed", error_output=err or out)
@@ -749,7 +755,29 @@ class GemModule(BaseModule):
         if "Latest version already installed" in out:
             return StepResult("unchanged")
 
-        return StepResult("ok", "updated")
+        details = []
+        # Check if RubyGems version was updated
+        m_ver = re.search(r"RubyGems\s+([0-9\.]+)\s+installed", out, re.I) or re.search(
+            r"Installing RubyGems\s+([0-9\.]+)", out, re.I
+        )
+        new_system_ver = m_ver.group(1) if m_ver else None
+        if not new_system_ver:
+            new_code, new_out, _ = ctx.run_cmd(["gem", "--version"], read_only=True)
+            if new_code == 0 and new_out.strip():
+                new_system_ver = new_out.strip()
+
+        if new_system_ver:
+            if old_system_ver and old_system_ver != new_system_ver:
+                details.append(f"rubygems-update: {old_system_ver} -> {new_system_ver}")
+            else:
+                details.append(f"rubygems-update -> {new_system_ver}")
+
+        count = len(details)
+        if count > 0:
+            msg = f"{count} package{'s' if count != 1 else ''} updated"
+            return StepResult("ok", msg, details=details)
+
+        return StepResult("ok", "1 package updated")
 
 
 class MiseModule(BaseModule):

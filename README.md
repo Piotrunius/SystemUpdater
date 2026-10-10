@@ -271,6 +271,7 @@ SystemUpdater/
     ├── test_distrobox.py           # Distrobox update detection and results
     ├── test_firmware.py            # Firmware update states and metadata warnings
     ├── test_flatpak.py             # Preserving and displaying advisory warnings
+    ├── test_gem_module.py          # Reporting Ruby gem update failures
     ├── test_history_store.py       # Private run history, selection, and redaction
     ├── test_module_availability.py # Installed tools and update target detection
     ├── test_module_registry.py     # Custom configuration passed to modules
