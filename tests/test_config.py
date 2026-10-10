@@ -53,6 +53,23 @@ class ConfigTests(unittest.TestCase):
             "Configuration file does not exist or is not a regular file.",
         )
 
+    def test_parse_args_supports_reboot_flag(self):
+        import sys
+        from unittest.mock import patch
+        from main import parse_args
+
+        with patch.object(sys, "argv", ["sysupdate", "--reboot"]):
+            args = parse_args()
+            self.assertTrue(args.reboot)
+
+        with patch.object(sys, "argv", ["sysupdate", "-r"]):
+            args = parse_args()
+            self.assertTrue(args.reboot)
+
+        with patch.object(sys, "argv", ["sysupdate"]):
+            args = parse_args()
+            self.assertFalse(args.reboot)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -29,6 +29,7 @@ class NuvioModule(BaseModule):
     category = "Applications & Gaming"
     description = "Checks GitHub releases for Nuvio, installs RPM, and applies Coil3 Linux image patch"
     requires_sudo = True
+    is_single_entity = True
 
     def is_available(self, ctx: UpdateContext) -> bool:
         return os.path.exists("/opt/nuvio") or ctx.which("nuvio") is not None
@@ -96,15 +97,24 @@ class NuvioModule(BaseModule):
             except OSError as error:
                 raise RuntimeError(f"Could not save installed Nuvio release tag: {error}") from error
 
+            old_ver = installed_tag.strip() if installed_tag else ""
+            new_ver = latest_tag.strip() if latest_tag else ""
+            if old_ver and new_ver and old_ver != new_ver:
+                ver_change = f"{old_ver} -> {new_ver}"
+            elif new_ver:
+                ver_change = f"-> {new_ver}"
+            else:
+                ver_change = "updated"
+
             # Apply the image patch after recording the package upgrade.
             if not self._ensure_patched(ctx, force=True):
                 return StepResult(
                     "warning",
                     f"Updated Nuvio to {latest_tag}, but its application JAR was not found; image patch was skipped",
-                    details=[f"nuvio -> {latest_tag}"],
+                    details=[ver_change],
                 )
 
-            return StepResult("ok", "updated", details=[f"nuvio -> {latest_tag}"])
+            return StepResult("ok", "updated", details=[ver_change])
 
         finally:
             with contextlib.suppress(FileNotFoundError):

@@ -8,8 +8,10 @@ class FakeContext:
 
     def __init__(self, responses):
         self.responses = iter(responses)
+        self.commands = []
 
-    def run_cmd(self, *_args, **_kwargs):
+    def run_cmd(self, cmd, *_args, **_kwargs):
+        self.commands.append(cmd)
         return next(self.responses)
 
 
@@ -68,6 +70,39 @@ class FirmwareTests(unittest.TestCase):
 
         self.assertEqual(result.status, "error")
         self.assertEqual(result.error_output, "installation failed")
+
+    def test_firmware_update_staged_with_reboot_required(self):
+        context = FakeContext([
+            (0, "", ""),
+            (0, '{"Devices": [{"Name": "UEFI System Firmware", "Version": "1.2.0"}]}', ""),
+            (0, "Decompressing...\nUpdating UEFI System Firmware...", ""),
+            (0, "Reboot required to apply", ""),
+        ])
+
+        result = FirmwareModule().run(context)
+
+        self.assertEqual(result.status, "ok")
+        self.assertTrue(result.reboot_required)
+        self.assertEqual(result.message, "1 package updated")
+        self.assertEqual(result.details, ["UEFI System Firmware -> 1.2.0"])
+        self.assertEqual(result.warnings, ["System reboot required to complete pending updates"])
+        self.assertIn(["fwupdmgr", "update", "-y", "--no-reboot-check"], context.commands)
+        self.assertIn(["fwupdmgr", "check-reboot-needed"], context.commands)
+
+    def test_firmware_update_applied_without_reboot(self):
+        context = FakeContext([
+            (0, "", ""),
+            (0, '{"Devices": [{"Name": "Wireless Dongle", "Version": "3.1.0"}]}', ""),
+            (0, "Updating Wireless Dongle...", ""),
+            (2, "No reboot is necessary", ""),
+        ])
+
+        result = FirmwareModule().run(context)
+
+        self.assertEqual(result.status, "ok")
+        self.assertFalse(result.reboot_required)
+        self.assertEqual(result.message, "1 package updated")
+        self.assertEqual(result.details, ["Wireless Dongle -> 3.1.0"])
 
 
 if __name__ == "__main__":

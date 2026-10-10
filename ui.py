@@ -8,7 +8,7 @@ import re
 import sys
 import time
 import threading
-from typing import Callable, Any, Optional, Dict, List
+from typing import Callable, Any, Optional, Dict, List, Tuple
 
 
 class Colors:
@@ -43,6 +43,22 @@ DIAGNOSTIC_LINE_PATTERN = re.compile(
     re.I,
 )
 
+REBOOT_TRIGGER_PATTERNS = re.compile(
+    r"(^|[\-_])(kernel|linux|systemd|glibc|libc6|musl|grub|shim)([\-_]|$)",
+    re.I,
+)
+
+
+def check_packages_require_reboot(package_lines: List[str]) -> Tuple[bool, Optional[str]]:
+    """Check if any package in the upgraded list requires a system reboot."""
+    for line in package_lines:
+        clean = str(line).strip()
+        name = clean.split(":")[0].split("->")[0].split()[0].lower().strip()
+        short_name = name.split("/")[-1].split("@")[0]
+        if REBOOT_TRIGGER_PATTERNS.search(name) or REBOOT_TRIGGER_PATTERNS.search(short_name):
+            return True, name
+    return False, None
+
 
 class StepResult:
     def __init__(
@@ -53,6 +69,7 @@ class StepResult:
         duration: float = 0.0,
         error_output: str = "",
         warnings: Optional[List[str]] = None,
+        reboot_required: bool = False,
     ):
         self.status = status
         self.message = message
@@ -60,6 +77,7 @@ class StepResult:
         self.duration = duration
         self.error_output = error_output
         self.warnings = warnings or []
+        self.reboot_required = reboot_required
 
 
 class UI:
@@ -157,7 +175,7 @@ class UI:
                 dur_val = max(0.1, res.duration)
                 time_tag = f"{Colors.GRAY}({dur_val:.1f}s){Colors.RESET}"
                 if res.status == "ok":
-                    msg_text = self._clean_ok_message(label, res.message)
+                    msg_text = self._resolve_ok_msg(label, res, module=module)
                     print(f"      {Colors.DIM}[{Colors.RESET}{Colors.BOLD_GREEN}✓{Colors.RESET}{Colors.DIM}]{Colors.RESET} {msg_text or 'updated'} {time_tag}")
                 elif res.status == "warning" or (
                     is_verbose and res.status == "unchanged" and res.warnings
@@ -177,7 +195,7 @@ class UI:
                 else:  # error
                     print(f"      {Colors.DIM}[{Colors.RESET}{Colors.BOLD_RED}✗{Colors.RESET}{Colors.DIM}]{Colors.RESET} failed {time_tag}")
             else:
-                self._print_static_result(label, res)
+                self._print_static_result(label, res, module=module)
 
             return res
 
@@ -220,7 +238,7 @@ class UI:
                     res.status = "warning"
                     res.message = warn_reason
 
-        self._print_static_result(label, res)
+        self._print_static_result(label, res, module=module)
         return res
 
     def _complete_step(
@@ -266,6 +284,20 @@ class UI:
             dict.fromkeys(redact_text(line) for line in warning_lines if line.strip())
         )
 
+        # Universal reboot detection across all modules
+        if result.status == "ok":
+            reboot_needed, _ = check_packages_require_reboot(result.details)
+            if (
+                result.reboot_required
+                or reboot_needed
+                or os.path.exists("/run/reboot-required")
+                or os.path.exists("/var/run/reboot-required")
+            ):
+                result.reboot_required = True
+                reboot_warning = "System reboot required to complete pending updates"
+                if reboot_warning not in result.warnings:
+                    result.warnings.append(reboot_warning)
+
         if show_command_output and not self.quiet:
             for record in records:
                 if record.get("output_withheld") or record.get("output_streamed"):
@@ -309,14 +341,26 @@ class UI:
             return "updated"
         return msg_clean
 
-    def _print_static_result(self, label: str, res: StepResult):
+    def _resolve_ok_msg(self, label: str, res: StepResult, module: Optional[Any] = None) -> str:
+        msg_text = self._clean_ok_message(label, res.message)
+        item_meta = {"name": label, "key": getattr(res, "key", ""), "module": module}
+        if not is_single_entity_module(item_meta) and res.details and not any(c.isdigit() for c in msg_text):
+            valid = [d for d in res.details if d and not str(d).strip().startswith("... and")]
+            if valid:
+                msg_text = f"{len(valid)} package{'s' if len(valid) != 1 else ''} updated"
+        return msg_text
+
+    def _print_static_result(self, label: str, res: StepResult, module: Optional[Any] = None):
         dur_val = max(0.1, res.duration)
         time_tag = f"{Colors.GRAY}({dur_val:.1f}s){Colors.RESET}"
 
         if res.status == "ok":
-            msg_text = self._clean_ok_message(label, res.message)
-            msg = f": {msg_text}" if msg_text else ""
-            print(f"  {Colors.DIM}[{Colors.RESET}{Colors.BOLD_GREEN}✓{Colors.RESET}{Colors.DIM}]{Colors.RESET} {label}{msg} {time_tag}")
+            if self.verbose and res.warnings:
+                print(f"  {Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET} {label}: warning {time_tag}")
+            else:
+                msg_text = self._resolve_ok_msg(label, res, module=module)
+                msg = f": {msg_text}" if msg_text else ""
+                print(f"  {Colors.DIM}[{Colors.RESET}{Colors.BOLD_GREEN}✓{Colors.RESET}{Colors.DIM}]{Colors.RESET} {label}{msg} {time_tag}")
         elif res.status == "warning" or (
             self.verbose and res.status == "unchanged" and res.warnings
         ):
@@ -335,10 +379,10 @@ class UI:
         else:  # error
             print(f"  {Colors.DIM}[{Colors.RESET}{Colors.BOLD_RED}✗{Colors.RESET}{Colors.DIM}]{Colors.RESET} {label}: failed {time_tag}")
 
-    def print_result(self, label: str, result: StepResult):
+    def print_result(self, label: str, result: StepResult, module: Optional[Any] = None):
         """Render an already completed result using the standard step style."""
         if not self.quiet:
-            self._print_static_result(label, result)
+            self._print_static_result(label, result, module=module)
 
     def print_summary(self, results: List[Dict[str, Any]], total_elapsed: float):
         width = min(self.terminal_width, 80)
@@ -385,9 +429,23 @@ class UI:
         if package_updates:
             print("  Updates applied:")
             for item in package_updates:
-                msg_text = self._clean_ok_message(item['name'], item['result'].message)
-                print(f"    • {item['name']}: {msg_text}")
-                print_details(item['result'].details)
+                res = item["result"]
+                msg_text = self._clean_ok_message(item["name"], res.message)
+                if is_single_entity_module(item):
+                    ver_info = extract_single_entity_version(res.details, res.message)
+                    print(f"    • {item['name']}: {ver_info}")
+                else:
+                    if res.details and not any(c.isdigit() for c in msg_text):
+                        valid = [
+                            d for d in res.details
+                            if d and not str(d).strip().startswith("... and") and not str(d).strip().startswith("and ") and not str(d).strip().startswith("(+")
+                        ]
+                        if valid:
+                            msg_text = f"{len(valid)} package{'s' if len(valid) != 1 else ''} updated"
+                    print(f"    • {item['name']}: {msg_text}")
+                    formatted_details = format_package_list(res.details, msg_text, limit=10)
+                    for detail in formatted_details:
+                        print(f"      - {detail}")
         elif not all_warning_items and not error_items:
             print("  All components are fully up to date.")
         else:
@@ -402,6 +460,9 @@ class UI:
                 if res.status == "skipped":
                     message = "skipped"
                     details = ([res.message] if res.message else []) + list(res.details)
+                elif res.status == "ok":
+                    message = "warning"
+                    details = []
                 else:
                     message = "warning"
                     details = list(res.details)
@@ -429,3 +490,132 @@ class UI:
 
         print(f"{Colors.CYAN}" + "─" * width + f"{Colors.RESET}")
         print()
+
+
+SINGLE_ENTITY_NAMES = {
+    "nuvio desktop",
+    "oh my zsh",
+    "self update",
+    "python pip",
+    "python poetry",
+    "ghcup (haskell)",
+    "flutter sdk",
+    "pyenv runtimes",
+    "sdkman (java/jvm)",
+    "manual pages database",
+}
+
+SINGLE_ENTITY_KEYS = {
+    "nuvio",
+    "omz",
+    "self_update",
+    "pip",
+    "poetry",
+    "ghcup",
+    "flutter",
+    "pyenv",
+    "sdkman",
+    "maintenance",
+    "mandb",
+}
+
+
+def is_single_entity_module(item: Dict[str, Any]) -> bool:
+    mod = item.get("module")
+    if mod is not None and getattr(mod, "is_single_entity", False):
+        return True
+    key = str(item.get("key") or "").lower().strip()
+    if key in SINGLE_ENTITY_KEYS:
+        return True
+    name = str(item.get("name") or "").lower().strip()
+    return name in SINGLE_ENTITY_NAMES
+
+
+def extract_single_entity_version(details: List[str], message: str) -> str:
+    """Extract 'old -> new' or version string for single-purpose modules."""
+    for detail in details:
+        text = str(detail).strip()
+        if "->" in text:
+            if ":" in text:
+                parts = text.split(":", 1)
+                return parts[1].strip()
+            left, right = [p.strip() for p in text.split("->", 1)]
+            if re.match(r"^[a-zA-Z_\-]+$", left):
+                return right
+            return f"{left} -> {right}"
+        if text and text.lower() != "updated":
+            return text
+    if message and message.lower() != "updated":
+        m = re.search(r"(?:to|version)\s+([^\s]+)", message, re.I)
+        if m:
+            return m.group(1)
+        return message
+    return "updated"
+
+
+CORE_SYSTEM_KEYWORDS = {
+    "linux", "kernel", "systemd", "glibc", "nobara", "grub", "shim",
+    "mesa", "nvidia", "xorg", "wayland", "pipewire", "wireplumber",
+    "openssl", "ca-certificates", "networkmanager", "firewalld", "systemupdater",
+}
+
+DEV_TOOLS_KEYWORDS = {
+    "python", "node", "rust", "rustc", "gcc", "llvm", "clang", "go", "ruby", "bun", "deno",
+    "git", "docker", "containerd", "podman", "antigravity", "gh", "ripgrep", "tmux",
+    "zsh", "bash", "code", "cursor", "neovim", "nvim", "helix", "brave", "firefox", "chrome",
+}
+
+
+def package_importance_score(pkg_line: str) -> int:
+    clean = pkg_line.strip()
+    name = clean.split(":")[0].split("->")[0].split()[0].lower().strip()
+    short_name = name.split("/")[-1].split("@")[0]
+
+    for kw in CORE_SYSTEM_KEYWORDS:
+        if kw in name or kw in short_name:
+            return 100
+
+    for kw in DEV_TOOLS_KEYWORDS:
+        if kw in name or kw in short_name:
+            return 80
+
+    if (
+        name.startswith("lib")
+        or name.endswith("-devel")
+        or name.endswith("-libs")
+        or name.endswith("-common")
+        or name.endswith("-static")
+        or name.startswith("@types/")
+    ):
+        return 20
+
+    return 50
+
+
+def format_package_list(details: List[str], msg_text: str, limit: int = 10) -> List[str]:
+    cleaned = []
+    seen = set()
+    for item in details:
+        line = str(item).strip()
+        if not line or line.startswith("... and ") or line.startswith("... ") or line.startswith("and ") or line.startswith("(+"):
+            continue
+        m_space_arrow = re.match(r"^([\w\.\-\@\/]+)\s+([^\s:]+)\s+->\s+([^\s]+)$", line)
+        if m_space_arrow:
+            line = f"{m_space_arrow.group(1)}: {m_space_arrow.group(2)} -> {m_space_arrow.group(3)}"
+        if line not in seen:
+            seen.add(line)
+            cleaned.append(line)
+
+    total = len(cleaned)
+    if total == 0:
+        return []
+
+    sorted_items = sorted(cleaned, key=package_importance_score, reverse=True)
+
+    if total <= limit:
+        return sorted_items
+
+    displayed = sorted_items[:limit]
+    remaining = total - limit
+    remainder_line = f"(+{remaining} more packages)"
+    return displayed + [remainder_line]

@@ -11,9 +11,14 @@ IGNORED_DNF_TOKENS = {
 }
 
 
+def _clean_epoch(ver: str) -> str:
+    return re.sub(r"^\d+:", "", ver)
+
+
 def parse_dnf_packages(output: str) -> list:
     packages = []
     capture = False
+    pending_pkg = None  # (name, ver)
     for line in output.splitlines():
         line_clean = line.strip()
         if not line_clean or line_clean.startswith("=") or line_clean.startswith("-"):
@@ -26,12 +31,24 @@ def parse_dnf_packages(output: str) -> list:
             continue
         if capture:
             parts = line_clean.split()
+            if line_clean.startswith("replacing ") or line_clean.startswith("replacing:"):
+                # e.g.: replacing sudo x86_64 0:1.9.17-8.p2.fc44 ...
+                if pending_pkg and len(parts) >= 4:
+                    old_ver = _clean_epoch(parts[3])
+                    name, new_ver = pending_pkg
+                    packages.append(f"{name}: {old_ver} -> {_clean_epoch(new_ver)}")
+                    pending_pkg = None
+                    continue
             if len(parts) >= 3:
                 name = parts[0]
                 arch = parts[1]
                 ver = parts[2]
                 if name.lower() not in IGNORED_DNF_TOKENS and arch in ("x86_64", "noarch", "i686", "aarch64", "armv7hl"):
-                    packages.append(f"{name} -> {ver}")
+                    if pending_pkg:
+                        packages.append(f"{pending_pkg[0]} -> {_clean_epoch(pending_pkg[1])}")
+                    pending_pkg = (name, ver)
+    if pending_pkg:
+        packages.append(f"{pending_pkg[0]} -> {_clean_epoch(pending_pkg[1])}")
     return list(dict.fromkeys(packages))
 
 
@@ -106,9 +123,6 @@ class SystemPackagesModule(BaseModule):
         count = len(upgraded_pkgs)
         if count > 0:
             msg = f"{count} package{'s' if count != 1 else ''} upgraded"
-            details = upgraded_pkgs[:10]
-            if count > 10:
-                details.append(f"... and {count - 10} more")
-            return StepResult("ok", msg, details=details)
+            return StepResult("ok", msg, details=upgraded_pkgs)
 
         return StepResult("ok", "System packages upgraded successfully")

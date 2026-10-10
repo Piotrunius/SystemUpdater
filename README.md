@@ -8,10 +8,12 @@ SystemUpdater runs supported system package managers, application sources, conta
 
 - **Distribution Detection**: Reads `/etc/os-release` and selects the matching system package manager.
 - **No Python Packages to Install**: The Git installation uses only the Python standard library. Homebrew supplies its own Python runtime.
-- **Terminal Progress**: ANSI status lines and summaries show each module's result and duration.
+- **Standardized Terminal Progress & Summaries**: Live ANSI status lines display exact package upgrade counts (e.g. `[✓] Homebrew: 3 packages upgraded`). The final summary formats single-purpose tools inline (`• Tool: old -> new`) and provides clean hierarchical lists for package managers.
+- **Intelligent Package Prioritization**: Multi-package managers sort upgraded items by architectural importance (kernel and core system runtimes first, low-level libraries last) and cleanly cap lists at 10 items with a remainder count line.
+- **Safe Device Firmware Updates**: Hardware and UEFI firmware upgrades through `fwupdmgr` stage non-blocking capsule updates without abruptly restarting the machine mid-run, with pending reboot requirements reported under verbose diagnostic warnings.
 - **Btrfs Snapshots**: Creates Snapper snapshots before system updates, with a configurable cooldown.
-- **Package Change Details**: Reports upgraded package names and versions when the package manager provides them.
-- **Target-Aware Modules**: Container updates run only when there are local Docker images, Distrobox containers, or a Vagrant project to update.
+- **Target-Aware Modules**: Container and service updates run only when there are local Docker images, Distrobox containers, or a Vagrant project to update.
+- **Run History & Inspection**: Securely stores the last 30 update runs with redacted logs, queryable via `--history` and `--show-log`.
 - **Sudo Keepalive**: Maintains the sudo timestamp during long update runs.
 - **Dry Run and Verbose Modes**: Preview commands with `-n` or stream command output with `-v`.
 - **Configuration**: Disable modules, set custom commands, and list Git repositories in `~/.config/sysupdate/config.toml`.
@@ -23,13 +25,13 @@ SystemUpdater runs supported system package managers, application sources, conta
 
 | Category | Modules & Integrations |
 | :--- | :--- |
-| **System Core** |DNF / DNF5 (Fedora / Nobara / RHEL), APT (Debian / Ubuntu / Mint / Pop!_OS), Pacman & AUR (Arch / Manjaro / CachyOS via `yay` / `paru`), Zypper (openSUSE Tumbleweed & Leap), APK (Alpine), XBPS (Void), Device Firmware (`fwupdmgr`), Btrfs Snapper |
+| **System Core** | DNF / DNF5 (Fedora / Nobara / RHEL), APT (Debian / Ubuntu / Mint / Pop!_OS), Pacman & AUR (Arch / Manjaro / CachyOS via `yay` / `paru`), Zypper (openSUSE Tumbleweed & Leap), APK (Alpine), XBPS (Void), Device Firmware (`fwupdmgr` with safe staging & reboot detection), Btrfs Snapper |
 | **Applications & Gaming** | Flatpak (User & System), ProtonPlus Runners, Gear Lever AppImages, Nuvio Desktop |
 | **Containers** | Distrobox (`upgrade --all`), Docker (`docker pull`), Podman (`auto-update`), Vagrant |
 | **Package Managers** | Homebrew (Formulae & Casks), Snap, Nix |
 | **Development Runtimes** | Rustup, Cargo, Python (`pip`, `pipx`, `pipenv`, `poetry`, `pyenv`, `uv`), Node (`npm`, `pnpm`, `bun`, `yarn`), PHP (`composer`), Ruby (`gem`), Mise, asdf, SDKMAN, GHCup, Flutter |
-| **Editors & Shells** | Oh My Zsh, Zinit, Fisher (Fish), Micro Plugins, Neovim (Lazy.nvim), Helix Grammars, VS Code, Cursor, VSCodium, Tmux (TPM) |
-| **Tools & CLI** | GitHub CLI Extensions, Agent Skills, Tealdeer (`tldr`), Antigravity Extensions, Custom Git Repositories |
+| **Editors & Shells** | Oh My Zsh, Zinit, Fisher (Fish), Micro Plugins, Neovim (Lazy.nvim), Helix Grammars, VS Code, Cursor, VSCodium, Tmux (TPM), Chezmoi, Yadm |
+| **Tools & CLI** | GitHub CLI Extensions, Agent Skills, Tealdeer (`tldr`), Antigravity Extensions, Manual Pages Database (`mandb`), Custom Git Repositories |
 
 ---
 
@@ -89,9 +91,7 @@ alias update="sysupdate"
 ```text
 usage: sysupdate [-h] [--version] [-n] [-f] [-q] [-v] [--only ONLY] [--skip SKIP]
                  [-c CATEGORY] [--no-sudo] [--no-snapshot] [--config PATH]
-                 [--edit-config] [-l] [--history [COUNT] | --show-log RUN_ID]
-
-Unified System Updater for Linux (Fedora, Nobara, Debian, Ubuntu, Arch, openSUSE), Flatpaks, Homebrew, Containers, and Runtimes.
+                 [--edit-config] [-l] [-r] [--history [COUNT] | --show-log RUN_ID]
 
 options:
   -h, --help            show this help message and exit
@@ -109,6 +109,7 @@ options:
   --config PATH         Path to custom configuration TOML file
   --edit-config         Open configuration file in $EDITOR
   -l, --list            List all registered modules and check their availability
+  -r, --reboot          Reboot the system after updates if required by any module (e.g. kernel, systemd, firmware)
   --history [COUNT]     List recent update runs (default: 10, maximum: 30)
   --show-log RUN_ID     Show saved command output for a selected run
 ```
@@ -121,6 +122,9 @@ sysupdate
 
 # Preview updates without modifying the system
 sysupdate --dry-run
+
+# Run updates and reboot automatically if required by kernel, systemd, or firmware
+sysupdate --reboot
 
 # Run only DNF system packages and Homebrew
 sysupdate --only dnf,brew
@@ -166,6 +170,18 @@ Completed runs are stored in `~/.local/state/sysupdate/history/` (or `$XDG_STATE
 Use `sysupdate --history [COUNT]` to list saved runs, then pass the chosen run ID to `sysupdate --show-log RUN_ID` to inspect its module statuses, commands, exit codes, and captured output. Warning details are shown in the relevant module output.
 
 The history status is `warning` only when a module reports warning text not present in that module's latest previous run. Repeated warnings remain available in the saved log but do not keep changing every run's status to `warning`.
+
+### Universal Reboot Detection and Automation
+
+SystemUpdater continuously inspects all update steps for components requiring a machine restart:
+- **Core system packages:** Kernel (`kernel`, `linux`, `vmlinuz`), core runtimes (`systemd`, `glibc`, `libc6`, `musl`), bootloaders (`grub`, `shim`).
+- **Device & UEFI firmware:** Hardware capsules staged via `fwupdmgr` that require a reboot cycle to flash to the EFI system partition.
+- **System markers:** Standard trigger files such as `/run/reboot-required` created by package managers like APT or DNF.
+
+In standard mode, live progress and summary output remain 1:1 identical in structure to all other package modules (`• Device Firmware: 1 package updated`). When any module updates a package requiring a restart:
+1. The update is flagged with `reboot_required=True`.
+2. In verbose mode (`-v`), diagnostic warnings report `System reboot required to complete pending updates` alongside other warnings.
+3. If executed with `-r` or `--reboot`, SystemUpdater invokes non-interactive `systemctl reboot` immediately following summary printing and history logging. If no reboot is needed, the flag has no effect and the process exits normally.
 
 ---
 

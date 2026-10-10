@@ -134,7 +134,9 @@ def self_update():
     updated_version = os.environ.pop("SYSUPDATE_UPDATED_VERSION", None)
     if updated_version:
         duration = float(os.environ.pop("SYSUPDATE_UPDATE_DURATION", "0.1"))
-        return "ok", f"Updated to {updated_version}", duration, []
+        old_version = os.environ.pop("SYSUPDATE_OLD_VERSION", None)
+        details = [f"{old_version} -> {updated_version}"] if old_version and old_version != updated_version else [updated_version]
+        return "ok", "updated", duration, details
     if not git_output("rev-parse", "--is-inside-work-tree"):
         return result("skipped", "not a Git checkout")
     if git_output("status", "--porcelain", timeout=5):
@@ -197,6 +199,7 @@ def self_update():
     behind = git_output("rev-list", "--count", f"HEAD..{update_ref}")
     if not behind or behind == "0":
         return result("unchanged", "up to date")
+    old_version = get_version()
     merged = subprocess.run(
         ["git", "merge", "--ff-only", "--quiet", update_ref],
         cwd=SCRIPT_DIR,
@@ -209,6 +212,7 @@ def self_update():
             "update skipped",
             ["The local branch cannot be updated with a fast-forward."],
         )
+    os.environ["SYSUPDATE_OLD_VERSION"] = old_version
     os.environ["SYSUPDATE_UPDATED_VERSION"] = get_version()
     os.environ["SYSUPDATE_UPDATE_DURATION"] = str(max(0.1, time.monotonic() - started))
     os.execv(sys.executable, [sys.executable, os.path.join(SCRIPT_DIR, "main.py"), *sys.argv[1:]])
@@ -247,7 +251,6 @@ def parse_args():
 
     parser = argparse.ArgumentParser(
         prog=prog_name,
-        description="Unified System Updater for Linux (Fedora, Nobara, Debian, Ubuntu, Arch, openSUSE), Flatpaks, Homebrew, Containers, and Runtimes.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=f"""
 Examples:
@@ -261,6 +264,7 @@ Examples:
   {prog_name} --list          List all supported modules and system availability
   {prog_name} --history       List recent update runs
   {prog_name} --show-log ID   Show a saved update run
+  {prog_name} --reboot        Reboot system after update if required by kernel or firmware
 """,
     )
 
@@ -330,6 +334,11 @@ Examples:
         "-l", "--list",
         action="store_true",
         help="List all registered modules and check their availability",
+    )
+    parser.add_argument(
+        "-r", "--reboot",
+        action="store_true",
+        help="Reboot the system after updates if required by any module (e.g. kernel, systemd, firmware)",
     )
     history_group = parser.add_mutually_exclusive_group()
     history_group.add_argument(
@@ -571,6 +580,22 @@ def main():
         )
 
     ui.print_summary(results, total_elapsed)
+
+    reboot_needed = any(
+        getattr(r.get("result"), "reboot_required", False)
+        for r in results
+    )
+
+    if args.reboot and reboot_needed and not ctx.dry_run:
+        print("Rebooting system as requested by --reboot...")
+        sys.stdout.flush()
+        try:
+            subprocess.run(["systemctl", "reboot"], check=False)
+        except OSError:
+            try:
+                subprocess.run(["sudo", "reboot"], check=False)
+            except OSError:
+                pass
 
     sys.exit(1 if has_failures else 0)
 

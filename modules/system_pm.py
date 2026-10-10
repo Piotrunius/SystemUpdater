@@ -77,13 +77,10 @@ class AptModule(BaseModule):
 
         if upgraded:
             count = len(upgraded)
-            details = upgraded[:10]
-            if count > 10:
-                details.append(f"... and {count - 10} more")
             return StepResult(
                 "ok",
                 f"{count} package{'s' if count != 1 else ''} upgraded",
-                details=details,
+                details=upgraded,
                 warnings=cleanup_warnings,
             )
 
@@ -138,10 +135,7 @@ class PacmanModule(BaseModule):
         upgraded = list(dict.fromkeys(upgraded))
         if upgraded:
             count = len(upgraded)
-            details = upgraded[:10]
-            if count > 10:
-                details.append(f"... and {count - 10} more")
-            return StepResult("ok", f"{count} package{'s' if count != 1 else ''} upgraded", details=details)
+            return StepResult("ok", f"{count} package{'s' if count != 1 else ''} upgraded", details=upgraded)
 
         return StepResult("ok", "System packages upgraded")
 
@@ -195,10 +189,7 @@ class ZypperModule(BaseModule):
         upgraded = list(dict.fromkeys(upgraded))
         if upgraded:
             count = len(upgraded)
-            details = upgraded[:10]
-            if count > 10:
-                details.append(f"... and {count - 10} more")
-            return StepResult("ok", f"{count} package{'s' if count != 1 else ''} upgraded", details=details)
+            return StepResult("ok", f"{count} package{'s' if count != 1 else ''} upgraded", details=upgraded)
 
         return StepResult("ok", "System packages upgraded")
 
@@ -235,10 +226,7 @@ class ApkModule(BaseModule):
         upgraded = list(dict.fromkeys(upgraded))
         if upgraded:
             count = len(upgraded)
-            details = upgraded[:10]
-            if count > 10:
-                details.append(f"... and {count - 10} more")
-            return StepResult("ok", f"{count} package{'s' if count != 1 else ''} upgraded", details=details)
+            return StepResult("ok", f"{count} package{'s' if count != 1 else ''} upgraded", details=upgraded)
 
         return StepResult("unchanged")
 
@@ -275,9 +263,6 @@ class XbpsModule(BaseModule):
         upgraded = list(dict.fromkeys(upgraded))
         if upgraded:
             count = len(upgraded)
-            details = upgraded[:10]
-            if count > 10:
-                details.append(f"... and {count - 10} more")
-            return StepResult("ok", f"{count} package{'s' if count != 1 else ''} upgraded", details=details)
+            return StepResult("ok", f"{count} package{'s' if count != 1 else ''} upgraded", details=upgraded)
 
         return StepResult("ok", "System packages upgraded")

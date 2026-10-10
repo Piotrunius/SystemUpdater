@@ -36,6 +36,7 @@ class PyenvModule(BaseModule):
     key = "pyenv"
     category = "Development Environment"
     description = "Updates pyenv and python definitions via pyenv update"
+    is_single_entity = True
 
     def is_available(self, ctx: UpdateContext) -> bool:
         if ctx.which("pyenv") is not None:
@@ -61,6 +62,7 @@ class SdkmanModule(BaseModule):
     key = "sdkman"
     category = "Development Environment"
     description = "Updates SDKMAN tool and installed candidate versions"
+    is_single_entity = True
 
     def is_available(self, ctx: UpdateContext) -> bool:
         return os.path.isfile(os.path.expanduser("~/.sdkman/bin/sdkman-init.sh"))
@@ -85,6 +87,7 @@ class GhcupModule(BaseModule):
     key = "ghcup"
     category = "Development Environment"
     description = "Updates Haskell GHCup toolchain manager"
+    is_single_entity = True
 
     def is_available(self, ctx: UpdateContext) -> bool:
         return ctx.which("ghcup") is not None
@@ -100,7 +103,9 @@ class GhcupModule(BaseModule):
         if "already up to date" in out.lower() or "latest version is already installed" in out.lower():
             return StepResult("unchanged")
 
-        return StepResult("ok", "updated")
+        m = re.search(r"from\s+([^\s]+)\s+to\s+([^\s]+)", out, re.I)
+        details = [f"{m.group(1)} -> {m.group(2)}"] if m else []
+        return StepResult("ok", "updated", details=details)
 
 
 class FlutterModule(BaseModule):
@@ -108,6 +113,7 @@ class FlutterModule(BaseModule):
     key = "flutter"
     category = "Development Environment"
     description = "Updates Flutter SDK toolchain"
+    is_single_entity = True
 
     def is_available(self, ctx: UpdateContext) -> bool:
         return ctx.which("flutter") is not None
@@ -123,4 +129,6 @@ class FlutterModule(BaseModule):
         if "Flutter is already up to date" in out:
             return StepResult("unchanged")
 
-        return StepResult("ok", "updated")
+        m = re.search(r"from\s+([^\s]+)\s+to\s+([^\s]+)", out, re.I)
+        details = [f"{m.group(1)} -> {m.group(2)}"] if m else []
+        return StepResult("ok", "updated", details=details)

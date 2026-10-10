@@ -11,6 +11,7 @@ class MandbModule(BaseModule):
     key = "mandb"
     category = "System Core"
     description = "Updates the manual page index caches via mandb -q"
+    is_single_entity = True
 
     def is_available(self, ctx: UpdateContext) -> bool:
         return ctx.which("mandb") is not None

@@ -35,11 +35,30 @@ class BrewModule(BaseModule):
         combined_out = (up_out or "") + "\n" + (cask_out or "")
 
         upgraded = []
-        for line in combined_out.splitlines():
-            # Matches: "==> Upgrading <name>"
-            m = re.match(r"==> Upgrading\s+([\w\.\-\@\/]+)", line)
-            if m:
-                upgraded.append(m.group(1))
+        version_transitions = {}
+        lines = combined_out.splitlines()
+
+        for i, line in enumerate(lines):
+            line_str = line.strip()
+            # 1. Matches: "==> Upgrading <name>"
+            m_up = re.match(r"==> Upgrading\s+([\w\.\-\@\/]+)", line)
+            if m_up:
+                pkg_name = m_up.group(1)
+                upgraded.append(pkg_name)
+                if i + 1 < len(lines):
+                    next_line = lines[i + 1].strip()
+                    m_ver = re.match(r"^([^\s]+)\s+->\s+([^\s]+)$", next_line)
+                    if m_ver:
+                        version_transitions[pkg_name] = (m_ver.group(1), m_ver.group(2))
+
+            # 2. Matches table rows like: "systemd 262 -> 262_1"
+            m_table = re.match(r"^([\w\.\-\@\/]+)\s+([^\s]+)\s+->\s+([^\s]+)", line_str)
+            if m_table and not line_str.startswith("==>") and not line_str.startswith("Warning:"):
+                pkg_name = m_table.group(1)
+                upgraded.append(pkg_name)
+                version_transitions[pkg_name] = (m_table.group(2), m_table.group(3))
+
+        upgraded = list(dict.fromkeys(upgraded))
 
         failed_commands = []
         if up_code != 0:
@@ -56,15 +75,16 @@ class BrewModule(BaseModule):
 
         if upgraded:
             count = len(upgraded)
-            # Resolve version for each upgraded package for consistent "name -> version" formatting
+            # Resolve version for each upgraded package for consistent formatting
             version_map = {}
-            _, v_out, _ = ctx.run_cmd([brew_bin, "list", "--versions"] + upgraded, read_only=True)
+            queries = list(dict.fromkeys([pkg for pkg in upgraded] + [pkg.split("/")[-1] for pkg in upgraded]))
+            _, v_out, _ = ctx.run_cmd([brew_bin, "list", "--versions"] + queries, read_only=True)
             for line in (v_out or "").splitlines():
                 parts = line.strip().split()
                 if len(parts) >= 2 and not parts[0].startswith("Warning:"):
                     version_map[parts[0]] = parts[-1]
 
-            missing = [pkg for pkg in upgraded if pkg not in version_map]
+            missing = [pkg for pkg in queries if pkg not in version_map]
             if missing:
                 _, c_out, _ = ctx.run_cmd([brew_bin, "list", "--cask", "--versions"] + missing, read_only=True)
                 for line in (c_out or "").splitlines():
@@ -72,12 +92,18 @@ class BrewModule(BaseModule):
                     if len(parts) >= 2 and not parts[0].startswith("Warning:"):
                         version_map[parts[0]] = parts[-1]
 
-            formatted_details = [
-                f"{pkg} -> {version_map[pkg]}" if pkg in version_map else pkg
-                for pkg in upgraded[:10]
-            ]
-            if count > 10:
-                formatted_details.append(f"... and {count - 10} more")
+            formatted_details = []
+            for pkg in upgraded:
+                short_pkg = pkg.split("/")[-1]
+                if pkg in version_transitions:
+                    old_v, new_v = version_transitions[pkg]
+                    formatted_details.append(f"{pkg}: {old_v} -> {new_v}")
+                elif pkg in version_map:
+                    formatted_details.append(f"{pkg} -> {version_map[pkg]}")
+                elif short_pkg in version_map:
+                    formatted_details.append(f"{pkg} -> {version_map[short_pkg]}")
+                else:
+                    formatted_details.append(pkg)
 
             return StepResult("ok", f"{count} package{'s' if count != 1 else ''} upgraded", details=formatted_details)
 

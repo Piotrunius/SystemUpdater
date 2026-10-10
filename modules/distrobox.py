@@ -50,7 +50,8 @@ class DistroboxModule(BaseModule):
         current_box = None
         box_had_update = False
 
-        for line in (out or "").splitlines():
+        combined = f"{out or ''}\n{err or ''}"
+        for line in combined.splitlines():
             m = re.search(r"Upgrading\s+([\w\.\-_]+)\.\.\.", line)
             if m:
                 if current_box and box_had_update:

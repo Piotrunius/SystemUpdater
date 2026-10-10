@@ -287,6 +287,7 @@ class BaseModule:
     category: str = "General"
     description: str = ""
     requires_sudo: bool = False
+    is_single_entity: bool = False
 
     def is_available(self, ctx: UpdateContext) -> bool:
         return True

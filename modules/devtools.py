@@ -14,6 +14,7 @@ class OhMyZshModule(BaseModule):
     key = "omz"
     category = "Development Environment"
     description = "Updates Oh My Zsh framework"
+    is_single_entity = True
 
     def is_available(self, ctx: UpdateContext) -> bool:
         omz_dir = os.path.expanduser("~/.oh-my-zsh")
@@ -24,6 +25,9 @@ class OhMyZshModule(BaseModule):
         if ctx.dry_run:
             return StepResult("ok", "[DRY-RUN] Would update Oh My Zsh")
 
+        _, old_head, _ = ctx.run_cmd(["git", "-C", omz_dir, "rev-parse", "--short", "HEAD"], read_only=True)
+        old_commit = old_head.strip()
+
         code, out, err = ctx.run_cmd(["git", "-C", omz_dir, "pull", "--rebase", "--stat", "origin", "master"])
         if code != 0:
             return StepResult("error", "Oh My Zsh update failed", error_output=err or out)
@@ -31,7 +35,18 @@ class OhMyZshModule(BaseModule):
         if "Already up to date" in out or "Already up-to-date" in out:
             return StepResult("unchanged")
 
-        return StepResult("ok", "updated")
+        m = re.search(r"Updating\s+([0-9a-fA-F]+)\.\.([0-9a-fA-F]+)", out)
+        if m:
+            ver_change = f"{m.group(1)} -> {m.group(2)}"
+        else:
+            _, new_head, _ = ctx.run_cmd(["git", "-C", omz_dir, "rev-parse", "--short", "HEAD"], read_only=True)
+            new_commit = new_head.strip()
+            if old_commit and new_commit and old_commit != new_commit:
+                ver_change = f"{old_commit} -> {new_commit}"
+            else:
+                ver_change = "updated"
+
+        return StepResult("ok", "updated", details=[ver_change])
 
 
 class RustupModule(BaseModule):
@@ -54,7 +69,17 @@ class RustupModule(BaseModule):
         if "unchanged" in out and "update available" not in out:
             return StepResult("unchanged")
 
-        return StepResult("ok", "updated")
+        matches = re.findall(r"([\w\.\-]+)\s+updated\s+-\s+rustc\s+([^\s]+).*?->\s+rustc\s+([^\s]+)", out)
+        if matches:
+            details = [f"{tc}: {old} -> {new}" for tc, old, new in matches]
+            count = len(details)
+            return StepResult("ok", f"{count} toolchain{'s' if count != 1 else ''} updated", details=details)
+
+        m_self = re.search(r"rustup updated.*?([0-9\.]+)\s+to\s+([0-9\.]+)", out)
+        if m_self:
+            return StepResult("ok", "1 toolchain updated", details=[f"rustup: {m_self.group(1)} -> {m_self.group(2)}"])
+
+        return StepResult("ok", "toolchain updated")
 
 
 class PipModule(BaseModule):
@@ -62,6 +87,7 @@ class PipModule(BaseModule):
     key = "pip"
     category = "Development Environment"
     description = "Upgrades pip user installation to the latest version"
+    is_single_entity = True
 
     def is_available(self, ctx: UpdateContext) -> bool:
         return ctx.which("pip3") is not None or ctx.which("python3") is not None
@@ -71,6 +97,10 @@ class PipModule(BaseModule):
             return StepResult("ok", "[DRY-RUN] Would upgrade pip")
 
         pip_bin = ctx.which("pip3") or ctx.which("pip") or "pip3"
+        _, pre_v, _ = ctx.run_cmd([pip_bin, "--version"], read_only=True)
+        m_old = re.search(r"pip\s+([^\s]+)", pre_v or "")
+        old_ver = m_old.group(1) if m_old else ""
+
         code, out, err = ctx.run_cmd([pip_bin, "install", "--upgrade", "pip"])
         if code != 0:
             return StepResult("error", "pip upgrade failed", error_output=err or out)
@@ -78,11 +108,22 @@ class PipModule(BaseModule):
         if "Requirement already satisfied" in out:
             return StepResult("unchanged")
 
-        m = re.search(r"Successfully installed\s+pip-([\w\.\+]+)", out)
-        if m:
-            return StepResult("ok", "updated", details=[f"pip -> {m.group(1)}"])
+        m_new = re.search(r"Successfully installed\s+pip-([\w\.\+]+)", out)
+        new_ver = m_new.group(1) if m_new else ""
 
-        return StepResult("ok", "updated")
+        if not new_ver:
+            _, post_v, _ = ctx.run_cmd([pip_bin, "--version"], read_only=True)
+            m_post = re.search(r"pip\s+([^\s]+)", post_v or "")
+            new_ver = m_post.group(1) if m_post else ""
+
+        if old_ver and new_ver and old_ver != new_ver:
+            ver_change = f"{old_ver} -> {new_ver}"
+        elif new_ver:
+            ver_change = f"-> {new_ver}"
+        else:
+            ver_change = "updated"
+
+        return StepResult("ok", "updated", details=[ver_change])
 
 
 class NpmModule(BaseModule):
@@ -98,7 +139,7 @@ class NpmModule(BaseModule):
         if ctx.dry_run:
             return StepResult("ok", "[DRY-RUN] Would check and update NPM packages")
 
-        code, out, err = ctx.run_cmd(["npm", "outdated", "-g", "--json"])
+        code, out, err = ctx.run_cmd(["npm", "outdated", "-g", "--json"], read_only=True)
         if code not in (0, 1):
             return StepResult("error", "npm outdated check failed", error_output=err or out)
 
@@ -120,8 +161,19 @@ class NpmModule(BaseModule):
         if up_code != 0:
             return StepResult("error", "npm update failed", error_output=up_err or up_out)
 
-        details = [f"{pkg} -> {info.get('latest', 'latest')}" for pkg, info in outdated.items()]
-        return StepResult("ok", f"{len(pkg_names)} package{'s' if len(pkg_names) != 1 else ''} updated", details=details)
+        details = []
+        for pkg, info in outdated.items():
+            curr = info.get("current")
+            latest = info.get("latest") or info.get("wanted")
+            if curr and latest and curr != latest:
+                details.append(f"{pkg}: {curr} -> {latest}")
+            elif latest:
+                details.append(f"{pkg} -> {latest}")
+            else:
+                details.append(pkg)
+
+        count = len(pkg_names)
+        return StepResult("ok", f"{count} package{'s' if count != 1 else ''} updated", details=details)
 
 
 class PnpmModule(BaseModule):
@@ -191,7 +243,7 @@ class PnpmModule(BaseModule):
             return StepResult(
                 "ok",
                 f"{len(details)} package{'s' if len(details) != 1 else ''} updated",
-                details=details[:10],
+                details=details,
             )
 
         return StepResult("ok", "updated")
@@ -255,7 +307,7 @@ class BunModule(BaseModule):
         matches = re.findall(r"(?:installed|\+)\s+([@\w\.\-\/]+)@([\w\.\-]+)", combined)
         if matches:
             details = [f"{p} -> {v}" for p, v in matches]
-            return StepResult("ok", f"{len(details)} package{'s' if len(details) != 1 else ''} updated", details=details[:10])
+            return StepResult("ok", f"{len(details)} package{'s' if len(details) != 1 else ''} updated", details=details)
 
         return StepResult("ok", "updated")
 
@@ -279,6 +331,17 @@ class MicroModule(BaseModule):
 
         if "Nothing to install" in out or "Nothing to update" in out:
             return StepResult("unchanged")
+
+        plugins = []
+        for line in out.splitlines():
+            m = re.search(r"(?:Updated|Installed|Updating)\s+plugin\s+([\w\.\-_]+)", line, re.I)
+            if m:
+                plugins.append(m.group(1))
+        plugins = list(dict.fromkeys(plugins))
+
+        if plugins:
+            count = len(plugins)
+            return StepResult("ok", f"{count} plugin{'s' if count != 1 else ''} updated", details=plugins)
 
         return StepResult("ok", "updated")
 
@@ -306,7 +369,8 @@ class GhExtensionsModule(BaseModule):
         matches = re.findall(r"[Uu]pgraded\s+([\w\.\-\/]+)(?:\s+to\s+|\s+->\s+|\s+\([^)]*->\s*)([v\w\.\-]+)", out)
         if matches:
             details = [f"{ext} -> {ver.rstrip(')')}" for ext, ver in matches]
-            return StepResult("ok", f"{len(details)} extension{'s' if len(details) != 1 else ''} updated", details=details[:10])
+            count = len(details)
+            return StepResult("ok", f"{count} extension{'s' if count != 1 else ''} updated", details=details)
 
         return StepResult("ok", "updated")
 
@@ -331,7 +395,25 @@ class SkillsModule(BaseModule):
         if "All global skills are up to date" in out:
             return StepResult("unchanged")
 
-        return StepResult("ok", "updated")
+        skills = []
+        for line in out.splitlines():
+            line_s = line.strip()
+            m = re.search(r"[Uu]pdated\s+([@\w\.\-\/]+)", line_s)
+            if m:
+                cand = m.group(1).rstrip("…").rstrip(".")
+                if "skill" not in cand.lower() and not cand.startswith("from"):
+                    skills.append(cand)
+        skills = list(dict.fromkeys(skills))
+
+        count = len(skills)
+        if count == 0:
+            m_cnt = re.search(r"[Uu]pdated\s+(\d+)\s+skill", out)
+            count = int(m_cnt.group(1)) if m_cnt else (0 if "0 skill" in out else 1)
+            if count == 0 and "found 0" in out.lower():
+                return StepResult("unchanged")
+            return StepResult("ok", f"{count} skill{'s' if count != 1 else ''} updated")
+
+        return StepResult("ok", f"{count} skill{'s' if count != 1 else ''} updated", details=skills)
 
 
 class AntigravityModule(BaseModule):
@@ -354,6 +436,19 @@ class AntigravityModule(BaseModule):
 
         if "No extension to update" in out:
             return StepResult("unchanged")
+
+        exts = []
+        for line in out.splitlines():
+            m = re.search(r"Extension\s+'([^']+)'\s+(?:v[^\s]+\s+)?was successfully updated", line, re.I)
+            if not m:
+                m = re.search(r"Updated\s+extension\s+([^\s]+)", line, re.I)
+            if m:
+                exts.append(m.group(1))
+        exts = list(dict.fromkeys(exts))
+
+        if exts:
+            count = len(exts)
+            return StepResult("ok", f"{count} extension{'s' if count != 1 else ''} updated", details=exts)
 
         return StepResult("ok", "updated")
 
@@ -497,7 +592,7 @@ class CargoUpdateModule(BaseModule):
         matches = re.findall(r"(?:Updating\s+)?([\w\.\-_]+)\s+(?:from\s+v?[\w\.\-_]+\s+to|->)\s+v?([\w\.\-_]+)", out)
         if matches:
             details = [f"{crate} -> {ver}" for crate, ver in matches]
-            return StepResult("ok", f"{len(details)} crate{'s' if len(details) != 1 else ''} updated", details=details[:10])
+            return StepResult("ok", f"{len(details)} crate{'s' if len(details) != 1 else ''} updated", details=details)
 
         return StepResult("ok", "updated")
 

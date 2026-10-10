@@ -157,7 +157,7 @@ class HistoryStoreTests(unittest.TestCase):
                     "name": "ProtonPlus Runners",
                     "status": "warning",
                     "message": "GitHub API unreachable or timed out",
-                    "details": ["GitHub API health check failed: timed out"],
+                    "details": ["timed out"],
                 }
             ],
         }
