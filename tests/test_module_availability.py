@@ -1,10 +1,23 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, mock_open
 
 from modules.containers_ext import PodmanModule, VagrantModule
-from modules.devtools import BunModule, PnpmModule
+from modules.devtools import (
+    AntigravityModule,
+    BunModule,
+    CargoUpdateModule,
+    GemModule,
+    GhExtensionsModule,
+    MicroModule,
+    NpmModule,
+    PipxModule,
+    PnpmModule,
+    RustupModule,
+    SkillsModule,
+)
 from modules.distrobox import DistroboxModule
 from modules.docker import DockerModule
 
@@ -110,6 +123,174 @@ class ModuleAvailabilityTests(unittest.TestCase):
         probe_error = FakeContext(error="registry is unavailable", return_code=1)
         self.assertTrue(bun.is_available(probe_error))
         self.assertEqual(bun.availability_status(probe_error), "[Unavailable]")
+
+    def test_gh_extensions_requires_installed_extensions(self):
+        gh = GhExtensionsModule()
+        with patch("modules.devtools.os.path.isdir", return_value=False):
+            self.assertFalse(
+                gh.is_available(FakeContext(output="no installed extensions found\n"))
+            )
+            self.assertEqual(
+                gh.availability_status(
+                    FakeContext(output="no installed extensions found\n")
+                ),
+                "[No Targets]",
+            )
+            self.assertTrue(
+                gh.is_available(
+                    FakeContext(output="cli/gh-copilot\tCopilot extension\n")
+                )
+            )
+            self.assertEqual(
+                gh.availability_status(
+                    FakeContext(output="cli/gh-copilot\tCopilot extension\n")
+                ),
+                "[Active]",
+            )
+        self.assertFalse(gh.is_available(FakeContext(installed=False)))
+        self.assertEqual(
+            gh.availability_status(FakeContext(installed=False)), "[Not Installed]"
+        )
+
+    def test_micro_plugins_requires_custom_plugins(self):
+        micro = MicroModule()
+        with patch("modules.devtools.os.path.isdir", return_value=False):
+            builtin_only = "autoclose (built-in)\ncomment (built-in)\n"
+            self.assertFalse(micro.is_available(FakeContext(output=builtin_only)))
+            self.assertEqual(
+                micro.availability_status(FakeContext(output=builtin_only)),
+                "[No Targets]",
+            )
+            custom = "myplugin 1.0.0\nautoclose (built-in)\n"
+            self.assertTrue(micro.is_available(FakeContext(output=custom)))
+            self.assertEqual(
+                micro.availability_status(FakeContext(output=custom)), "[Active]"
+            )
+        self.assertFalse(micro.is_available(FakeContext(installed=False)))
+        self.assertEqual(
+            micro.availability_status(FakeContext(installed=False)), "[Not Installed]"
+        )
+
+    def test_skills_requires_skills_in_lock_or_directory(self):
+        skills = SkillsModule()
+        with patch("modules.devtools.os.path.isdir", return_value=False):
+            empty_data = json.dumps({"version": 3, "skills": {}})
+            with (
+                patch("builtins.open", mock_open(read_data=empty_data)),
+                patch("modules.devtools.os.path.isfile", return_value=True),
+            ):
+                self.assertFalse(skills.is_available(FakeContext()))
+                self.assertEqual(
+                    skills.availability_status(FakeContext()), "[No Targets]"
+                )
+
+            active_data = json.dumps(
+                {"version": 3, "skills": {"cloudflare": {"source": "foo"}}}
+            )
+            with (
+                patch("builtins.open", mock_open(read_data=active_data)),
+                patch("modules.devtools.os.path.isfile", return_value=True),
+            ):
+                self.assertTrue(skills.is_available(FakeContext()))
+                self.assertEqual(skills.availability_status(FakeContext()), "[Active]")
+
+        self.assertFalse(skills.is_available(FakeContext(installed=False)))
+        self.assertEqual(
+            skills.availability_status(FakeContext(installed=False)), "[Not Installed]"
+        )
+
+    def test_antigravity_requires_extensions(self):
+        ag = AntigravityModule()
+        with patch("modules.devtools.os.path.isdir", return_value=False):
+            self.assertFalse(ag.is_available(FakeContext(output="")))
+            self.assertEqual(
+                ag.availability_status(FakeContext(output="")), "[No Targets]"
+            )
+            self.assertTrue(
+                ag.is_available(FakeContext(output="golang.go\nmeta.pyrefly\n"))
+            )
+            self.assertEqual(
+                ag.availability_status(FakeContext(output="golang.go\nmeta.pyrefly\n")),
+                "[Active]",
+            )
+        self.assertFalse(ag.is_available(FakeContext(installed=False)))
+        self.assertEqual(
+            ag.availability_status(FakeContext(installed=False)), "[Not Installed]"
+        )
+
+    def test_npm_requires_global_packages(self):
+        npm = NpmModule()
+        npm_only = json.dumps(
+            {"name": "lib", "dependencies": {"npm": {"version": "10.0"}}}
+        )
+        self.assertFalse(npm.is_available(FakeContext(output=npm_only)))
+        self.assertEqual(
+            npm.availability_status(FakeContext(output=npm_only)), "[No Targets]"
+        )
+
+        with_pkgs = json.dumps(
+            {"name": "lib", "dependencies": {"npm": {}, "eslint": {"version": "9.0"}}}
+        )
+        self.assertTrue(npm.is_available(FakeContext(output=with_pkgs)))
+        self.assertEqual(
+            npm.availability_status(FakeContext(output=with_pkgs)), "[Active]"
+        )
+        self.assertFalse(npm.is_available(FakeContext(installed=False)))
+        self.assertEqual(
+            npm.availability_status(FakeContext(installed=False)), "[Not Installed]"
+        )
+
+    def test_rustup_requires_toolchains(self):
+        rustup = RustupModule()
+        with patch("modules.devtools.os.path.isdir", return_value=False):
+            self.assertFalse(
+                rustup.is_available(
+                    FakeContext(output="info: no installed toolchains\n")
+                )
+            )
+            self.assertEqual(
+                rustup.availability_status(
+                    FakeContext(output="info: no installed toolchains\n")
+                ),
+                "[No Targets]",
+            )
+            self.assertTrue(
+                rustup.is_available(
+                    FakeContext(output="stable-x86_64-unknown-linux-gnu (default)\n")
+                )
+            )
+            self.assertEqual(
+                rustup.availability_status(
+                    FakeContext(output="stable-x86_64-unknown-linux-gnu (default)\n")
+                ),
+                "[Active]",
+            )
+        self.assertFalse(rustup.is_available(FakeContext(installed=False)))
+        self.assertEqual(
+            rustup.availability_status(FakeContext(installed=False)), "[Not Installed]"
+        )
+
+    def test_gem_requires_custom_gems(self):
+        gem = GemModule()
+        default_only = (
+            "*** LOCAL GEMS ***\nbundler (default: 4.0.20)\njson (default: 2.18.0)\n"
+        )
+        self.assertFalse(gem.is_available(FakeContext(output=default_only)))
+        self.assertEqual(
+            gem.availability_status(FakeContext(output=default_only)), "[No Targets]"
+        )
+
+        with_custom = (
+            "*** LOCAL GEMS ***\nbundler (default: 4.0.20)\ncommander (5.0.0)\n"
+        )
+        self.assertTrue(gem.is_available(FakeContext(output=with_custom)))
+        self.assertEqual(
+            gem.availability_status(FakeContext(output=with_custom)), "[Active]"
+        )
+        self.assertFalse(gem.is_available(FakeContext(installed=False)))
+        self.assertEqual(
+            gem.availability_status(FakeContext(installed=False)), "[Not Installed]"
+        )
 
 
 if __name__ == "__main__":

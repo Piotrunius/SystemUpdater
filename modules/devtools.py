@@ -5,6 +5,7 @@ Developer tools, language runtimes, and shell extensions modules.
 import json
 import os
 import re
+from typing import List, Tuple, Optional
 from modules.base import BaseModule, UpdateContext
 from ui import StepResult
 
@@ -63,8 +64,39 @@ class RustupModule(BaseModule):
     category = "Development Environment"
     description = "Updates Rust compiler toolchains and rustup itself"
 
+    def _availability(self, ctx: UpdateContext) -> str:
+        if ctx.which("rustup") is None:
+            return "not-installed"
+        tc_dir = os.path.expanduser("~/.rustup/toolchains")
+        if os.path.isdir(tc_dir):
+            try:
+                toolchains = [t for t in os.listdir(tc_dir) if not t.startswith(".")]
+                if toolchains:
+                    return "active"
+            except OSError:
+                pass
+        code, out, _ = ctx.run_cmd(
+            ["rustup", "toolchain", "list"], timeout=5, read_only=True
+        )
+        if code != 0:
+            return "unavailable"
+        lines = [
+            l.strip()
+            for l in out.splitlines()
+            if l.strip() and "no installed toolchains" not in l.lower()
+        ]
+        return "active" if lines else "no-targets"
+
     def is_available(self, ctx: UpdateContext) -> bool:
-        return ctx.which("rustup") is not None
+        return self._availability(ctx) in ("active", "unavailable")
+
+    def availability_status(self, ctx: UpdateContext) -> str:
+        return {
+            "not-installed": "[Not Installed]",
+            "no-targets": "[No Targets]",
+            "unavailable": "[Unavailable]",
+            "active": "[Active]",
+        }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
         if ctx.dry_run:
@@ -107,29 +139,49 @@ class PipModule(BaseModule):
     description = "Upgrades pip user installation to the latest version"
     is_single_entity = True
 
-    def is_available(self, ctx: UpdateContext) -> bool:
-        if ctx.which("pip3") is not None or ctx.which("pip") is not None:
-            return True
+    def _get_target(self, ctx: UpdateContext) -> Optional[Tuple[List[str], str]]:
+        # 1. Standalone pip binary (user pip in ~/.local/bin or system pip)
+        pip_bin = ctx.which("pip3") or ctx.which("pip")
+        if pip_bin:
+            code_chk, ver_out, _ = ctx.run_cmd([pip_bin, "--version"], read_only=True)
+            if code_chk == 0:
+                return [pip_bin], ver_out
+
+        # 2. Python module pip (python3 -m pip)
         py_bin = ctx.which("python3") or ctx.which("python")
         if py_bin:
-            code, _, _ = ctx.run_cmd([py_bin, "-m", "pip", "--version"], read_only=True)
-            return code == 0
-        return False
+            code_chk, ver_out, _ = ctx.run_cmd(
+                [py_bin, "-m", "pip", "--version"], read_only=True
+            )
+            if code_chk == 0:
+                # Only use if this Python environment is NOT PEP 668 externally managed
+                code_managed, _, _ = ctx.run_cmd(
+                    [
+                        py_bin,
+                        "-c",
+                        "import sysconfig, os, sys; "
+                        "stdlib = sysconfig.get_path('stdlib'); "
+                        "sys.exit(0 if os.path.exists(os.path.join(stdlib, 'EXTERNALLY-MANAGED')) else 1)",
+                    ],
+                    read_only=True,
+                )
+                if code_managed != 0:
+                    return [py_bin, "-m", "pip"], ver_out
+
+        return None
+
+    def is_available(self, ctx: UpdateContext) -> bool:
+        return self._get_target(ctx) is not None
 
     def run(self, ctx: UpdateContext) -> StepResult:
         if ctx.dry_run:
             return StepResult("ok", "[DRY-RUN] Would upgrade pip")
 
-        py_bin = ctx.which("python3") or ctx.which("python")
-        pip_bin = ctx.which("pip3") or ctx.which("pip")
-        if py_bin:
-            cmd_prefix = [py_bin, "-m", "pip"]
-        elif pip_bin:
-            cmd_prefix = [pip_bin]
-        else:
-            return StepResult("skipped", "pip not available")
+        target = self._get_target(ctx)
+        if not target:
+            return StepResult("skipped", "pip not available or externally managed")
 
-        _, pre_v, _ = ctx.run_cmd(cmd_prefix + ["--version"], read_only=True)
+        cmd_prefix, pre_v = target
         m_old = re.search(r"pip\s+([^\s]+)", pre_v or "")
         old_ver = m_old.group(1) if m_old else ""
 
@@ -137,25 +189,8 @@ class PipModule(BaseModule):
         if code != 0:
             combined = f"{out}\n{err}".lower()
             if "externally-managed-environment" in combined:
-                # If managed externally (e.g. Homebrew, PEP 668), check if standalone pip binary exists
-                pip_standalone = ctx.which("pip3") or ctx.which("pip")
-                if pip_standalone and (not py_bin or pip_standalone != py_bin):
-                    # Verify standalone pip can actually be invoked (shebang interpreter might be absent in container)
-                    code_chk, _, _ = ctx.run_cmd([pip_standalone, "--version"], read_only=True)
-                    if code_chk == 0:
-                        code_user, out_user, err_user = ctx.run_cmd([pip_standalone, "install", "--upgrade", "pip"])
-                        if code_user == 0:
-                            code, out, err = code_user, out_user, err_user
-                        elif "externally-managed-environment" in f"{out_user}\n{err_user}".lower():
-                            return StepResult("unchanged")
-                        else:
-                            return StepResult("error", "pip upgrade failed", error_output=err_user or out_user)
-                    else:
-                        return StepResult("unchanged")
-                else:
-                    return StepResult("unchanged")
-            else:
-                return StepResult("error", "pip upgrade failed", error_output=err or out)
+                return StepResult("unchanged")
+            return StepResult("error", "pip upgrade failed", error_output=err or out)
 
         if "Requirement already satisfied" in out:
             return StepResult("unchanged")
@@ -184,8 +219,32 @@ class NpmModule(BaseModule):
     category = "Development Environment"
     description = "Updates globally installed Node.js npm packages"
 
+    def _availability(self, ctx: UpdateContext) -> str:
+        if ctx.which("npm") is None:
+            return "not-installed"
+        code, out, err = ctx.run_cmd(
+            ["npm", "ls", "-g", "--depth=0", "--json"], timeout=10, read_only=True
+        )
+        if not out.strip() and code != 0:
+            return "unavailable"
+        try:
+            data = json.loads(out)
+            deps = data.get("dependencies", {})
+            has_packages = any(pkg.lower() != "npm" for pkg in deps.keys())
+            return "active" if has_packages else "no-targets"
+        except Exception:
+            return "unavailable" if code != 0 else "no-targets"
+
     def is_available(self, ctx: UpdateContext) -> bool:
-        return ctx.which("npm") is not None
+        return self._availability(ctx) in ("active", "unavailable")
+
+    def availability_status(self, ctx: UpdateContext) -> str:
+        return {
+            "not-installed": "[Not Installed]",
+            "no-targets": "[No Targets]",
+            "unavailable": "[Unavailable]",
+            "active": "[Active]",
+        }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
         if ctx.dry_run:
@@ -405,8 +464,41 @@ class MicroModule(BaseModule):
     category = "Development Environment"
     description = "Updates plugins installed in the Micro text editor"
 
+    def _availability(self, ctx: UpdateContext) -> str:
+        if ctx.which("micro") is None:
+            return "not-installed"
+        plugins_dir = os.path.expanduser("~/.config/micro/plugins")
+        if os.path.isdir(plugins_dir):
+            try:
+                custom = [p for p in os.listdir(plugins_dir) if not p.startswith(".")]
+                if custom:
+                    return "active"
+            except OSError:
+                pass
+        code, out, _ = ctx.run_cmd(
+            ["micro", "-plugin", "list"], timeout=5, read_only=True
+        )
+        if code != 0:
+            return "unavailable"
+        custom = [
+            l.strip()
+            for l in out.splitlines()
+            if l.strip()
+            and "(built-in)" not in l.lower()
+            and "installed:" not in l.lower()
+        ]
+        return "active" if custom else "no-targets"
+
     def is_available(self, ctx: UpdateContext) -> bool:
-        return ctx.which("micro") is not None
+        return self._availability(ctx) in ("active", "unavailable")
+
+    def availability_status(self, ctx: UpdateContext) -> str:
+        return {
+            "not-installed": "[Not Installed]",
+            "no-targets": "[No Targets]",
+            "unavailable": "[Unavailable]",
+            "active": "[Active]",
+        }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
         if ctx.dry_run:
@@ -447,8 +539,36 @@ class GhExtensionsModule(BaseModule):
     category = "Development Environment"
     description = "Updates installed GitHub CLI extensions"
 
+    def _availability(self, ctx: UpdateContext) -> str:
+        if ctx.which("gh") is None:
+            return "not-installed"
+        ext_dir = os.path.expanduser("~/.local/share/gh/extensions")
+        if os.path.isdir(ext_dir):
+            try:
+                entries = [e for e in os.listdir(ext_dir) if not e.startswith(".")]
+                if entries:
+                    return "active"
+            except OSError:
+                pass
+        code, out, _ = ctx.run_cmd(
+            ["gh", "extension", "list"], timeout=5, read_only=True
+        )
+        if code != 0:
+            return "unavailable"
+        if "no installed extensions found" in out.lower() or not out.strip():
+            return "no-targets"
+        return "active"
+
     def is_available(self, ctx: UpdateContext) -> bool:
-        return ctx.which("gh") is not None
+        return self._availability(ctx) in ("active", "unavailable")
+
+    def availability_status(self, ctx: UpdateContext) -> str:
+        return {
+            "not-installed": "[Not Installed]",
+            "no-targets": "[No Targets]",
+            "unavailable": "[Unavailable]",
+            "active": "[Active]",
+        }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
         if ctx.dry_run:
@@ -485,15 +605,38 @@ class SkillsModule(BaseModule):
     category = "Development Environment"
     description = "Updates global Agent Skills via npx skills"
 
-    def is_available(self, ctx: UpdateContext) -> bool:
+    def _availability(self, ctx: UpdateContext) -> str:
         if ctx.which("npx") is None:
-            return False
-        # Only activate if agent skills are actually installed locally or globally
+            return "not-installed"
         lock_file = os.path.expanduser("~/.agents/.skill-lock.json")
+        if os.path.isfile(lock_file):
+            try:
+                with open(lock_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if isinstance(data, dict) and bool(data.get("skills")):
+                    return "active"
+            except Exception:
+                pass
         skills_dir = os.path.expanduser("~/.agents/skills")
-        return os.path.isfile(lock_file) or (
-            os.path.isdir(skills_dir) and bool(os.listdir(skills_dir))
-        )
+        if os.path.isdir(skills_dir):
+            try:
+                entries = [e for e in os.listdir(skills_dir) if not e.startswith(".")]
+                if entries:
+                    return "active"
+            except OSError:
+                pass
+        return "no-targets"
+
+    def is_available(self, ctx: UpdateContext) -> bool:
+        return self._availability(ctx) in ("active", "unavailable")
+
+    def availability_status(self, ctx: UpdateContext) -> str:
+        return {
+            "not-installed": "[Not Installed]",
+            "no-targets": "[No Targets]",
+            "unavailable": "[Unavailable]",
+            "active": "[Active]",
+        }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
         if ctx.dry_run:
@@ -540,8 +683,43 @@ class AntigravityModule(BaseModule):
     category = "Development Environment"
     description = "Updates Antigravity extensions"
 
+    def _availability(self, ctx: UpdateContext) -> str:
+        if ctx.which("antigravity") is None:
+            return "not-installed"
+        ext_dir = os.path.expanduser("~/.antigravity/extensions")
+        if os.path.isdir(ext_dir):
+            try:
+                subdirs = [
+                    d
+                    for d in os.listdir(ext_dir)
+                    if not d.startswith(".") and os.path.isdir(os.path.join(ext_dir, d))
+                ]
+                if subdirs:
+                    return "active"
+            except OSError:
+                pass
+        code, out, _ = ctx.run_cmd(
+            ["antigravity", "--list-extensions"], timeout=5, read_only=True
+        )
+        if code != 0:
+            return "unavailable"
+        lines = [
+            l.strip()
+            for l in out.splitlines()
+            if l.strip() and not l.startswith("[") and not l.startswith("Warning:")
+        ]
+        return "active" if lines else "no-targets"
+
     def is_available(self, ctx: UpdateContext) -> bool:
-        return ctx.which("antigravity") is not None
+        return self._availability(ctx) in ("active", "unavailable")
+
+    def availability_status(self, ctx: UpdateContext) -> str:
+        return {
+            "not-installed": "[Not Installed]",
+            "no-targets": "[No Targets]",
+            "unavailable": "[Unavailable]",
+            "active": "[Active]",
+        }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
         if ctx.dry_run:
@@ -640,8 +818,31 @@ class PipxModule(BaseModule):
     category = "Development Environment"
     description = "Updates all pipx-installed CLI applications"
 
+    def _availability(self, ctx: UpdateContext) -> str:
+        if ctx.which("pipx") is None:
+            return "not-installed"
+        code, out, _ = ctx.run_cmd(
+            ["pipx", "list", "--short"], timeout=5, read_only=True
+        )
+        if code != 0:
+            return "unavailable"
+        lines = [
+            l.strip()
+            for l in out.splitlines()
+            if l.strip() and not l.strip().lower().startswith("nothing")
+        ]
+        return "active" if lines else "no-targets"
+
     def is_available(self, ctx: UpdateContext) -> bool:
-        return ctx.which("pipx") is not None
+        return self._availability(ctx) in ("active", "unavailable")
+
+    def availability_status(self, ctx: UpdateContext) -> str:
+        return {
+            "not-installed": "[Not Installed]",
+            "no-targets": "[No Targets]",
+            "unavailable": "[Unavailable]",
+            "active": "[Active]",
+        }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
         if ctx.dry_run:
@@ -716,8 +917,31 @@ class CargoUpdateModule(BaseModule):
     category = "Development Environment"
     description = "Updates installed cargo crates via cargo-update"
 
+    def _availability(self, ctx: UpdateContext) -> str:
+        if ctx.which("cargo-install-update") is None:
+            return "not-installed"
+        code, out, _ = ctx.run_cmd(
+            ["cargo", "install", "--list"], timeout=5, read_only=True
+        )
+        if code != 0:
+            return "unavailable"
+        lines = [
+            l.strip()
+            for l in out.splitlines()
+            if l.strip() and not l.strip().endswith(":")
+        ]
+        return "active" if lines else "no-targets"
+
     def is_available(self, ctx: UpdateContext) -> bool:
-        return ctx.which("cargo-install-update") is not None
+        return self._availability(ctx) in ("active", "unavailable")
+
+    def availability_status(self, ctx: UpdateContext) -> str:
+        return {
+            "not-installed": "[Not Installed]",
+            "no-targets": "[No Targets]",
+            "unavailable": "[Unavailable]",
+            "active": "[Active]",
+        }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
         if ctx.dry_run:
@@ -781,8 +1005,37 @@ class GemModule(BaseModule):
     category = "Development Environment"
     description = "Updates RubyGems system and installed gems"
 
+    def _availability(self, ctx: UpdateContext) -> str:
+        if ctx.which("gem") is None:
+            return "not-installed"
+        code, out, _ = ctx.run_cmd(
+            ["gem", "list", "--local"], timeout=5, read_only=True
+        )
+        if code != 0:
+            return "unavailable"
+        has_custom_gems = False
+        for line in out.splitlines():
+            line = line.strip()
+            if not line or line.startswith("***"):
+                continue
+            m = re.search(r"\(([^)]+)\)", line)
+            if m:
+                versions = [v.strip() for v in m.group(1).split(",")]
+                if any(not v.startswith("default:") for v in versions):
+                    has_custom_gems = True
+                    break
+        return "active" if has_custom_gems else "no-targets"
+
     def is_available(self, ctx: UpdateContext) -> bool:
-        return ctx.which("gem") is not None
+        return self._availability(ctx) in ("active", "unavailable")
+
+    def availability_status(self, ctx: UpdateContext) -> str:
+        return {
+            "not-installed": "[Not Installed]",
+            "no-targets": "[No Targets]",
+            "unavailable": "[Unavailable]",
+            "active": "[Active]",
+        }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
         if ctx.dry_run:

@@ -2,6 +2,7 @@
 Editor extensions and toolchains update modules (VS Code, Cursor, VSCodium, Helix).
 """
 
+import os
 from modules.base import BaseModule, UpdateContext
 from ui import StepResult
 
@@ -12,8 +13,39 @@ class VsCodeModule(BaseModule):
     category = "Development Environment"
     description = "Updates installed VS Code extensions"
 
+    def _availability(self, ctx: UpdateContext) -> str:
+        if ctx.which("code") is None:
+            return "not-installed"
+        ext_dir = os.path.expanduser("~/.vscode/extensions")
+        if os.path.isdir(ext_dir):
+            try:
+                subdirs = [
+                    d
+                    for d in os.listdir(ext_dir)
+                    if not d.startswith(".") and os.path.isdir(os.path.join(ext_dir, d))
+                ]
+                if subdirs:
+                    return "active"
+            except OSError:
+                pass
+        code, out, _ = ctx.run_cmd(
+            ["code", "--list-extensions"], timeout=5, read_only=True
+        )
+        if code != 0:
+            return "unavailable"
+        lines = [l.strip() for l in out.splitlines() if l.strip()]
+        return "active" if lines else "no-targets"
+
     def is_available(self, ctx: UpdateContext) -> bool:
-        return ctx.which("code") is not None
+        return self._availability(ctx) in ("active", "unavailable")
+
+    def availability_status(self, ctx: UpdateContext) -> str:
+        return {
+            "not-installed": "[Not Installed]",
+            "no-targets": "[No Targets]",
+            "unavailable": "[Unavailable]",
+            "active": "[Active]",
+        }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
         if ctx.dry_run:
@@ -34,8 +66,39 @@ class CursorModule(BaseModule):
     category = "Development Environment"
     description = "Updates installed Cursor extensions"
 
+    def _availability(self, ctx: UpdateContext) -> str:
+        if ctx.which("cursor") is None:
+            return "not-installed"
+        ext_dir = os.path.expanduser("~/.cursor/extensions")
+        if os.path.isdir(ext_dir):
+            try:
+                subdirs = [
+                    d
+                    for d in os.listdir(ext_dir)
+                    if not d.startswith(".") and os.path.isdir(os.path.join(ext_dir, d))
+                ]
+                if subdirs:
+                    return "active"
+            except OSError:
+                pass
+        code, out, _ = ctx.run_cmd(
+            ["cursor", "--list-extensions"], timeout=5, read_only=True
+        )
+        if code != 0:
+            return "unavailable"
+        lines = [l.strip() for l in out.splitlines() if l.strip()]
+        return "active" if lines else "no-targets"
+
     def is_available(self, ctx: UpdateContext) -> bool:
-        return ctx.which("cursor") is not None
+        return self._availability(ctx) in ("active", "unavailable")
+
+    def availability_status(self, ctx: UpdateContext) -> str:
+        return {
+            "not-installed": "[Not Installed]",
+            "no-targets": "[No Targets]",
+            "unavailable": "[Unavailable]",
+            "active": "[Active]",
+        }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
         if ctx.dry_run:
@@ -56,8 +119,39 @@ class VscodiumModule(BaseModule):
     category = "Development Environment"
     description = "Updates installed VSCodium extensions"
 
+    def _availability(self, ctx: UpdateContext) -> str:
+        if ctx.which("codium") is None:
+            return "not-installed"
+        ext_dir = os.path.expanduser("~/.vscode-oss/extensions")
+        if os.path.isdir(ext_dir):
+            try:
+                subdirs = [
+                    d
+                    for d in os.listdir(ext_dir)
+                    if not d.startswith(".") and os.path.isdir(os.path.join(ext_dir, d))
+                ]
+                if subdirs:
+                    return "active"
+            except OSError:
+                pass
+        code, out, _ = ctx.run_cmd(
+            ["codium", "--list-extensions"], timeout=5, read_only=True
+        )
+        if code != 0:
+            return "unavailable"
+        lines = [l.strip() for l in out.splitlines() if l.strip()]
+        return "active" if lines else "no-targets"
+
     def is_available(self, ctx: UpdateContext) -> bool:
-        return ctx.which("codium") is not None
+        return self._availability(ctx) in ("active", "unavailable")
+
+    def availability_status(self, ctx: UpdateContext) -> str:
+        return {
+            "not-installed": "[Not Installed]",
+            "no-targets": "[No Targets]",
+            "unavailable": "[Unavailable]",
+            "active": "[Active]",
+        }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
         if ctx.dry_run:

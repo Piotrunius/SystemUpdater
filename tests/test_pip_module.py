@@ -6,20 +6,24 @@ from modules.devtools import PipModule
 
 
 class PipModuleTests(unittest.TestCase):
-    def test_pip_module_handles_pep668_externally_managed_gracefully(self):
+    def test_pip_module_is_unavailable_when_externally_managed(self):
         context = UpdateContext()
-        context.which = Mock(side_effect=lambda name: "/home/linuxbrew/.linuxbrew/bin/python3" if name == "python3" else None)
+        context.which = Mock(
+            side_effect=lambda name: (
+                "/home/linuxbrew/.linuxbrew/bin/python3" if name == "python3" else None
+            )
+        )
         context.run_cmd = Mock(
             side_effect=[
-                (0, "pip 26.2.1\n", ""),
-                (1, "", "error: externally-managed-environment\n\n× This environment is externally managed"),
+                (0, "pip 26.2.1\n", ""),  # pip --version
+                (0, "", ""),  # managed probe exit code 0 (managed)
             ]
         )
 
-        result = PipModule().run(context)
-        self.assertEqual(result.status, "unchanged")
+        mod = PipModule()
+        self.assertFalse(mod.is_available(context))
 
-    def test_pip_module_falls_back_to_standalone_pip_when_externally_managed(self):
+    def test_pip_module_is_available_when_standalone_pip_exists(self):
         context = UpdateContext()
 
         def mock_which(name):
@@ -32,17 +36,26 @@ class PipModuleTests(unittest.TestCase):
         context.which = Mock(side_effect=mock_which)
 
         def mock_run_cmd(cmd, **kwargs):
-            if cmd == ["/home/linuxbrew/.linuxbrew/bin/python3", "-m", "pip", "--version"]:
+            if cmd == ["/home/piotrunius/.local/bin/pip3", "--version"]:
                 return 0, "pip 26.2.1\n", ""
-            if cmd == ["/home/linuxbrew/.linuxbrew/bin/python3", "-m", "pip", "install", "--upgrade", "pip"]:
-                return 1, "", "error: externally-managed-environment"
-            if cmd == ["/home/piotrunius/.local/bin/pip3", "install", "--upgrade", "pip"]:
-                return 0, "Requirement already satisfied: pip in ./.local/lib/python3.14/site-packages (26.2.1)\n", ""
+            if cmd == [
+                "/home/piotrunius/.local/bin/pip3",
+                "install",
+                "--upgrade",
+                "pip",
+            ]:
+                return (
+                    0,
+                    "Requirement already satisfied: pip in ./.local/lib/python3.14/site-packages (26.2.1)\n",
+                    "",
+                )
             return 0, "", ""
 
         context.run_cmd = Mock(side_effect=mock_run_cmd)
 
-        result = PipModule().run(context)
+        mod = PipModule()
+        self.assertTrue(mod.is_available(context))
+        result = mod.run(context)
         self.assertEqual(result.status, "unchanged")
 
 

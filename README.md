@@ -12,7 +12,7 @@ SystemUpdater runs supported system package managers, application sources, conta
 - **Intelligent Package Prioritization**: Multi-package managers sort upgraded items by architectural importance (kernel and core system runtimes first, low-level libraries last) and cleanly cap lists at 10 items with a remainder count line.
 - **Safe Device Firmware Updates**: Hardware and UEFI firmware upgrades through `fwupdmgr` stage non-blocking capsule updates without abruptly restarting the machine mid-run, with pending reboot requirements reported under verbose diagnostic warnings.
 - **Btrfs Snapshots**: Creates Snapper snapshots before system updates, with a configurable cooldown.
-- **Target-Aware Modules**: Container and service updates run only when there are local Docker images, Distrobox containers, or a Vagrant project to update.
+- **Target-Aware Modules**: Container, developer tool, and service updates run only when there are local Docker images, Distrobox containers, unmanaged Python pip installations, active Agent Skills, or Vagrant projects to update.
 - **Run History & Inspection**: Securely stores the last 30 update runs with redacted logs, queryable via `--history` and `--show-log`.
 - **Sudo Keepalive**: Maintains the sudo timestamp during long update runs.
 - **Dry Run and Verbose Modes**: Preview commands with `-n` or stream command output with `-v`.
