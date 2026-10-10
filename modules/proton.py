@@ -12,7 +12,9 @@ class ProtonPlusModule(BaseModule):
     name = "ProtonPlus Runners"
     key = "proton"
     category = "Applications & Gaming"
-    description = "Updates compatibility tools (Proton-GE, CachyOS, Wine) via ProtonPlus"
+    description = (
+        "Updates compatibility tools (Proton-GE, CachyOS, Wine) via ProtonPlus"
+    )
 
     def is_available(self, ctx: UpdateContext) -> bool:
         return ctx.which("protonplus") is not None
@@ -23,7 +25,9 @@ class ProtonPlusModule(BaseModule):
 
         # Fast health check for GitHub API before launching libsoup queries that could stall
         try:
-            req = urllib.request.Request("https://api.github.com/", headers={"User-Agent": "SystemUpdater"})
+            req = urllib.request.Request(
+                "https://api.github.com/", headers={"User-Agent": "SystemUpdater"}
+            )
             with urllib.request.urlopen(req, timeout=3.0):
                 pass
         except (OSError, TimeoutError, urllib.error.URLError) as error:
@@ -41,7 +45,9 @@ class ProtonPlusModule(BaseModule):
             return StepResult("warning", "GitHub API rate limit reached")
 
         if code != 0:
-            return StepResult("error", "ProtonPlus update failed", error_output=err or out)
+            return StepResult(
+                "error", "ProtonPlus update failed", error_output=err or out
+            )
 
         installed = []
         for line in out.splitlines():
@@ -56,6 +62,10 @@ class ProtonPlusModule(BaseModule):
                     installed.append(val)
 
         if installed:
-            return StepResult("ok", f"{len(installed)} runner{'s' if len(installed) != 1 else ''} updated", details=installed)
+            return StepResult(
+                "ok",
+                f"{len(installed)} runner{'s' if len(installed) != 1 else ''} updated",
+                details=installed,
+            )
 
         return StepResult("unchanged")

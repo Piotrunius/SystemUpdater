@@ -26,7 +26,9 @@ class Config:
         self.git_repos: List[str] = []
         self.snapshot_cooldown_hours: int = 12
         self._explicit_config_path = config_path is not None
-        self.config_path: str = os.path.expanduser(config_path) if config_path else DEFAULT_CONFIG_PATH
+        self.config_path: str = (
+            os.path.expanduser(config_path) if config_path else DEFAULT_CONFIG_PATH
+        )
         self.load_error: Optional[str] = None
 
         self._load_config()
@@ -35,7 +37,9 @@ class Config:
         target_path = self.config_path
         if not os.path.isfile(target_path):
             if self._explicit_config_path:
-                self.load_error = "Configuration file does not exist or is not a regular file."
+                self.load_error = (
+                    "Configuration file does not exist or is not a regular file."
+                )
             return
         if tomllib is None:
             self.load_error = "TOML configuration requires Python 3.11 or newer."
@@ -51,14 +55,22 @@ class Config:
 
             if "disable" in misc:
                 disabled = misc["disable"]
-                if not isinstance(disabled, list) or not all(isinstance(key, str) for key in disabled):
+                if not isinstance(disabled, list) or not all(
+                    isinstance(key, str) for key in disabled
+                ):
                     raise ValueError("misc.disable must be a list of strings")
                 self.disabled_keys = {key.lower().strip() for key in disabled}
 
             if "cooldown_hours" in misc:
                 cooldown = misc["cooldown_hours"]
-                if isinstance(cooldown, bool) or not isinstance(cooldown, int) or cooldown < 0:
-                    raise ValueError("misc.cooldown_hours must be a non-negative integer")
+                if (
+                    isinstance(cooldown, bool)
+                    or not isinstance(cooldown, int)
+                    or cooldown < 0
+                ):
+                    raise ValueError(
+                        "misc.cooldown_hours must be a non-negative integer"
+                    )
                 self.snapshot_cooldown_hours = cooldown
 
             # Custom commands sections
@@ -77,10 +89,13 @@ class Config:
                 raise ValueError("[git] must be a TOML table")
             if "repos" in git_sec:
                 repos = git_sec["repos"]
-                if not isinstance(repos, list) or not all(isinstance(path, str) for path in repos):
+                if not isinstance(repos, list) or not all(
+                    isinstance(path, str) for path in repos
+                ):
                     raise ValueError("git.repos must be a list of paths")
                 self.git_repos = [
-                    os.path.expanduser(path) for path in repos
+                    os.path.expanduser(path)
+                    for path in repos
                     if os.path.isdir(os.path.expanduser(path))
                 ]
         except (OSError, ValueError) as error:
@@ -98,6 +113,8 @@ _global_config = None
 
 def get_config(config_path: Optional[str] = None) -> Config:
     global _global_config
-    if _global_config is None or (config_path and _global_config.config_path != os.path.expanduser(config_path)):
+    if _global_config is None or (
+        config_path and _global_config.config_path != os.path.expanduser(config_path)
+    ):
         _global_config = Config(config_path=config_path)
     return _global_config

@@ -54,7 +54,10 @@ class NuvioModule(BaseModule):
         if installed_tag and latest_key <= installed_key:
             target_jar = self._find_target_jar()
             if not target_jar:
-                return StepResult("warning", "Nuvio application JAR was not found; image patch was skipped")
+                return StepResult(
+                    "warning",
+                    "Nuvio application JAR was not found; image patch was skipped",
+                )
             if ctx.dry_run:
                 if not self._is_jar_patched(target_jar):
                     return StepResult("ok", "[DRY-RUN] Would re-apply image patch")
@@ -68,7 +71,10 @@ class NuvioModule(BaseModule):
         # Update is available
         rpm_url, _ = self._find_rpm_asset(release.get("assets", []))
         if not rpm_url:
-            return StepResult("warning", f"New version {latest_tag} found, but no compatible RPM asset found")
+            return StepResult(
+                "warning",
+                f"New version {latest_tag} found, but no compatible RPM asset found",
+            )
 
         if ctx.dry_run:
             return StepResult("ok", f"[DRY-RUN] Would update to {latest_tag}")
@@ -77,16 +83,30 @@ class NuvioModule(BaseModule):
         os.close(fd)
         try:
             # 1. Download RPM
-            dl_code, _, dl_err = ctx.run_cmd(["curl", "-sSL", "--fail", "-o", temp_rpm, rpm_url])
+            dl_code, _, dl_err = ctx.run_cmd(
+                ["curl", "-sSL", "--fail", "-o", temp_rpm, rpm_url]
+            )
             if dl_code != 0:
-                return StepResult("error", f"Failed to download RPM for {latest_tag}", error_output=dl_err)
+                return StepResult(
+                    "error",
+                    f"Failed to download RPM for {latest_tag}",
+                    error_output=dl_err,
+                )
 
             # 2. Upgrade RPM package
-            up_code, up_out, up_err = ctx.run_cmd(["sudo", "dnf", "upgrade", "-y", "-q", temp_rpm])
+            up_code, up_out, up_err = ctx.run_cmd(
+                ["sudo", "dnf", "upgrade", "-y", "-q", temp_rpm]
+            )
             if up_code != 0:
-                up_code, up_out, up_err = ctx.run_cmd(["sudo", "rpm", "-U", "--replacepkgs", temp_rpm])
+                up_code, up_out, up_err = ctx.run_cmd(
+                    ["sudo", "rpm", "-U", "--replacepkgs", temp_rpm]
+                )
                 if up_code != 0:
-                    return StepResult("error", f"Failed to install RPM {latest_tag}", error_output=up_err or up_out)
+                    return StepResult(
+                        "error",
+                        f"Failed to install RPM {latest_tag}",
+                        error_output=up_err or up_out,
+                    )
 
             # Record the installed release before patching so a patch failure does not
             # cause the next run to reinstall the same RPM.
@@ -95,7 +115,9 @@ class NuvioModule(BaseModule):
                 with open(TAG_FILE, "w") as f:
                     f.write(latest_tag + "\n")
             except OSError as error:
-                raise RuntimeError(f"Could not save installed Nuvio release tag: {error}") from error
+                raise RuntimeError(
+                    f"Could not save installed Nuvio release tag: {error}"
+                ) from error
 
             old_ver = installed_tag.strip() if installed_tag else ""
             new_ver = latest_tag.strip() if latest_tag else ""
@@ -128,9 +150,13 @@ class NuvioModule(BaseModule):
                     if val:
                         return val
             except OSError as error:
-                ctx.print_verbose(f"Could not read the stored Nuvio release tag: {error}")
+                ctx.print_verbose(
+                    f"Could not read the stored Nuvio release tag: {error}"
+                )
 
-        code, out, _ = ctx.run_cmd(["rpm", "-q", "--qf", "%{VERSION}", "nuvio"], read_only=True)
+        code, out, _ = ctx.run_cmd(
+            ["rpm", "-q", "--qf", "%{VERSION}", "nuvio"], read_only=True
+        )
         if code == 0 and out.strip():
             rpm_ver = out.strip()
             m = re.match(r"^1\.(\d+\.\d+)", rpm_ver)
@@ -202,7 +228,11 @@ class NuvioModule(BaseModule):
             target = generic_assets[0]
         if target is None:
             target = next(
-                (asset for asset in generic_assets if "linux" in asset.get("name", "").lower()),
+                (
+                    asset
+                    for asset in generic_assets
+                    if "linux" in asset.get("name", "").lower()
+                ),
                 None,
             )
 
@@ -255,15 +285,19 @@ class NuvioModule(BaseModule):
             idx = data.find(b"\xb1", pos)
             if idx == -1:
                 break
-            if idx >= 26 and data[idx - 3] == 0xb3 and data[idx - 4] == 0x03:
+            if idx >= 26 and data[idx - 3] == 0xB3 and data[idx - 4] == 0x03:
                 clinit_start = idx - 26
-                data[clinit_start + 15 : clinit_start + 23] = bytes([0x57, 0x57, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04])
+                data[clinit_start + 15 : clinit_start + 23] = bytes(
+                    [0x57, 0x57, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04]
+                )
                 found = True
                 break
             pos = idx + 1
 
         if not found and PATCH_SIGNATURE not in data:
-            raise ValueError("Could not locate AsyncImage_desktopKt.<clinit> bytecode pattern")
+            raise ValueError(
+                "Could not locate AsyncImage_desktopKt.<clinit> bytecode pattern"
+            )
 
         return data
 
@@ -287,7 +321,9 @@ class NuvioModule(BaseModule):
                 raw_class = bytearray(zin.read(CLASS_PATH))
                 patched_class = self._patch_bytecode(raw_class)
 
-                with zipfile.ZipFile(temp_patched, "w", compression=zipfile.ZIP_DEFLATED) as zout:
+                with zipfile.ZipFile(
+                    temp_patched, "w", compression=zipfile.ZIP_DEFLATED
+                ) as zout:
                     for item in zin.infolist():
                         if item.filename == CLASS_PATH:
                             zout.writestr(item, patched_class)
@@ -297,7 +333,9 @@ class NuvioModule(BaseModule):
             # Backup original if not backed up
             backup_path = f"{target_jar}.bak"
             if not os.path.exists(backup_path):
-                code, out, err = ctx.run_cmd(["sudo", "cp", "-p", target_jar, backup_path])
+                code, out, err = ctx.run_cmd(
+                    ["sudo", "cp", "-p", target_jar, backup_path]
+                )
                 if code != 0:
                     raise RuntimeError(f"Could not back up Nuvio jar: {err or out}")
 

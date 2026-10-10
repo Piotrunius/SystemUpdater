@@ -15,10 +15,10 @@ class ConfigTests(unittest.TestCase):
 
     def test_loads_disabled_modules_commands_and_cooldown(self):
         config = self.load_config(
-            '[misc]\n'
+            "[misc]\n"
             'disable = ["docker", "brew"]\n'
-            'cooldown_hours = 4\n'
-            '[commands]\n'
+            "cooldown_hours = 4\n"
+            "[commands]\n"
             '"Refresh cache" = "tool refresh"\n'
         )
 
@@ -28,11 +28,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.commands, {"Refresh cache": "tool refresh"})
 
     def test_rejects_invalid_values_and_restores_defaults(self):
-        config = self.load_config(
-            '[misc]\n'
-            'disable = ["docker"]\n'
-            'cooldown_hours = -1\n'
-        )
+        config = self.load_config('[misc]\ndisable = ["docker"]\ncooldown_hours = -1\n')
 
         self.assertIn("non-negative integer", config.load_error)
         self.assertEqual(config.disabled_keys, set())

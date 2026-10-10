@@ -23,7 +23,10 @@ class CommandLoggingTests(unittest.TestCase):
     def test_read_only_command_output_is_not_saved(self):
         context = UpdateContext()
         completed = subprocess.CompletedProcess(
-            args=["gh"], returncode=0, stdout="ghp_sensitive_value_12345678901234567890", stderr=""
+            args=["gh"],
+            returncode=0,
+            stdout="ghp_sensitive_value_12345678901234567890",
+            stderr="",
         )
 
         with patch("modules.base.subprocess.run", return_value=completed):

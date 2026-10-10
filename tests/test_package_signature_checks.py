@@ -21,7 +21,8 @@ class PackageSignatureCheckTests(unittest.TestCase):
         context.run_cmd = Mock(return_value=(0, "Nothing to do", ""))
 
         with unittest.mock.patch(
-            "modules.system_pm.get_os_release", return_value={"ID": "opensuse-tumbleweed"}
+            "modules.system_pm.get_os_release",
+            return_value={"ID": "opensuse-tumbleweed"},
         ):
             ZypperModule().run(context)
 

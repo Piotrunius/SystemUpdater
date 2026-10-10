@@ -35,7 +35,12 @@ class SummaryFormattingTests(unittest.TestCase):
 
     def test_error_uses_failed_label_and_nested_details(self):
         output = render_summary(
-            StepResult("error", "Update failed", details=["one package updated"], error_output="bad mirror")
+            StepResult(
+                "error",
+                "Update failed",
+                details=["one package updated"],
+                error_output="bad mirror",
+            )
         )
 
         self.assertIn("── Errors ", output)
@@ -76,7 +81,9 @@ class SummaryFormattingTests(unittest.TestCase):
         self.assertIn("\033[1;31m[✗]\033[0m Example Module: failed", rendered)
 
     def test_warnings_remain_hidden_without_verbose_mode(self):
-        output = render_summary(StepResult("warning", "Update check unavailable"), verbose=False)
+        output = render_summary(
+            StepResult("warning", "Update check unavailable"), verbose=False
+        )
 
         self.assertNotIn("Warnings", output)
         self.assertNotIn("Update check unavailable", output)
@@ -148,7 +155,9 @@ class SummaryFormattingTests(unittest.TestCase):
 
     def test_single_entity_module_displays_version_inline_without_sublist(self):
         # Nuvio Desktop
-        nuvio_res = StepResult("ok", "updated", details=["0.1.28-alpha -> 0.1.29-alpha"])
+        nuvio_res = StepResult(
+            "ok", "updated", details=["0.1.28-alpha -> 0.1.29-alpha"]
+        )
         out_nuvio = io.StringIO()
         with contextlib.redirect_stdout(out_nuvio):
             UI(is_interactive=False).print_summary(
@@ -190,7 +199,9 @@ class SummaryFormattingTests(unittest.TestCase):
         self.assertIn("- bun: 1.2.0 -> 1.2.4", plain)
         self.assertIn("- antigravity-cli-linux -> 1.3.3", plain)
 
-    def test_multi_package_large_updates_are_capped_at_10_and_sorted_by_importance(self):
+    def test_multi_package_large_updates_are_capped_at_10_and_sorted_by_importance(
+        self,
+    ):
         packages = [
             "libssh2: 1.11.1_6 -> 1.11.1_7",
             "libgit2: 1.9.7_1 -> 1.9.7_2",
@@ -256,7 +267,9 @@ class SummaryFormattingTests(unittest.TestCase):
         ui = UI(is_interactive=False)
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
-            res = StepResult("ok", "updated", details=["60c9a7a -> 9f9b28a"], duration=0.5)
+            res = StepResult(
+                "ok", "updated", details=["60c9a7a -> 9f9b28a"], duration=0.5
+            )
             ui.print_result("Oh My Zsh", res)
         plain = re.sub(r"\x1b\[[0-9;]*m", "", output.getvalue())
         self.assertIn("[✓] Oh My Zsh: updated (0.5s)", plain)
@@ -293,31 +306,43 @@ class SummaryFormattingTests(unittest.TestCase):
         self.assertIn("- UEFI System Firmware -> 1.2.0", plain_verbose)
         self.assertIn("── Warnings", plain_verbose)
         self.assertIn("[!] Device Firmware: warning", plain_verbose)
-        self.assertIn("- System reboot required to complete pending updates", plain_verbose)
+        self.assertIn(
+            "- System reboot required to complete pending updates", plain_verbose
+        )
         self.assertNotIn("(Device Firmware)", plain_verbose)
 
     def test_check_packages_require_reboot(self):
         from ui import check_packages_require_reboot
 
         # Packages that trigger reboot
-        self.assertTrue(check_packages_require_reboot(["kernel-core: 6.13.0 -> 6.13.2"])[0])
+        self.assertTrue(
+            check_packages_require_reboot(["kernel-core: 6.13.0 -> 6.13.2"])[0]
+        )
         self.assertTrue(check_packages_require_reboot(["linux-zen -> 6.13.1"])[0])
         self.assertTrue(check_packages_require_reboot(["systemd: 256 -> 257"])[0])
         self.assertTrue(check_packages_require_reboot(["glibc: 2.40 -> 2.41"])[0])
         self.assertTrue(check_packages_require_reboot(["libc6 -> 2.39"])[0])
 
         # Packages that do not trigger reboot
-        self.assertFalse(check_packages_require_reboot(["python@3.14: 3.14.0 -> 3.14.1"])[0])
-        self.assertFalse(check_packages_require_reboot(["systemupdater: 0.1.6 -> 0.1.7"])[0])
+        self.assertFalse(
+            check_packages_require_reboot(["python@3.14: 3.14.0 -> 3.14.1"])[0]
+        )
+        self.assertFalse(
+            check_packages_require_reboot(["systemupdater: 0.1.6 -> 0.1.7"])[0]
+        )
         self.assertFalse(check_packages_require_reboot(["node: 22.0 -> 22.1"])[0])
 
     def test_complete_step_triggers_reboot_for_kernel_update(self):
         ui = UI(is_interactive=False, verbose=True)
-        res = StepResult("ok", "1 package upgraded", details=["kernel-core: 6.13.0 -> 6.13.2"])
+        res = StepResult(
+            "ok", "1 package upgraded", details=["kernel-core: 6.13.0 -> 6.13.2"]
+        )
         ui._complete_step(res, None, command_start=0)
 
         self.assertTrue(res.reboot_required)
-        self.assertIn("System reboot required to complete pending updates", res.warnings)
+        self.assertIn(
+            "System reboot required to complete pending updates", res.warnings
+        )
 
 
 if __name__ == "__main__":

@@ -41,14 +41,18 @@ class NixModule(BaseModule):
 
     def run(self, ctx: UpdateContext) -> StepResult:
         if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would update nix channels and environment")
+            return StepResult(
+                "ok", "[DRY-RUN] Would update nix channels and environment"
+            )
 
         channel_code, channel_out, channel_err = ctx.run_cmd(
             ["nix-channel", "--update"], timeout=180
         )
         if channel_code != 0:
             return StepResult(
-                "error", "nix-channel update failed", error_output=channel_err or channel_out
+                "error",
+                "nix-channel update failed",
+                error_output=channel_err or channel_out,
             )
 
         code, out, err = ctx.run_cmd(["nix-env", "-u"], timeout=300)

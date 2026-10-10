@@ -13,7 +13,13 @@ from modules.snapshot import SnapshotModule
 
 # System Core
 from modules.nobara import RepoSyncModule, SystemPackagesModule
-from modules.system_pm import AptModule, PacmanModule, ZypperModule, ApkModule, XbpsModule
+from modules.system_pm import (
+    AptModule,
+    PacmanModule,
+    ZypperModule,
+    ApkModule,
+    XbpsModule,
+)
 from modules.firmware import FirmwareModule
 
 # Applications & Gaming
@@ -79,99 +85,132 @@ def get_all_modules(cfg: Config | None = None) -> List[BaseModule]:
 
     # 1. Custom Pre-Commands (if defined in config.toml)
     for name, cmd in cfg.pre_commands.items():
-        modules.append(CustomCommandModule(name, cmd, category="Custom Pre-Commands", key=f"pre_{name.lower().replace(' ', '_')}"))
+        modules.append(
+            CustomCommandModule(
+                name,
+                cmd,
+                category="Custom Pre-Commands",
+                key=f"pre_{name.lower().replace(' ', '_')}",
+            )
+        )
 
     # 2. System Protection
     modules.append(SnapshotModule(cooldown_hours=cfg.snapshot_cooldown_hours))
 
     # 3. System Core (Distro-specific repository sync and package manager)
-    modules.append(RepoSyncModule())      # Active exclusively on Nobara Linux
-    modules.extend([
-        SystemPackagesModule(),           # DNF / RPM (Fedora, Nobara, RHEL, CentOS, Rocky)
-        AptModule(),                      # APT (Debian, Ubuntu, Linux Mint, Pop!_OS)
-        PacmanModule(),                   # Pacman / AUR / Yay / Paru (Arch, Manjaro, CachyOS)
-        ZypperModule(),                   # Zypper (openSUSE Tumbleweed / Leap)
-        ApkModule(),                      # APK (Alpine Linux)
-        XbpsModule(),                     # XBPS (Void Linux)
-        FirmwareModule(),
-    ])
+    modules.append(RepoSyncModule())  # Active exclusively on Nobara Linux
+    modules.extend(
+        [
+            SystemPackagesModule(),  # DNF / RPM (Fedora, Nobara, RHEL, CentOS, Rocky)
+            AptModule(),  # APT (Debian, Ubuntu, Linux Mint, Pop!_OS)
+            PacmanModule(),  # Pacman / AUR / Yay / Paru (Arch, Manjaro, CachyOS)
+            ZypperModule(),  # Zypper (openSUSE Tumbleweed / Leap)
+            ApkModule(),  # APK (Alpine Linux)
+            XbpsModule(),  # XBPS (Void Linux)
+            FirmwareModule(),
+        ]
+    )
 
     # 4. Applications & Gaming
-    modules.extend([
-        FlatpakModule(),
-        NuvioModule(),
-        GearLeverModule(),
-        ProtonPlusModule(),
-        DistroboxModule(),
-    ])
+    modules.extend(
+        [
+            FlatpakModule(),
+            NuvioModule(),
+            GearLeverModule(),
+            ProtonPlusModule(),
+            DistroboxModule(),
+        ]
+    )
 
     # 5. Containers & Virtualization
-    modules.extend([
-        BrewModule(),
-        DockerModule(),
-        PodmanModule(),
-        VagrantModule(),
-        SnapModule(),
-        NixModule(),
-    ])
+    modules.extend(
+        [
+            BrewModule(),
+            DockerModule(),
+            PodmanModule(),
+            VagrantModule(),
+            SnapModule(),
+            NixModule(),
+        ]
+    )
 
     # 6. Development Environment - Dotfiles & Shells
-    modules.extend([
-        ChezmoiModule(),
-        YadmModule(),
-        OhMyZshModule(),
-        ZinitModule(),
-        FisherModule(),
-        TealdeerModule(),
-    ])
+    modules.extend(
+        [
+            ChezmoiModule(),
+            YadmModule(),
+            OhMyZshModule(),
+            ZinitModule(),
+            FisherModule(),
+            TealdeerModule(),
+        ]
+    )
 
     # 7. Development Environment - Languages, Toolchains & Package Managers
-    modules.extend([
-        RustupModule(),
-        CargoUpdateModule(),
-        PipModule(),
-        UvModule(),
-        PipxModule(),
-        PipenvModule(),
-        PoetryModule(),
-        CondaModule(),
-        PyenvModule(),
-        NpmModule(),
-        PnpmModule(),
-        BunModule(),
-        YarnModule(),
-        ComposerModule(),
-        GemModule(),
-        MiseModule(),
-        AsdfModule(),
-        SdkmanModule(),
-        GhcupModule(),
-        FlutterModule(),
-    ])
+    modules.extend(
+        [
+            RustupModule(),
+            CargoUpdateModule(),
+            PipModule(),
+            UvModule(),
+            PipxModule(),
+            PipenvModule(),
+            PoetryModule(),
+            CondaModule(),
+            PyenvModule(),
+            NpmModule(),
+            PnpmModule(),
+            BunModule(),
+            YarnModule(),
+            ComposerModule(),
+            GemModule(),
+            MiseModule(),
+            AsdfModule(),
+            SdkmanModule(),
+            GhcupModule(),
+            FlutterModule(),
+        ]
+    )
 
     # 8. Development Environment - Editors & Extensions
-    modules.extend([
-        NeovimModule(),
-        MicroModule(),
-        HelixModule(),
-        VsCodeModule(),
-        CursorModule(),
-        VscodiumModule(),
-        TmuxPluginsModule(),
-        GhExtensionsModule(),
-        SkillsModule(),
-        AntigravityModule(),
-    ])
+    modules.extend(
+        [
+            NeovimModule(),
+            MicroModule(),
+            HelixModule(),
+            VsCodeModule(),
+            CursorModule(),
+            VscodiumModule(),
+            TmuxPluginsModule(),
+            GhExtensionsModule(),
+            SkillsModule(),
+            AntigravityModule(),
+        ]
+    )
 
     # 9. Development Environment - Local Git Repositories
     modules.append(GitReposModule(cfg))
 
     # 10. Custom Commands (if defined in config.toml)
     for name, cmd in cfg.commands.items():
-        modules.append(CustomCommandModule(name, cmd, category="Custom Commands", key=f"cmd_{name.lower().replace(' ', '_')}"))
+        modules.append(
+            CustomCommandModule(
+                name,
+                cmd,
+                category="Custom Commands",
+                key=f"cmd_{name.lower().replace(' ', '_')}",
+            )
+        )
 
     # 11. Custom Post-Commands (if defined in config.toml)
     for name, cmd in cfg.post_commands.items():
-        modules.append(CustomCommandModule(name, cmd, category="Custom Post-Commands", key=f"post_{name.lower().replace(' ', '_')}"))
+        modules.append(
+            CustomCommandModule(
+                name,
+                cmd,
+                category="Custom Post-Commands",
+                key=f"post_{name.lower().replace(' ', '_')}",
+            )
+        )
 
     return modules

@@ -9,7 +9,13 @@ from ui import StepResult
 
 
 class CustomCommandModule(BaseModule):
-    def __init__(self, name: str, command: str, category: str = "Custom Commands", key: str = "custom"):
+    def __init__(
+        self,
+        name: str,
+        command: str,
+        category: str = "Custom Commands",
+        key: str = "custom",
+    ):
         self.name = name
         self.command = command
         self.category = category

@@ -38,6 +38,7 @@ from history_store import (
 )
 import sudo
 
+
 def git_output(*args, timeout=3):
     try:
         result = subprocess.run(
@@ -56,7 +57,9 @@ def get_version():
     """Use the nearest release tag and exact source commit as the version."""
     if is_homebrew_install():
         try:
-            with open(os.path.join(SCRIPT_DIR, "VERSION"), encoding="utf-8") as version_file:
+            with open(
+                os.path.join(SCRIPT_DIR, "VERSION"), encoding="utf-8"
+            ) as version_file:
                 return version_file.read().strip() or "unknown"
         except OSError:
             return "unknown"
@@ -68,7 +71,11 @@ def get_version():
     if description:
         parts = description.rsplit("-", 2)
         if len(parts) == 3 and parts[1].isdigit():
-            return f"{parts[0]}+{commit}" if parts[1] == "0" else f"{parts[0]}+{parts[1]}.g{commit}"
+            return (
+                f"{parts[0]}+{commit}"
+                if parts[1] == "0"
+                else f"{parts[0]}+{parts[1]}.g{commit}"
+            )
     return commit
 
 
@@ -92,7 +99,9 @@ def latest_homebrew_version():
 
 def latest_remote_commit():
     """Return the upstream branch commit, if the repository has a configured upstream."""
-    upstream = git_output("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
+    upstream = git_output(
+        "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"
+    )
     if not upstream or "/" not in upstream:
         return None
     remote, branch = upstream.split("/", 1)
@@ -105,19 +114,34 @@ def latest_remote_commit():
 class VersionAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         current = get_version()
-        latest = latest_homebrew_version() if is_homebrew_install() else latest_remote_commit()
+        latest = (
+            latest_homebrew_version()
+            if is_homebrew_install()
+            else latest_remote_commit()
+        )
         ui = UI()
         ui.print_header("System Updater")
         ui.print_category("Version")
         ui.print_result("Installed version", StepResult("unchanged", current))
         if latest:
-            installed = current if is_homebrew_install() else git_output("rev-parse", "--short=12", "HEAD")
+            installed = (
+                current
+                if is_homebrew_install()
+                else git_output("rev-parse", "--short=12", "HEAD")
+            )
             if latest == installed:
-                ui.print_result("Latest version", StepResult("unchanged", f"{latest} (up to date)"))
+                ui.print_result(
+                    "Latest version", StepResult("unchanged", f"{latest} (up to date)")
+                )
             else:
-                ui.print_result("Latest version", StepResult("unchanged", f"{latest} (update available)"))
+                ui.print_result(
+                    "Latest version",
+                    StepResult("unchanged", f"{latest} (update available)"),
+                )
         else:
-            ui.print_result("Latest version", StepResult("unchanged", "check unavailable"))
+            ui.print_result(
+                "Latest version", StepResult("unchanged", "check unavailable")
+            )
         parser.exit()
 
 
@@ -135,7 +159,11 @@ def self_update():
     if updated_version:
         duration = float(os.environ.pop("SYSUPDATE_UPDATE_DURATION", "0.1"))
         old_version = os.environ.pop("SYSUPDATE_OLD_VERSION", None)
-        details = [f"{old_version} -> {updated_version}"] if old_version and old_version != updated_version else [updated_version]
+        details = (
+            [f"{old_version} -> {updated_version}"]
+            if old_version and old_version != updated_version
+            else [updated_version]
+        )
         return "ok", "updated", duration, details
     if not git_output("rev-parse", "--is-inside-work-tree"):
         return result("skipped", "not a Git checkout")
@@ -144,7 +172,9 @@ def self_update():
             "warning",
             "Update skipped because local changes were detected.",
         )
-    upstream = git_output("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
+    upstream = git_output(
+        "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"
+    )
     remote_names = (git_output("remote", timeout=5) or "").splitlines()
     current_branch = git_output("symbolic-ref", "--quiet", "--short", "HEAD")
 
@@ -215,7 +245,10 @@ def self_update():
     os.environ["SYSUPDATE_OLD_VERSION"] = old_version
     os.environ["SYSUPDATE_UPDATED_VERSION"] = get_version()
     os.environ["SYSUPDATE_UPDATE_DURATION"] = str(max(0.1, time.monotonic() - started))
-    os.execv(sys.executable, [sys.executable, os.path.join(SCRIPT_DIR, "main.py"), *sys.argv[1:]])
+    os.execv(
+        sys.executable,
+        [sys.executable, os.path.join(SCRIPT_DIR, "main.py"), *sys.argv[1:]],
+    )
 
 
 def edit_config(config_path: str):
@@ -275,22 +308,26 @@ Examples:
         help="Show installed version and latest available version",
     )
     parser.add_argument(
-        "-n", "--dry-run",
+        "-n",
+        "--dry-run",
         action="store_true",
         help="Simulate update process without downloading or installing changes",
     )
     parser.add_argument(
-        "-f", "--force",
+        "-f",
+        "--force",
         action="store_true",
         help="Force execution (e.g. bypass Btrfs snapshot cooldown)",
     )
     parser.add_argument(
-        "-q", "--quiet",
+        "-q",
+        "--quiet",
         action="store_true",
         help="Suppress live step progress, display only the final summary and errors",
     )
     parser.add_argument(
-        "-v", "--verbose",
+        "-v",
+        "--verbose",
         action="store_true",
         help="Stream update command output live; keep internal probes quiet",
     )
@@ -305,7 +342,8 @@ Examples:
         help="Comma-separated list of module keys to skip",
     )
     parser.add_argument(
-        "-c", "--category",
+        "-c",
+        "--category",
         type=str,
         help="Comma-separated list of categories to run (e.g. 'system', 'containers', 'dev', 'gaming')",
     )
@@ -331,12 +369,14 @@ Examples:
         help="Open configuration file in $EDITOR",
     )
     parser.add_argument(
-        "-l", "--list",
+        "-l",
+        "--list",
         action="store_true",
         help="List all registered modules and check their availability",
     )
     parser.add_argument(
-        "-r", "--reboot",
+        "-r",
+        "--reboot",
         action="store_true",
         help="Reboot the system after updates if required by any module (e.g. kernel, systemd, firmware)",
     )
@@ -379,11 +419,18 @@ def main():
     if args.show_log:
         run_data = history_store.load(args.show_log)
         if run_data is None:
-            print(f"Error: No saved update run found for ID {args.show_log!r}.", file=sys.stderr)
+            print(
+                f"Error: No saved update run found for ID {args.show_log!r}.",
+                file=sys.stderr,
+            )
             sys.exit(1)
         previous_runs = history_store.list_runs(30)
         matching_index = next(
-            (index for index, item in enumerate(previous_runs) if item.get("id") == args.show_log),
+            (
+                index
+                for index, item in enumerate(previous_runs)
+                if item.get("id") == args.show_log
+            ),
             None,
         )
         if matching_index is not None:
@@ -395,7 +442,9 @@ def main():
         sys.exit(0)
 
     self_update_result = None
-    if not is_homebrew_install() and not (args.dry_run or args.list or args.edit_config):
+    if not is_homebrew_install() and not (
+        args.dry_run or args.list or args.edit_config
+    ):
         self_update_result = self_update()
 
     if args.edit_config:
@@ -423,9 +472,13 @@ def main():
         sys.exit(0)
 
     # Filter modules
-    selected_keys = [k.strip().lower() for k in args.only.split(",")] if args.only else None
+    selected_keys = (
+        [k.strip().lower() for k in args.only.split(",")] if args.only else None
+    )
     skip_keys = [k.strip().lower() for k in args.skip.split(",")] if args.skip else []
-    selected_categories = [c.strip().lower() for c in args.category.split(",")] if args.category else None
+    selected_categories = (
+        [c.strip().lower() for c in args.category.split(",")] if args.category else None
+    )
 
     if args.no_snapshot:
         skip_keys.append("snapshot")
@@ -458,7 +511,9 @@ def main():
     needs_sudo = any(getattr(m, "requires_sudo", False) for m in modules_to_run)
     if needs_sudo and not args.dry_run:
         if not sudo.init_sudo(interactive=sys.stdin.isatty()):
-            print("Error: Administrator privileges (sudo) required but could not be obtained.")
+            print(
+                "Error: Administrator privileges (sudo) required but could not be obtained."
+            )
             sys.exit(1)
 
     ui = UI(quiet=args.quiet, verbose=args.verbose)
@@ -497,14 +552,18 @@ def main():
                         "Self Update",
                         self_update_step,
                     )
-                    results.append({
-                        "name": "Self Update",
-                        "key": "self_update",
-                        "result": self_update_step,
-                    })
+                    results.append(
+                        {
+                            "name": "Self Update",
+                            "key": "self_update",
+                            "result": self_update_step,
+                        }
+                    )
                     self_update_printed = True
             command_start = len(ctx.command_log)
-            step_res = ui.run_step(m.name, lambda mod=m: mod.run(ctx), ctx=ctx, module=m)
+            step_res = ui.run_step(
+                m.name, lambda mod=m: mod.run(ctx), ctx=ctx, module=m
+            )
             results.append(
                 {
                     "name": m.name,
@@ -525,11 +584,13 @@ def main():
                 "Self Update",
                 self_update_step,
             )
-            results.append({
-                "name": "Self Update",
-                "key": "self_update",
-                "result": self_update_step,
-            })
+            results.append(
+                {
+                    "name": "Self Update",
+                    "key": "self_update",
+                    "result": self_update_step,
+                }
+            )
     finally:
         sudo.stop_sudo_keeper()
 
@@ -550,7 +611,9 @@ def main():
             "message": redact_text(item["result"].message),
             "duration": round(item["result"].duration, 2),
             "details": [redact_text(str(detail)) for detail in item["result"].details],
-            "warnings": [redact_text(str(warning)) for warning in item["result"].warnings],
+            "warnings": [
+                redact_text(str(warning)) for warning in item["result"].warnings
+            ],
             "error_output": redact_text(item["result"].error_output),
             "commands": item.get("commands", []),
         }
@@ -575,15 +638,16 @@ def main():
             {
                 "name": "Run History",
                 "key": "history",
-                "result": StepResult("warning", "Could not save update history", error_output=str(error)),
+                "result": StepResult(
+                    "warning", "Could not save update history", error_output=str(error)
+                ),
             }
         )
 
     ui.print_summary(results, total_elapsed)
 
     reboot_needed = any(
-        getattr(r.get("result"), "reboot_required", False)
-        for r in results
+        getattr(r.get("result"), "reboot_required", False) for r in results
     )
 
     if args.reboot and reboot_needed and not ctx.dry_run:

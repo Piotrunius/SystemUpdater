@@ -13,18 +13,21 @@ class SnapshotTests(unittest.TestCase):
         context = Mock()
         context.which.return_value = "/usr/bin/snapper"
 
-        with patch("modules.snapshot._root_filesystem_type", return_value="ext4"), patch(
-            "modules.snapshot.os.path.isfile", return_value=True
+        with (
+            patch("modules.snapshot._root_filesystem_type", return_value="ext4"),
+            patch("modules.snapshot.os.path.isfile", return_value=True),
         ):
             self.assertFalse(module.is_available(context))
 
-        with patch("modules.snapshot._root_filesystem_type", return_value="btrfs"), patch(
-            "modules.snapshot.os.path.isfile", return_value=False
+        with (
+            patch("modules.snapshot._root_filesystem_type", return_value="btrfs"),
+            patch("modules.snapshot.os.path.isfile", return_value=False),
         ):
             self.assertFalse(module.is_available(context))
 
-        with patch("modules.snapshot._root_filesystem_type", return_value="btrfs"), patch(
-            "modules.snapshot.os.path.isfile", return_value=True
+        with (
+            patch("modules.snapshot._root_filesystem_type", return_value="btrfs"),
+            patch("modules.snapshot.os.path.isfile", return_value=True),
         ):
             self.assertTrue(module.is_available(context))
 
@@ -33,8 +36,9 @@ class SnapshotTests(unittest.TestCase):
         context = UpdateContext()
         context.run_cmd = Mock(side_effect=AssertionError("snapshot should be skipped"))
 
-        with tempfile.TemporaryDirectory() as cache_dir, patch.dict(
-            os.environ, {"XDG_CACHE_HOME": cache_dir}
+        with (
+            tempfile.TemporaryDirectory() as cache_dir,
+            patch.dict(os.environ, {"XDG_CACHE_HOME": cache_dir}),
         ):
             stamp_path = os.path.join(cache_dir, "topgrade_snapper_stamp")
             with open(stamp_path, "w", encoding="utf-8") as stamp:

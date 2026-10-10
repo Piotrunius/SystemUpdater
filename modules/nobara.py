@@ -4,10 +4,29 @@ from ui import StepResult
 
 
 IGNORED_DNF_TOKENS = {
-    "package", "packages", "architecture", "version", "repository", "size",
-    "transaction", "summary", "upgrading", "installing", "upgrading:", "installing:",
-    "total", "download", "downloading", "complete!", "action", "upgraded", "installed",
-    "replacing:", "replacing", "reinstalling:", "reinstalling"
+    "package",
+    "packages",
+    "architecture",
+    "version",
+    "repository",
+    "size",
+    "transaction",
+    "summary",
+    "upgrading",
+    "installing",
+    "upgrading:",
+    "installing:",
+    "total",
+    "download",
+    "downloading",
+    "complete!",
+    "action",
+    "upgraded",
+    "installed",
+    "replacing:",
+    "replacing",
+    "reinstalling:",
+    "reinstalling",
 }
 
 
@@ -26,12 +45,16 @@ def parse_dnf_packages(output: str) -> list:
         if "Upgrading:" in line or "Installing:" in line or "Upgrading" in line:
             capture = True
             continue
-        if line_clean.startswith("Transaction Summary") or line_clean.startswith("Transaction complete"):
+        if line_clean.startswith("Transaction Summary") or line_clean.startswith(
+            "Transaction complete"
+        ):
             capture = False
             continue
         if capture:
             parts = line_clean.split()
-            if line_clean.startswith("replacing ") or line_clean.startswith("replacing:"):
+            if line_clean.startswith("replacing ") or line_clean.startswith(
+                "replacing:"
+            ):
                 # e.g.: replacing sudo x86_64 0:1.9.17-8.p2.fc44 ...
                 if pending_pkg and len(parts) >= 4:
                     old_ver = _clean_epoch(parts[3])
@@ -43,9 +66,17 @@ def parse_dnf_packages(output: str) -> list:
                 name = parts[0]
                 arch = parts[1]
                 ver = parts[2]
-                if name.lower() not in IGNORED_DNF_TOKENS and arch in ("x86_64", "noarch", "i686", "aarch64", "armv7hl"):
+                if name.lower() not in IGNORED_DNF_TOKENS and arch in (
+                    "x86_64",
+                    "noarch",
+                    "i686",
+                    "aarch64",
+                    "armv7hl",
+                ):
                     if pending_pkg:
-                        packages.append(f"{pending_pkg[0]} -> {_clean_epoch(pending_pkg[1])}")
+                        packages.append(
+                            f"{pending_pkg[0]} -> {_clean_epoch(pending_pkg[1])}"
+                        )
                     pending_pkg = (name, ver)
     if pending_pkg:
         packages.append(f"{pending_pkg[0]} -> {_clean_epoch(pending_pkg[1])}")
@@ -57,7 +88,9 @@ class RepoSyncModule(BaseModule):
     key = "reposync"
     aliases = ["repos"]
     category = "System Core"
-    description = "Synchronizes Nobara repository configs, GPG keys, and updater packages"
+    description = (
+        "Synchronizes Nobara repository configs, GPG keys, and updater packages"
+    )
     requires_sudo = True
 
     def is_available(self, ctx: UpdateContext) -> bool:
@@ -68,18 +101,30 @@ class RepoSyncModule(BaseModule):
 
     def run(self, ctx: UpdateContext) -> StepResult:
         if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would sync Nobara repositories and GPG keys")
+            return StepResult(
+                "ok", "[DRY-RUN] Would sync Nobara repositories and GPG keys"
+            )
 
         sync_cmd = [
-            "sudo", "dnf", "update",
-            "nobara-repos", "nobara-gpg-keys", "fedora-repos", "fedora-gpg-keys", "nobara-updater",
-            "--refresh", "-y", "-q"
+            "sudo",
+            "dnf",
+            "update",
+            "nobara-repos",
+            "nobara-gpg-keys",
+            "fedora-repos",
+            "fedora-gpg-keys",
+            "nobara-updater",
+            "--refresh",
+            "-y",
+            "-q",
         ]
         # Allow 1 retry in case of transient repository network glitch or lock
         code, out, err = ctx.run_cmd(sync_cmd, timeout=300, retries=1, retry_delay=3.0)
 
         if code != 0:
-            return StepResult("error", "Repository sync failed", error_output=err or out)
+            return StepResult(
+                "error", "Repository sync failed", error_output=err or out
+            )
 
         upgraded = parse_dnf_packages(out)
         if upgraded:
@@ -110,7 +155,12 @@ class SystemPackagesModule(BaseModule):
         if ctx.dry_run:
             return StepResult("ok", "[DRY-RUN] Would upgrade DNF system packages")
 
-        code, out, err = ctx.run_cmd(["sudo", "dnf", "upgrade", "--refresh", "-y"], timeout=600, retries=1, retry_delay=3.0)
+        code, out, err = ctx.run_cmd(
+            ["sudo", "dnf", "upgrade", "--refresh", "-y"],
+            timeout=600,
+            retries=1,
+            retry_delay=3.0,
+        )
 
         if code != 0:
             return StepResult("error", "DNF upgrade failed", error_output=err or out)

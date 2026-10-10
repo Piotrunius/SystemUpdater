@@ -18,14 +18,18 @@ class FlatpakModule(BaseModule):
 
     def run(self, ctx: UpdateContext) -> StepResult:
         if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would update Flatpak user and system packages")
+            return StepResult(
+                "ok", "[DRY-RUN] Would update Flatpak user and system packages"
+            )
 
         updated_items = []
         errors = []
         support_warnings = []
 
         # 1. User updates
-        u_code, u_out, u_err = ctx.run_cmd(["flatpak", "update", "--user", "-y", "--noninteractive"])
+        u_code, u_out, u_err = ctx.run_cmd(
+            ["flatpak", "update", "--user", "-y", "--noninteractive"]
+        )
         if u_code != 0:
             errors.append(f"User Flatpaks: {u_err or u_out}")
         else:
@@ -33,7 +37,9 @@ class FlatpakModule(BaseModule):
             support_warnings.extend(self._find_support_warnings(u_out))
 
         # 2. System updates (polkit handles authorization)
-        s_code, s_out, s_err = ctx.run_cmd(["flatpak", "update", "--system", "-y", "--noninteractive"])
+        s_code, s_out, s_err = ctx.run_cmd(
+            ["flatpak", "update", "--system", "-y", "--noninteractive"]
+        )
         if s_code != 0:
             errors.append(f"System Flatpaks: {s_err or s_out}")
         else:
@@ -57,7 +63,9 @@ class FlatpakModule(BaseModule):
         count = len(unique_updated)
         # Post-update version query
         post_map = {}
-        v_code, v_out, _ = ctx.run_cmd(["flatpak", "list", "--columns=application,version"], read_only=True)
+        v_code, v_out, _ = ctx.run_cmd(
+            ["flatpak", "list", "--columns=application,version"], read_only=True
+        )
         if v_code == 0:
             for line in v_out.splitlines():
                 parts = line.strip().split("\t")
@@ -80,7 +88,10 @@ class FlatpakModule(BaseModule):
         warnings = []
         for line in output.splitlines():
             line = line.strip()
-            if "end-of-life" in line.lower() or "no longer receiving fixes and security updates" in line.lower():
+            if (
+                "end-of-life" in line.lower()
+                or "no longer receiving fixes and security updates" in line.lower()
+            ):
                 warnings.append(line)
         return warnings
 

@@ -61,15 +61,18 @@ class ZinitModule(BaseModule):
             os.path.expanduser("~/.local/share/zinit"),
             os.path.expanduser("~/.zinit"),
         ]
-        return any(os.path.isdir(d) for d in zinit_dirs) and ctx.which("zsh") is not None
+        return (
+            any(os.path.isdir(d) for d in zinit_dirs) and ctx.which("zsh") is not None
+        )
 
     def run(self, ctx: UpdateContext) -> StepResult:
         if ctx.dry_run:
             return StepResult("ok", "[DRY-RUN] Would run zinit update --parallel")
 
         cmd = [
-            "zsh", "-c",
-            'source ~/.local/share/zinit/zinit.git/zinit.zsh 2>/dev/null || source ~/.zinit/bin/zinit.zsh 2>/dev/null; zinit update --parallel'
+            "zsh",
+            "-c",
+            "source ~/.local/share/zinit/zinit.git/zinit.zsh 2>/dev/null || source ~/.zinit/bin/zinit.zsh 2>/dev/null; zinit update --parallel",
         ]
         code, out, err = ctx.run_cmd(cmd, timeout=180)
         if code != 0:

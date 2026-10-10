@@ -28,8 +28,12 @@ class ModuleRegistryTests(unittest.TestCase):
 
             modules = get_all_modules(config)
 
-        snapshot = next(module for module in modules if isinstance(module, SnapshotModule))
-        git_repos = next(module for module in modules if isinstance(module, GitReposModule))
+        snapshot = next(
+            module for module in modules if isinstance(module, SnapshotModule)
+        )
+        git_repos = next(
+            module for module in modules if isinstance(module, GitReposModule)
+        )
         custom_task = next(module for module in modules if module.name == "Custom task")
 
         self.assertEqual(snapshot.cooldown_hours, 3)

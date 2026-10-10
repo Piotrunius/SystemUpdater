@@ -35,14 +35,19 @@ class GitReposModule(BaseModule):
             return StepResult("unchanged")
 
         if ctx.dry_run:
-            return StepResult("ok", f"[DRY-RUN] Would pull {len(self.config.git_repos)} configured git repositories")
+            return StepResult(
+                "ok",
+                f"[DRY-RUN] Would pull {len(self.config.git_repos)} configured git repositories",
+            )
 
         updated = []
         errors = []
 
         for repo_dir in self.config.git_repos:
             repo_name = os.path.basename(repo_dir)
-            code, out, err = ctx.run_cmd(["git", "-C", repo_dir, "pull", "--ff-only"], timeout=60)
+            code, out, err = ctx.run_cmd(
+                ["git", "-C", repo_dir, "pull", "--ff-only"], timeout=60
+            )
             if code != 0:
                 errors.append(f"{repo_name}: {err or out}")
             elif "Already up to date" not in out:
@@ -57,6 +62,10 @@ class GitReposModule(BaseModule):
             )
 
         if updated:
-            return StepResult("ok", f"{len(updated)} repo{'s' if len(updated) != 1 else ''} updated", details=updated)
+            return StepResult(
+                "ok",
+                f"{len(updated)} repo{'s' if len(updated) != 1 else ''} updated",
+                details=updated,
+            )
 
         return StepResult("unchanged")

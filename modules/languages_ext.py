@@ -21,7 +21,9 @@ class PipenvModule(BaseModule):
             return StepResult("ok", "[DRY-RUN] Would run pip install --upgrade pipenv")
 
         pip_bin = ctx.which("pip3") or ctx.which("pip") or "pip"
-        code, out, err = ctx.run_cmd([pip_bin, "install", "--upgrade", "pipenv"], timeout=180)
+        code, out, err = ctx.run_cmd(
+            [pip_bin, "install", "--upgrade", "pipenv"], timeout=180
+        )
         if code != 0:
             return StepResult("error", "pipenv upgrade failed", error_output=err or out)
 
@@ -72,8 +74,9 @@ class SdkmanModule(BaseModule):
             return StepResult("ok", "[DRY-RUN] Would run sdk selfupdate && sdk update")
 
         cmd = [
-            "bash", "-c",
-            'source "$HOME/.sdkman/bin/sdkman-init.sh" && sdk selfupdate && sdk update'
+            "bash",
+            "-c",
+            'source "$HOME/.sdkman/bin/sdkman-init.sh" && sdk selfupdate && sdk update',
         ]
         code, out, err = ctx.run_cmd(cmd, timeout=180)
         if code != 0:
@@ -100,7 +103,10 @@ class GhcupModule(BaseModule):
         if code != 0:
             return StepResult("error", "ghcup upgrade failed", error_output=err or out)
 
-        if "already up to date" in out.lower() or "latest version is already installed" in out.lower():
+        if (
+            "already up to date" in out.lower()
+            or "latest version is already installed" in out.lower()
+        ):
             return StepResult("unchanged")
 
         m = re.search(r"from\s+([^\s]+)\s+to\s+([^\s]+)", out, re.I)
@@ -124,7 +130,9 @@ class FlutterModule(BaseModule):
 
         code, out, err = ctx.run_cmd(["flutter", "upgrade"], timeout=300)
         if code != 0:
-            return StepResult("error", "flutter upgrade failed", error_output=err or out)
+            return StepResult(
+                "error", "flutter upgrade failed", error_output=err or out
+            )
 
         if "Flutter is already up to date" in out:
             return StepResult("unchanged")

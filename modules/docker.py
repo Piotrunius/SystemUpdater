@@ -42,12 +42,15 @@ class DockerModule(BaseModule):
         if ctx.dry_run:
             return StepResult("ok", "[DRY-RUN] Would pull latest Docker images")
 
-        code, out, err = ctx.run_cmd(["docker", "images", "--format", "{{.Repository}}:{{.Tag}}"])
+        code, out, err = ctx.run_cmd(
+            ["docker", "images", "--format", "{{.Repository}}:{{.Tag}}"]
+        )
         if code != 0:
             return StepResult("error", "Failed to list Docker images", error_output=err)
 
         images = [
-            img.strip() for img in out.splitlines()
+            img.strip()
+            for img in out.splitlines()
             if img.strip() and not img.startswith("<none>")
         ]
 
@@ -73,6 +76,10 @@ class DockerModule(BaseModule):
             )
 
         if updated:
-            return StepResult("ok", f"{len(updated)} image{'s' if len(updated) != 1 else ''} updated", details=updated)
+            return StepResult(
+                "ok",
+                f"{len(updated)} image{'s' if len(updated) != 1 else ''} updated",
+                details=updated,
+            )
 
         return StepResult("unchanged")

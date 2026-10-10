@@ -43,7 +43,9 @@ class ModuleAvailabilityTests(unittest.TestCase):
             nested.mkdir(parents=True)
             with patch("modules.containers_ext.os.getcwd", return_value=str(nested)):
                 self.assertFalse(module.is_available(FakeContext()))
-                self.assertEqual(module.availability_status(FakeContext()), "[No Project]")
+                self.assertEqual(
+                    module.availability_status(FakeContext()), "[No Project]"
+                )
                 (project / "Vagrantfile").touch()
                 self.assertTrue(module.is_available(FakeContext()))
                 self.assertFalse(module.is_available(FakeContext(installed=False)))
@@ -54,7 +56,9 @@ class ModuleAvailabilityTests(unittest.TestCase):
 
         self.assertFalse(module.is_available(FakeContext(output=header)))
         self.assertTrue(
-            module.is_available(FakeContext(output=header + "abc | dev | Up | fedora:latest\n"))
+            module.is_available(
+                FakeContext(output=header + "abc | dev | Up | fedora:latest\n")
+            )
         )
         unavailable = FakeContext(output=header, return_code=1)
         self.assertTrue(module.is_available(unavailable))
@@ -64,7 +68,9 @@ class ModuleAvailabilityTests(unittest.TestCase):
         module = PodmanModule()
 
         self.assertFalse(module.is_available(FakeContext(output="")))
-        self.assertEqual(module.availability_status(FakeContext(output="")), "[No Targets]")
+        self.assertEqual(
+            module.availability_status(FakeContext(output="")), "[No Targets]"
+        )
         unavailable = FakeContext(return_code=1)
         self.assertTrue(module.is_available(unavailable))
         self.assertEqual(module.availability_status(unavailable), "[Unavailable]")
@@ -75,19 +81,32 @@ class ModuleAvailabilityTests(unittest.TestCase):
 
         self.assertFalse(
             bun.is_available(
-                FakeContext(error="error: No package.json was found for directory global", return_code=1)
+                FakeContext(
+                    error="error: No package.json was found for directory global",
+                    return_code=1,
+                )
             )
         )
         self.assertEqual(
             bun.availability_status(
-                FakeContext(error="error: No package.json was found for directory global", return_code=1)
+                FakeContext(
+                    error="error: No package.json was found for directory global",
+                    return_code=1,
+                )
             ),
             "[No Targets]",
         )
-        self.assertFalse(pnpm.is_available(FakeContext(output="No global packages found")))
-        self.assertEqual(pnpm.availability_status(FakeContext(output="No global packages found")), "[No Targets]")
+        self.assertFalse(
+            pnpm.is_available(FakeContext(output="No global packages found"))
+        )
+        self.assertEqual(
+            pnpm.availability_status(FakeContext(output="No global packages found")),
+            "[No Targets]",
+        )
         self.assertTrue(bun.is_available(FakeContext(output="cowsay 1.6.0")))
-        self.assertTrue(pnpm.is_available(FakeContext(output="Package | Version\nfoo | 1.0.0")))
+        self.assertTrue(
+            pnpm.is_available(FakeContext(output="Package | Version\nfoo | 1.0.0"))
+        )
         probe_error = FakeContext(error="registry is unavailable", return_code=1)
         self.assertTrue(bun.is_available(probe_error))
         self.assertEqual(bun.availability_status(probe_error), "[Unavailable]")

@@ -21,7 +21,9 @@ class VsCodeModule(BaseModule):
 
         code, out, err = ctx.run_cmd(["code", "--update-extensions"], timeout=180)
         if code != 0:
-            return StepResult("error", "VS Code extensions update failed", error_output=err or out)
+            return StepResult(
+                "error", "VS Code extensions update failed", error_output=err or out
+            )
 
         return StepResult("ok", "updated")
 
@@ -41,7 +43,9 @@ class CursorModule(BaseModule):
 
         code, out, err = ctx.run_cmd(["cursor", "--update-extensions"], timeout=180)
         if code != 0:
-            return StepResult("error", "Cursor extensions update failed", error_output=err or out)
+            return StepResult(
+                "error", "Cursor extensions update failed", error_output=err or out
+            )
 
         return StepResult("ok", "updated")
 
@@ -61,7 +65,9 @@ class VscodiumModule(BaseModule):
 
         code, out, err = ctx.run_cmd(["codium", "--update-extensions"], timeout=180)
         if code != 0:
-            return StepResult("error", "VSCodium extensions update failed", error_output=err or out)
+            return StepResult(
+                "error", "VSCodium extensions update failed", error_output=err or out
+            )
 
         return StepResult("ok", "updated")
 
@@ -81,10 +87,14 @@ class HelixModule(BaseModule):
 
         code, out, err = ctx.run_cmd(["hx", "--grammar", "fetch"], timeout=120)
         if code != 0:
-            return StepResult("error", "Helix grammar fetch failed", error_output=err or out)
+            return StepResult(
+                "error", "Helix grammar fetch failed", error_output=err or out
+            )
 
         code_b, out_b, err_b = ctx.run_cmd(["hx", "--grammar", "build"], timeout=180)
         if code_b != 0:
-            return StepResult("error", "Helix grammar build failed", error_output=err_b or out_b)
+            return StepResult(
+                "error", "Helix grammar build failed", error_output=err_b or out_b
+            )
 
         return StepResult("ok", "updated")

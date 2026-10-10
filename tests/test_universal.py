@@ -14,7 +14,9 @@ class NixModuleTests(unittest.TestCase):
 
         self.assertEqual(result.status, "error")
         self.assertEqual(result.message, "nix-channel update failed")
-        context.run_cmd.assert_called_once_with(["nix-channel", "--update"], timeout=180)
+        context.run_cmd.assert_called_once_with(
+            ["nix-channel", "--update"], timeout=180
+        )
 
 
 if __name__ == "__main__":

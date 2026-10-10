@@ -52,7 +52,9 @@ class SnapshotModule(BaseModule):
             try:
                 stamp_mtime = os.path.getmtime(stamp_file)
             except OSError:
-                ctx.print_verbose("Could not read the previous snapshot timestamp; creating a new snapshot")
+                ctx.print_verbose(
+                    "Could not read the previous snapshot timestamp; creating a new snapshot"
+                )
         if stamp_mtime is not None:
             diff_min = int((time.time() - stamp_mtime) // 60)
             if diff_min < cooldown_minutes:
@@ -61,12 +63,22 @@ class SnapshotModule(BaseModule):
         if ctx.dry_run:
             return StepResult("ok", "[DRY-RUN] Would create Btrfs root snapshot")
 
-        code, out, err = ctx.run_cmd([
-            "sudo", "snapper", "-c", "root", "create",
-            "--description", "system-updater",
-            "--cleanup", "number",
-            "--userdata", "important=yes",
-        ], timeout=60)
+        code, out, err = ctx.run_cmd(
+            [
+                "sudo",
+                "snapper",
+                "-c",
+                "root",
+                "create",
+                "--description",
+                "system-updater",
+                "--cleanup",
+                "number",
+                "--userdata",
+                "important=yes",
+            ],
+            timeout=60,
+        )
 
         if code == 0:
             warnings = []
@@ -77,4 +89,6 @@ class SnapshotModule(BaseModule):
                 warnings.append(f"Could not save snapshot cooldown timestamp: {error}")
             return StepResult("ok", "Snapshot created successfully", warnings=warnings)
         else:
-            return StepResult("error", "Failed to create Btrfs snapshot", error_output=err or out)
+            return StepResult(
+                "error", "Failed to create Btrfs snapshot", error_output=err or out
+            )

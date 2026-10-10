@@ -23,15 +23,15 @@ SystemUpdater runs supported system package managers, application sources, conta
 
 ## Supported Ecosystems
 
-| Category | Modules & Integrations |
-| :--- | :--- |
-| **System Core** | DNF / DNF5 (Fedora / Nobara / RHEL), APT (Debian / Ubuntu / Mint / Pop!_OS), Pacman & AUR (Arch / Manjaro / CachyOS via `yay` / `paru`), Zypper (openSUSE Tumbleweed & Leap), APK (Alpine), XBPS (Void), Device Firmware (`fwupdmgr` with safe staging & reboot detection), Btrfs Snapper |
-| **Applications & Gaming** | Flatpak (User & System), ProtonPlus Runners, Gear Lever AppImages, Nuvio Desktop |
-| **Containers** | Distrobox (`upgrade --all`), Docker (`docker pull`), Podman (`auto-update`), Vagrant |
-| **Package Managers** | Homebrew (Formulae & Casks), Snap, Nix |
-| **Development Runtimes** | Rustup, Cargo, Python (`pip`, `pipx`, `pipenv`, `poetry`, `pyenv`, `uv`), Node (`npm`, `pnpm`, `bun`, `yarn`), PHP (`composer`), Ruby (`gem`), Mise, asdf, SDKMAN, GHCup, Flutter |
-| **Editors & Shells** | Oh My Zsh, Zinit, Fisher (Fish), Micro Plugins, Neovim (Lazy.nvim), Helix Grammars, VS Code, Cursor, VSCodium, Tmux (TPM), Chezmoi, Yadm |
-| **Tools & CLI** | GitHub CLI Extensions, Agent Skills, Tealdeer (`tldr`), Antigravity Extensions, Manual Pages Database (`mandb`), Custom Git Repositories |
+| Category                  | Modules & Integrations                                                                                                                                                                                                                                                                    |
+| :------------------------ | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **System Core**           | DNF / DNF5 (Fedora / Nobara / RHEL), APT (Debian / Ubuntu / Mint / Pop!_OS), Pacman & AUR (Arch / Manjaro / CachyOS via `yay` / `paru`), Zypper (openSUSE Tumbleweed & Leap), APK (Alpine), XBPS (Void), Device Firmware (`fwupdmgr` with safe staging & reboot detection), Btrfs Snapper |
+| **Applications & Gaming** | Flatpak (User & System), ProtonPlus Runners, Gear Lever AppImages, Nuvio Desktop                                                                                                                                                                                                          |
+| **Containers**            | Distrobox (`upgrade --all`), Docker (`docker pull`), Podman (`auto-update`), Vagrant                                                                                                                                                                                                      |
+| **Package Managers**      | Homebrew (Formulae & Casks), Snap, Nix                                                                                                                                                                                                                                                    |
+| **Development Runtimes**  | Rustup, Cargo, Python (`pip`, `pipx`, `pipenv`, `poetry`, `pyenv`, `uv`), Node (`npm`, `pnpm`, `bun`, `yarn`), PHP (`composer`), Ruby (`gem`), Mise, asdf, SDKMAN, GHCup, Flutter                                                                                                         |
+| **Editors & Shells**      | Oh My Zsh, Zinit, Fisher (Fish), Micro Plugins, Neovim (Lazy.nvim), Helix Grammars, VS Code, Cursor, VSCodium, Tmux (TPM), Chezmoi, Yadm                                                                                                                                                  |
+| **Tools & CLI**           | GitHub CLI Extensions, Agent Skills, Tealdeer (`tldr`), Antigravity Extensions, Manual Pages Database (`mandb`), Custom Git Repositories                                                                                                                                                  |
 
 ---
 
@@ -174,11 +174,13 @@ The history status is `warning` only when a module reports warning text not pres
 ### Universal Reboot Detection and Automation
 
 SystemUpdater continuously inspects all update steps for components requiring a machine restart:
+
 - **Core system packages:** Kernel (`kernel`, `linux`, `vmlinuz`), core runtimes (`systemd`, `glibc`, `libc6`, `musl`), bootloaders (`grub`, `shim`).
 - **Device & UEFI firmware:** Hardware capsules staged via `fwupdmgr` that require a reboot cycle to flash to the EFI system partition.
 - **System markers:** Standard trigger files such as `/run/reboot-required` created by package managers like APT or DNF.
 
 In standard mode, live progress and summary output remain 1:1 identical in structure to all other package modules (`• Device Firmware: 1 package updated`). When any module updates a package requiring a restart:
+
 1. The update is flagged with `reboot_required=True`.
 2. In verbose mode (`-v`), diagnostic warnings report `System reboot required to complete pending updates` alongside other warnings.
 3. If executed with `-r` or `--reboot`, SystemUpdater invokes non-interactive `systemctl reboot` immediately following summary printing and history logging. If no reboot is needed, the flag has no effect and the process exits normally.
@@ -228,6 +230,7 @@ SystemUpdater/
 │       └── update-homebrew-formula.yml  # Refreshes the tap formula after changes to main
 ├── Formula/
 │   └── systemupdater.rb                 # Homebrew package definition
+├── .gitignore                           # Excludes history, logs, and temporary files
 ├── main.py                              # CLI, module selection, and update lifecycle
 ├── config.py                            # Loads user settings from TOML
 ├── config.example.toml                  # Default configuration template
@@ -235,6 +238,7 @@ SystemUpdater/
 ├── sudo.py                              # Sudo credentials and keepalive
 ├── ui.py                                # Terminal status, progress, and summaries
 ├── install.sh                           # Git-checkout installer
+├── pytest.ini                           # Pytest configuration and Python path resolution
 ├── LICENSE                              # MIT license
 ├── README.md                            # Installation, usage, and configuration guide
 ├── modules/

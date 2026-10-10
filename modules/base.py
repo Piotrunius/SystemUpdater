@@ -12,14 +12,57 @@ import threading
 from typing import List, Tuple, Optional, Dict
 
 NON_FATAL_PATTERNS = [
-    (re.compile(r"(api limit reached|rate limit exceeded|too many requests|http[s]? (status )?429)", re.I), "API rate limit reached"),
-    (re.compile(r"(could not resolve host|temporary failure in name resolution|connection timed out|timed out after|operation timed out)", re.I), "Network connection timed out"),
-    (re.compile(r"(connection refused|network is unreachable|failed to connect to|unable to connect to)", re.I), "Network host unreachable"),
-    (re.compile(r"(502 bad gateway|503 service temporarily unavailable|504 gateway timeout|mirror sync in progress)", re.I), "Remote mirror temporarily unavailable"),
-    (re.compile(r"(ssl certificate problem|certificate has expired|unable to get local issuer certificate)", re.I), "SSL certificate error"),
-    (re.compile(r"(resource temporarily unavailable|database is locked|another instance is running|lock is held by)", re.I), "Resource temporarily locked"),
-    (re.compile(r"(bad credentials|authentication failed|invalid token|token expired|permission denied \(publickey\))", re.I), "Authentication/token issue"),
+    (
+        re.compile(
+            r"(api limit reached|rate limit exceeded|too many requests|http[s]? (status )?429)",
+            re.I,
+        ),
+        "API rate limit reached",
+    ),
+    (
+        re.compile(
+            r"(could not resolve host|temporary failure in name resolution|connection timed out|timed out after|operation timed out)",
+            re.I,
+        ),
+        "Network connection timed out",
+    ),
+    (
+        re.compile(
+            r"(connection refused|network is unreachable|failed to connect to|unable to connect to)",
+            re.I,
+        ),
+        "Network host unreachable",
+    ),
+    (
+        re.compile(
+            r"(502 bad gateway|503 service temporarily unavailable|504 gateway timeout|mirror sync in progress)",
+            re.I,
+        ),
+        "Remote mirror temporarily unavailable",
+    ),
+    (
+        re.compile(
+            r"(ssl certificate problem|certificate has expired|unable to get local issuer certificate)",
+            re.I,
+        ),
+        "SSL certificate error",
+    ),
+    (
+        re.compile(
+            r"(resource temporarily unavailable|database is locked|another instance is running|lock is held by)",
+            re.I,
+        ),
+        "Resource temporarily locked",
+    ),
+    (
+        re.compile(
+            r"(bad credentials|authentication failed|invalid token|token expired|permission denied \(publickey\))",
+            re.I,
+        ),
+        "Authentication/token issue",
+    ),
 ]
+
 
 def detect_warning(text: str) -> Optional[str]:
     """
@@ -60,9 +103,10 @@ def get_os_release() -> Dict[str, str]:
     return info
 
 
-
 class UpdateContext:
-    def __init__(self, dry_run: bool = False, force: bool = False, verbose: bool = False):
+    def __init__(
+        self, dry_run: bool = False, force: bool = False, verbose: bool = False
+    ):
         self.dry_run = dry_run
         self.force = force
         self.verbose = verbose
@@ -161,7 +205,11 @@ class UpdateContext:
                         finally:
                             pipe.close()
 
-                    t_out = threading.Thread(target=stream_reader, args=(proc.stdout, out_chunks), daemon=True)
+                    t_out = threading.Thread(
+                        target=stream_reader,
+                        args=(proc.stdout, out_chunks),
+                        daemon=True,
+                    )
                     t_out.start()
                     output_was_streamed = True
 
@@ -173,9 +221,17 @@ class UpdateContext:
                         t_out.join(timeout=0.5)
                         last_code = 124
                         last_out = "".join(out_chunks)
-                        last_err = f"Command timed out after {timeout}s: {shlex.join(cmd)}"
+                        last_err = (
+                            f"Command timed out after {timeout}s: {shlex.join(cmd)}"
+                        )
                         self._record_command(
-                            cmd, last_code, last_out, last_err, read_only, attempt, started,
+                            cmd,
+                            last_code,
+                            last_out,
+                            last_err,
+                            read_only,
+                            attempt,
+                            started,
                             output_streamed=True,
                         )
                         return last_code, last_out, last_err

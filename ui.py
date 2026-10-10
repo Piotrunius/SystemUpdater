@@ -49,13 +49,17 @@ REBOOT_TRIGGER_PATTERNS = re.compile(
 )
 
 
-def check_packages_require_reboot(package_lines: List[str]) -> Tuple[bool, Optional[str]]:
+def check_packages_require_reboot(
+    package_lines: List[str],
+) -> Tuple[bool, Optional[str]]:
     """Check if any package in the upgraded list requires a system reboot."""
     for line in package_lines:
         clean = str(line).strip()
         name = clean.split(":")[0].split("->")[0].split()[0].lower().strip()
         short_name = name.split("/")[-1].split("@")[0]
-        if REBOOT_TRIGGER_PATTERNS.search(name) or REBOOT_TRIGGER_PATTERNS.search(short_name):
+        if REBOOT_TRIGGER_PATTERNS.search(name) or REBOOT_TRIGGER_PATTERNS.search(
+            short_name
+        ):
             return True, name
     return False, None
 
@@ -81,8 +85,15 @@ class StepResult:
 
 
 class UI:
-    def __init__(self, is_interactive: Optional[bool] = None, quiet: bool = False, verbose: bool = False):
-        self.is_tty = is_interactive if is_interactive is not None else sys.stdout.isatty()
+    def __init__(
+        self,
+        is_interactive: Optional[bool] = None,
+        quiet: bool = False,
+        verbose: bool = False,
+    ):
+        self.is_tty = (
+            is_interactive if is_interactive is not None else sys.stdout.isatty()
+        )
         self.terminal_width = self._get_width()
         self.quiet = quiet
         self.verbose = verbose
@@ -99,7 +110,10 @@ class UI:
         width = min(self.terminal_width, 80)
         time_str = time.strftime("%H:%M:%S")
         print()
-        print(f"{Colors.BOLD}{Colors.CYAN}── {title} ─ {time_str} {Colors.RESET}" + "─" * max(0, width - len(title) - len(time_str) - 8))
+        print(
+            f"{Colors.BOLD}{Colors.CYAN}── {title} ─ {time_str} {Colors.RESET}"
+            + "─" * max(0, width - len(title) - len(time_str) - 8)
+        )
         print()
 
     def run_step(
@@ -121,7 +135,10 @@ class UI:
             except Exception as e:
                 res = StepResult("error", str(e), error_output=str(e))
             if res.status == "error":
-                is_core = module is not None and getattr(module, "category", "") == "System Core"
+                is_core = (
+                    module is not None
+                    and getattr(module, "category", "") == "System Core"
+                )
                 if not is_core:
                     warn_reason = detect_warning(f"{res.message}\n{res.error_output}")
                     if warn_reason:
@@ -155,7 +172,10 @@ class UI:
                     ctx._on_command_start = None
 
             if res.status == "error":
-                is_core = module is not None and getattr(module, "category", "") == "System Core"
+                is_core = (
+                    module is not None
+                    and getattr(module, "category", "") == "System Core"
+                )
                 if not is_core:
                     warn_reason = detect_warning(f"{res.message}\n{res.error_output}")
                     if warn_reason:
@@ -176,24 +196,36 @@ class UI:
                 time_tag = f"{Colors.GRAY}({dur_val:.1f}s){Colors.RESET}"
                 if res.status == "ok":
                     msg_text = self._resolve_ok_msg(label, res, module=module)
-                    print(f"      {Colors.DIM}[{Colors.RESET}{Colors.BOLD_GREEN}✓{Colors.RESET}{Colors.DIM}]{Colors.RESET} {msg_text or 'updated'} {time_tag}")
+                    print(
+                        f"      {Colors.DIM}[{Colors.RESET}{Colors.BOLD_GREEN}✓{Colors.RESET}{Colors.DIM}]{Colors.RESET} {msg_text or 'updated'} {time_tag}"
+                    )
                 elif res.status == "warning" or (
                     is_verbose and res.status == "unchanged" and res.warnings
                 ):
                     if self.verbose:
-                        print(f"      {Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET} warning {time_tag}")
+                        print(
+                            f"      {Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET} warning {time_tag}"
+                        )
                     else:
-                        print(f"      {Colors.DIM}[—]{Colors.RESET} up to date {time_tag}")
+                        print(
+                            f"      {Colors.DIM}[—]{Colors.RESET} up to date {time_tag}"
+                        )
                 elif res.status == "unchanged":
                     msg = res.message if res.message else "up to date"
                     print(f"      {Colors.DIM}[—]{Colors.RESET} {msg} {time_tag}")
                 elif res.status == "skipped":
                     if self.verbose:
-                        print(f"      {Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET} skipped {time_tag}")
+                        print(
+                            f"      {Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET} skipped {time_tag}"
+                        )
                     else:
-                        print(f"      {Colors.DIM}[—]{Colors.RESET} up to date {time_tag}")
+                        print(
+                            f"      {Colors.DIM}[—]{Colors.RESET} up to date {time_tag}"
+                        )
                 else:  # error
-                    print(f"      {Colors.DIM}[{Colors.RESET}{Colors.BOLD_RED}✗{Colors.RESET}{Colors.DIM}]{Colors.RESET} failed {time_tag}")
+                    print(
+                        f"      {Colors.DIM}[{Colors.RESET}{Colors.BOLD_RED}✗{Colors.RESET}{Colors.DIM}]{Colors.RESET} failed {time_tag}"
+                    )
             else:
                 self._print_static_result(label, res, module=module)
 
@@ -203,7 +235,9 @@ class UI:
         stop_event = threading.Event()
         current_status = {"text": label}
         if ctx is not None and hasattr(ctx, "status_updater"):
-            ctx.status_updater = lambda msg: current_status.__setitem__("text", f"{label}: {msg}" if msg else label)
+            ctx.status_updater = lambda msg: current_status.__setitem__(
+                "text", f"{label}: {msg}" if msg else label
+            )
 
         start_time = time.time()
         spinner_thread = threading.Thread(
@@ -231,7 +265,9 @@ class UI:
         sys.stdout.flush()
 
         if res.status == "error":
-            is_core = module is not None and getattr(module, "category", "") == "System Core"
+            is_core = (
+                module is not None and getattr(module, "category", "") == "System Core"
+            )
             if not is_core:
                 warn_reason = detect_warning(f"{res.message}\n{res.error_output}")
                 if warn_reason:
@@ -251,8 +287,12 @@ class UI:
     ) -> None:
         from history_store import redact_text
 
-        records = getattr(ctx, "command_log", [])[command_start:] if ctx is not None else []
-        notes = getattr(ctx, "deferred_notes", [])[note_start:] if ctx is not None else []
+        records = (
+            getattr(ctx, "command_log", [])[command_start:] if ctx is not None else []
+        )
+        notes = (
+            getattr(ctx, "deferred_notes", [])[note_start:] if ctx is not None else []
+        )
         warning_lines = list(result.warnings) + list(notes)
         failed_output = []
 
@@ -260,7 +300,10 @@ class UI:
             outputs = [record.get("stdout", ""), record.get("stderr", "")]
             if record.get("returncode", 0) != 0:
                 failed_output.extend(
-                    line for output in outputs for line in output.splitlines() if line.strip()
+                    line
+                    for output in outputs
+                    for line in output.splitlines()
+                    if line.strip()
                 )
                 if result.status == "warning":
                     warning_lines.extend(failed_output)
@@ -322,7 +365,11 @@ class UI:
             return
         width = min(self.terminal_width, 80)
         print()
-        print(f"{Colors.BOLD}{Colors.CYAN}── {title} " + "─" * max(0, width - len(title) - 4) + Colors.RESET)
+        print(
+            f"{Colors.BOLD}{Colors.CYAN}── {title} "
+            + "─" * max(0, width - len(title) - 4)
+            + Colors.RESET
+        )
 
     def _clean_ok_message(self, label: str, msg: str) -> str:
         if not msg:
@@ -332,40 +379,74 @@ class UI:
         msg_lower = msg_clean.lower()
         if (
             msg_lower == label_lower
-            or msg_lower in (f"{label_lower} updated", f"{label_lower} upgraded", f"{label_lower} upgraded successfully")
-            or (msg_lower.endswith(" updated") and msg_lower[:-8].strip() in label_lower)
-            or (msg_lower.endswith(" upgraded") and msg_lower[:-9].strip() in label_lower)
-            or (msg_lower.endswith(" upgraded successfully") and msg_lower[:-22].strip() in label_lower)
-            or (msg_lower.endswith(" updated successfully") and msg_lower[:-20].strip() in label_lower)
+            or msg_lower
+            in (
+                f"{label_lower} updated",
+                f"{label_lower} upgraded",
+                f"{label_lower} upgraded successfully",
+            )
+            or (
+                msg_lower.endswith(" updated") and msg_lower[:-8].strip() in label_lower
+            )
+            or (
+                msg_lower.endswith(" upgraded")
+                and msg_lower[:-9].strip() in label_lower
+            )
+            or (
+                msg_lower.endswith(" upgraded successfully")
+                and msg_lower[:-22].strip() in label_lower
+            )
+            or (
+                msg_lower.endswith(" updated successfully")
+                and msg_lower[:-20].strip() in label_lower
+            )
         ):
             return "updated"
         return msg_clean
 
-    def _resolve_ok_msg(self, label: str, res: StepResult, module: Optional[Any] = None) -> str:
+    def _resolve_ok_msg(
+        self, label: str, res: StepResult, module: Optional[Any] = None
+    ) -> str:
         msg_text = self._clean_ok_message(label, res.message)
         item_meta = {"name": label, "key": getattr(res, "key", ""), "module": module}
-        if not is_single_entity_module(item_meta) and res.details and not any(c.isdigit() for c in msg_text):
-            valid = [d for d in res.details if d and not str(d).strip().startswith("... and")]
+        if (
+            not is_single_entity_module(item_meta)
+            and res.details
+            and not any(c.isdigit() for c in msg_text)
+        ):
+            valid = [
+                d for d in res.details if d and not str(d).strip().startswith("... and")
+            ]
             if valid:
-                msg_text = f"{len(valid)} package{'s' if len(valid) != 1 else ''} updated"
+                msg_text = (
+                    f"{len(valid)} package{'s' if len(valid) != 1 else ''} updated"
+                )
         return msg_text
 
-    def _print_static_result(self, label: str, res: StepResult, module: Optional[Any] = None):
+    def _print_static_result(
+        self, label: str, res: StepResult, module: Optional[Any] = None
+    ):
         dur_val = max(0.1, res.duration)
         time_tag = f"{Colors.GRAY}({dur_val:.1f}s){Colors.RESET}"
 
         if res.status == "ok":
             if self.verbose and res.warnings:
-                print(f"  {Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET} {label}: warning {time_tag}")
+                print(
+                    f"  {Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET} {label}: warning {time_tag}"
+                )
             else:
                 msg_text = self._resolve_ok_msg(label, res, module=module)
                 msg = f": {msg_text}" if msg_text else ""
-                print(f"  {Colors.DIM}[{Colors.RESET}{Colors.BOLD_GREEN}✓{Colors.RESET}{Colors.DIM}]{Colors.RESET} {label}{msg} {time_tag}")
+                print(
+                    f"  {Colors.DIM}[{Colors.RESET}{Colors.BOLD_GREEN}✓{Colors.RESET}{Colors.DIM}]{Colors.RESET} {label}{msg} {time_tag}"
+                )
         elif res.status == "warning" or (
             self.verbose and res.status == "unchanged" and res.warnings
         ):
             if self.verbose:
-                print(f"  {Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET} {label}: warning {time_tag}")
+                print(
+                    f"  {Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET} {label}: warning {time_tag}"
+                )
             else:
                 print(f"  {Colors.DIM}[—]{Colors.RESET} {label}: up to date {time_tag}")
         elif res.status == "unchanged":
@@ -373,13 +454,19 @@ class UI:
             print(f"  {Colors.DIM}[—]{Colors.RESET} {label}: {msg} {time_tag}")
         elif res.status == "skipped":
             if self.verbose:
-                print(f"  {Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET} {label}: skipped {time_tag}")
+                print(
+                    f"  {Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET} {label}: skipped {time_tag}"
+                )
             else:
                 print(f"  {Colors.DIM}[—]{Colors.RESET} {label}: up to date {time_tag}")
         else:  # error
-            print(f"  {Colors.DIM}[{Colors.RESET}{Colors.BOLD_RED}✗{Colors.RESET}{Colors.DIM}]{Colors.RESET} {label}: failed {time_tag}")
+            print(
+                f"  {Colors.DIM}[{Colors.RESET}{Colors.BOLD_RED}✗{Colors.RESET}{Colors.DIM}]{Colors.RESET} {label}: failed {time_tag}"
+            )
 
-    def print_result(self, label: str, result: StepResult, module: Optional[Any] = None):
+    def print_result(
+        self, label: str, result: StepResult, module: Optional[Any] = None
+    ):
         """Render an already completed result using the standard step style."""
         if not self.quiet:
             self._print_static_result(label, result, module=module)
@@ -391,14 +478,16 @@ class UI:
         duration_str = f"{minutes}m {seconds:02d}s" if minutes > 0 else f"{seconds}s"
 
         package_updates = [
-            r for r in results
+            r
+            for r in results
             if r["result"].status == "ok"
             and r["result"].message
             and getattr(r.get("module"), "category", "") != "System Protection"
             and r.get("key") != "snapshot"
         ]
         all_warning_items = [
-            r for r in results
+            r
+            for r in results
             if r["result"].status in ("warning", "skipped") or r["result"].warnings
         ]
         warning_items = all_warning_items if self.verbose else []
@@ -414,7 +503,9 @@ class UI:
                         print(f"{indent}- {normalized}")
 
         def diagnostic_lines(output: str) -> List[str]:
-            lines = [line.rstrip() for line in output.strip().splitlines() if line.strip()]
+            lines = [
+                line.rstrip() for line in output.strip().splitlines() if line.strip()
+            ]
             if len(lines) > 20:
                 lines = ["... (previous output omitted) ..."] + lines[-20:]
             return lines
@@ -425,7 +516,11 @@ class UI:
 
         # ── 1. Summary Section ────────────────────────────────────────────────
         print()
-        print(f"{Colors.BOLD}{Colors.CYAN}── Summary ─ {duration_str} " + "─" * max(0, width - len(duration_str) - 14) + Colors.RESET)
+        print(
+            f"{Colors.BOLD}{Colors.CYAN}── Summary ─ {duration_str} "
+            + "─" * max(0, width - len(duration_str) - 14)
+            + Colors.RESET
+        )
         if package_updates:
             print("  Updates applied:")
             for item in package_updates:
@@ -437,13 +532,19 @@ class UI:
                 else:
                     if res.details and not any(c.isdigit() for c in msg_text):
                         valid = [
-                            d for d in res.details
-                            if d and not str(d).strip().startswith("... and") and not str(d).strip().startswith("and ") and not str(d).strip().startswith("(+")
+                            d
+                            for d in res.details
+                            if d
+                            and not str(d).strip().startswith("... and")
+                            and not str(d).strip().startswith("and ")
+                            and not str(d).strip().startswith("(+")
                         ]
                         if valid:
                             msg_text = f"{len(valid)} package{'s' if len(valid) != 1 else ''} updated"
                     print(f"    • {item['name']}: {msg_text}")
-                    formatted_details = format_package_list(res.details, msg_text, limit=10)
+                    formatted_details = format_package_list(
+                        res.details, msg_text, limit=10
+                    )
                     for detail in formatted_details:
                         print(f"      - {detail}")
         elif not all_warning_items and not error_items:
@@ -468,9 +569,15 @@ class UI:
                     details = list(res.details)
                 details.extend(res.warnings)
                 details.extend(diagnostic_lines(res.error_output))
-                if res.status == "warning" and res.message and res.message.lower() != "warning":
+                if (
+                    res.status == "warning"
+                    and res.message
+                    and res.message.lower() != "warning"
+                ):
                     details.insert(0, res.message)
-                print(f"  {Colors.BOLD_YELLOW}[!]{Colors.RESET} {item['name']}: {message}")
+                print(
+                    f"  {Colors.BOLD_YELLOW}[!]{Colors.RESET} {item['name']}: {message}"
+                )
                 print_details(details, indent="    ")
 
         if error_items:
@@ -554,15 +661,56 @@ def extract_single_entity_version(details: List[str], message: str) -> str:
 
 
 CORE_SYSTEM_KEYWORDS = {
-    "linux", "kernel", "systemd", "glibc", "nobara", "grub", "shim",
-    "mesa", "nvidia", "xorg", "wayland", "pipewire", "wireplumber",
-    "openssl", "ca-certificates", "networkmanager", "firewalld", "systemupdater",
+    "linux",
+    "kernel",
+    "systemd",
+    "glibc",
+    "nobara",
+    "grub",
+    "shim",
+    "mesa",
+    "nvidia",
+    "xorg",
+    "wayland",
+    "pipewire",
+    "wireplumber",
+    "openssl",
+    "ca-certificates",
+    "networkmanager",
+    "firewalld",
+    "systemupdater",
 }
 
 DEV_TOOLS_KEYWORDS = {
-    "python", "node", "rust", "rustc", "gcc", "llvm", "clang", "go", "ruby", "bun", "deno",
-    "git", "docker", "containerd", "podman", "antigravity", "gh", "ripgrep", "tmux",
-    "zsh", "bash", "code", "cursor", "neovim", "nvim", "helix", "brave", "firefox", "chrome",
+    "python",
+    "node",
+    "rust",
+    "rustc",
+    "gcc",
+    "llvm",
+    "clang",
+    "go",
+    "ruby",
+    "bun",
+    "deno",
+    "git",
+    "docker",
+    "containerd",
+    "podman",
+    "antigravity",
+    "gh",
+    "ripgrep",
+    "tmux",
+    "zsh",
+    "bash",
+    "code",
+    "cursor",
+    "neovim",
+    "nvim",
+    "helix",
+    "brave",
+    "firefox",
+    "chrome",
 }
 
 
@@ -592,12 +740,20 @@ def package_importance_score(pkg_line: str) -> int:
     return 50
 
 
-def format_package_list(details: List[str], msg_text: str, limit: int = 10) -> List[str]:
+def format_package_list(
+    details: List[str], msg_text: str, limit: int = 10
+) -> List[str]:
     cleaned = []
     seen = set()
     for item in details:
         line = str(item).strip()
-        if not line or line.startswith("... and ") or line.startswith("... ") or line.startswith("and ") or line.startswith("(+"):
+        if (
+            not line
+            or line.startswith("... and ")
+            or line.startswith("... ")
+            or line.startswith("and ")
+            or line.startswith("(+")
+        ):
             continue
         m_space_arrow = re.match(r"^([\w\.\-\@\/]+)\s+([^\s:]+)\s+->\s+([^\s]+)$", line)
         if m_space_arrow:

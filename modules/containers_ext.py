@@ -43,7 +43,9 @@ class PodmanModule(BaseModule):
 
         code, out, err = ctx.run_cmd(["podman", "auto-update"], timeout=300)
         if code != 0:
-            return StepResult("error", "podman auto-update failed", error_output=err or out)
+            return StepResult(
+                "error", "podman auto-update failed", error_output=err or out
+            )
 
         if not out.strip() or "nothing to update" in out.lower():
             return StepResult("unchanged")
@@ -86,6 +88,8 @@ class VagrantModule(BaseModule):
 
         code, out, err = ctx.run_cmd(["vagrant", "box", "update"], timeout=300)
         if code != 0:
-            return StepResult("error", "vagrant box update failed", error_output=err or out)
+            return StepResult(
+                "error", "vagrant box update failed", error_output=err or out
+            )
 
         return StepResult("ok", "updated")

@@ -21,7 +21,11 @@ class HistoryStoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             store = HistoryStore(Path(temp_dir))
             run_id = store.new_run_id(datetime(2026, 10, 8, tzinfo=timezone.utc))
-            run = {"id": run_id, "started_at": "2026-10-08T00:00:00+00:00", "modules": []}
+            run = {
+                "id": run_id,
+                "started_at": "2026-10-08T00:00:00+00:00",
+                "modules": [],
+            }
 
             path = store.save(run)
 
@@ -70,9 +74,21 @@ class HistoryStoreTests(unittest.TestCase):
     def test_warning_is_new_again_after_a_clean_run_of_the_same_module(self):
         previous_runs = [
             {"modules": [{"key": "flatpak", "status": "unchanged", "warnings": []}]},
-            {"modules": [{"key": "flatpak", "status": "unchanged", "warnings": ["Runtime warning"]}]},
+            {
+                "modules": [
+                    {
+                        "key": "flatpak",
+                        "status": "unchanged",
+                        "warnings": ["Runtime warning"],
+                    }
+                ]
+            },
         ]
-        current = {"key": "flatpak", "status": "unchanged", "warnings": ["Runtime warning"]}
+        current = {
+            "key": "flatpak",
+            "status": "unchanged",
+            "warnings": ["Runtime warning"],
+        }
 
         self.assertTrue(has_new_warnings([current], previous_runs))
 
@@ -81,11 +97,19 @@ class HistoryStoreTests(unittest.TestCase):
             {"modules": [{"key": "flatpak", "status": "skipped", "warnings": []}]},
             {
                 "modules": [
-                    {"key": "flatpak", "status": "unchanged", "warnings": ["Runtime warning"]}
+                    {
+                        "key": "flatpak",
+                        "status": "unchanged",
+                        "warnings": ["Runtime warning"],
+                    }
                 ]
             },
         ]
-        current = {"key": "flatpak", "status": "unchanged", "warnings": ["Runtime warning"]}
+        current = {
+            "key": "flatpak",
+            "status": "unchanged",
+            "warnings": ["Runtime warning"],
+        }
 
         self.assertFalse(has_new_warnings([current], previous_runs))
 
@@ -97,9 +121,24 @@ class HistoryStoreTests(unittest.TestCase):
             "warnings": ["Runtime is end-of-life"],
         }
         runs = [
-            {"id": "20261008T030000Z-00000003", "status": "warning", "update_count": 0, "modules": [module]},
-            {"id": "20261008T020000Z-00000002", "status": "warning", "update_count": 0, "modules": [module]},
-            {"id": "20261008T010000Z-00000001", "status": "warning", "update_count": 0, "modules": [module]},
+            {
+                "id": "20261008T030000Z-00000003",
+                "status": "warning",
+                "update_count": 0,
+                "modules": [module],
+            },
+            {
+                "id": "20261008T020000Z-00000002",
+                "status": "warning",
+                "update_count": 0,
+                "modules": [module],
+            },
+            {
+                "id": "20261008T010000Z-00000001",
+                "status": "warning",
+                "update_count": 0,
+                "modules": [module],
+            },
         ]
         output = io.StringIO()
 
@@ -185,7 +224,11 @@ class HistoryStoreTests(unittest.TestCase):
         previous = [
             {
                 "modules": [
-                    {"key": "flatpak", "status": "unchanged", "warnings": ["Known issue"]}
+                    {
+                        "key": "flatpak",
+                        "status": "unchanged",
+                        "warnings": ["Known issue"],
+                    }
                 ]
             }
         ]

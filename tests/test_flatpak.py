@@ -22,10 +22,12 @@ class FlatpakTests(unittest.TestCase):
             "Info: org.freedesktop.Platform.ffmpeg-full is end-of-life, with reason: "
             "org.freedesktop.Platform 24.08 is no longer receiving fixes and security updates."
         )
-        context = FakeContext([
-            (0, f"{warning}\nNothing to update.\n", ""),
-            (0, "Nothing to update.\n", ""),
-        ])
+        context = FakeContext(
+            [
+                (0, f"{warning}\nNothing to update.\n", ""),
+                (0, "Nothing to update.\n", ""),
+            ]
+        )
 
         result = FlatpakModule().run(context)
 
@@ -37,7 +39,13 @@ class FlatpakTests(unittest.TestCase):
         output = io.StringIO()
         with redirect_stdout(output):
             UI(is_interactive=False, verbose=True).print_summary(
-                [{"name": "Flatpak Packages", "key": "flatpak", "result": StepResult("unchanged", warnings=[warning])}],
+                [
+                    {
+                        "name": "Flatpak Packages",
+                        "key": "flatpak",
+                        "result": StepResult("unchanged", warnings=[warning]),
+                    }
+                ],
                 total_elapsed=1,
             )
 
@@ -49,7 +57,13 @@ class FlatpakTests(unittest.TestCase):
         output = io.StringIO()
         with redirect_stdout(output):
             UI(is_interactive=False).print_summary(
-                [{"name": "Flatpak Packages", "key": "flatpak", "result": StepResult("unchanged", warnings=[warning])}],
+                [
+                    {
+                        "name": "Flatpak Packages",
+                        "key": "flatpak",
+                        "result": StepResult("unchanged", warnings=[warning]),
+                    }
+                ],
                 total_elapsed=1,
             )
 

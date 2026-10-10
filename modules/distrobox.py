@@ -7,7 +7,9 @@ class DistroboxModule(BaseModule):
     name = "Distrobox Containers"
     key = "distrobox"
     category = "Applications & Gaming"
-    description = "Upgrades packages inside all active Distrobox containers (Arch, Fedora, etc.)"
+    description = (
+        "Upgrades packages inside all active Distrobox containers (Arch, Fedora, etc.)"
+    )
 
     def _availability(self, ctx: UpdateContext) -> str:
         if ctx.which("distrobox") is None:
@@ -43,7 +45,9 @@ class DistroboxModule(BaseModule):
         code, out, err = ctx.run_cmd(["distrobox", "upgrade", "--all"])
 
         if code != 0:
-            return StepResult("error", "Distrobox upgrade failed", error_output=err or out)
+            return StepResult(
+                "error", "Distrobox upgrade failed", error_output=err or out
+            )
 
         # Parse which containers were upgraded
         updated_containers = []
@@ -61,8 +65,14 @@ class DistroboxModule(BaseModule):
                 continue
 
             line_l = line.lower()
-            if any(token in line_l for token in ["upgrading ", "upgrading:", "installing:", "upgraded:"]):
-                if "nothing to do" not in line_l and "there is nothing to do" not in line_l:
+            if any(
+                token in line_l
+                for token in ["upgrading ", "upgrading:", "installing:", "upgraded:"]
+            ):
+                if (
+                    "nothing to do" not in line_l
+                    and "there is nothing to do" not in line_l
+                ):
                     box_had_update = True
 
         if current_box and box_had_update:
@@ -72,6 +82,10 @@ class DistroboxModule(BaseModule):
 
         if updated_containers:
             count = len(updated_containers)
-            return StepResult("ok", f"{count} container{'s' if count != 1 else ''} updated", details=updated_containers)
+            return StepResult(
+                "ok",
+                f"{count} container{'s' if count != 1 else ''} updated",
+                details=updated_containers,
+            )
 
         return StepResult("unchanged")

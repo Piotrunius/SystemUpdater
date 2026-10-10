@@ -13,7 +13,9 @@ from typing import Any, Dict, List, Optional
 
 
 RUN_ID_PATTERN = re.compile(r"^\d{8}T\d{6}Z-[0-9a-f]{8}$")
-TOKEN_PATTERN = re.compile(r"(?i)\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,})\b")
+TOKEN_PATTERN = re.compile(
+    r"(?i)\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,})\b"
+)
 BEARER_PATTERN = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+")
 URL_CREDENTIAL_PATTERN = re.compile(r"(https?://)[^/@\s]+:[^/@\s]+@")
 ASSIGNMENT_SECRET_PATTERN = re.compile(
@@ -67,7 +69,9 @@ def _warning_signatures(module: Dict[str, Any]) -> set[str]:
     return {" ".join(message.casefold().split()) for message in messages}
 
 
-def has_new_warnings(current_modules: List[Dict[str, Any]], previous_runs: List[Dict[str, Any]]) -> bool:
+def has_new_warnings(
+    current_modules: List[Dict[str, Any]], previous_runs: List[Dict[str, Any]]
+) -> bool:
     """Return whether a module has warning text absent from its latest previous run."""
     latest_module_by_key: Dict[str, Dict[str, Any]] = {}
     for run in previous_runs:
@@ -89,9 +93,13 @@ def has_new_warnings(current_modules: List[Dict[str, Any]], previous_runs: List[
     return False
 
 
-def classify_run_status(run: Dict[str, Any], previous_runs: List[Dict[str, Any]]) -> str:
+def classify_run_status(
+    run: Dict[str, Any], previous_runs: List[Dict[str, Any]]
+) -> str:
     modules = run.get("modules") or []
-    if run.get("status") == "error" or any(module.get("status") == "error" for module in modules):
+    if run.get("status") == "error" or any(
+        module.get("status") == "error" for module in modules
+    ):
         return "error"
     if has_new_warnings(modules, previous_runs):
         return "warning"
@@ -126,7 +134,9 @@ class HistoryStore:
         if not RUN_ID_PATTERN.fullmatch(run_id):
             raise ValueError("Invalid run history ID")
 
-        fd, temporary_path = tempfile.mkstemp(prefix=".run-", suffix=".tmp", dir=self.directory)
+        fd, temporary_path = tempfile.mkstemp(
+            prefix=".run-", suffix=".tmp", dir=self.directory
+        )
         try:
             os.fchmod(fd, 0o600)
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
@@ -156,7 +166,9 @@ class HistoryStore:
             try:
                 with path.open("r", encoding="utf-8") as handle:
                     data = json.load(handle)
-                if isinstance(data, dict) and RUN_ID_PATTERN.fullmatch(str(data.get("id", ""))):
+                if isinstance(data, dict) and RUN_ID_PATTERN.fullmatch(
+                    str(data.get("id", ""))
+                ):
                     runs.append(data)
             except (OSError, json.JSONDecodeError):
                 continue
@@ -278,10 +290,16 @@ def print_run_log(run: Dict[str, Any]) -> None:
             if str(detail).strip()
         ]
         if not has_command_output and module_status == "warning":
-            reason_parts = [message] if message and message.casefold() != "warning" else []
+            reason_parts = (
+                [message] if message and message.casefold() != "warning" else []
+            )
             reason_parts.extend(details)
             if not reason_parts:
-                reason_parts.extend(str(warning) for warning in module.get("warnings", []) if str(warning).strip())
+                reason_parts.extend(
+                    str(warning)
+                    for warning in module.get("warnings", [])
+                    if str(warning).strip()
+                )
             reason = "; ".join(reason_parts)
         elif not has_command_output:
             reason = message
@@ -312,9 +330,12 @@ def print_run_log(run: Dict[str, Any]) -> None:
                     for line in output.rstrip().splitlines():
                         print(f"      {line}")
         if error_output:
-            diagnostic_lines = [line.rstrip() for line in error_output.rstrip().splitlines()]
+            diagnostic_lines = [
+                line.rstrip() for line in error_output.rstrip().splitlines()
+            ]
             unseen_lines = [
-                line for line in diagnostic_lines
+                line
+                for line in diagnostic_lines
                 if " ".join(line.casefold().split()) not in captured_lines
             ]
             if unseen_lines:

@@ -49,7 +49,11 @@ def _keeper_worker():
         if _stop_event.wait(50):
             break
         try:
-            subprocess.run(["sudo", "-n", "-v"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(
+                ["sudo", "-n", "-v"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
         except OSError:
             _stop_event.set()
             return

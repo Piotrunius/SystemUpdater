@@ -25,12 +25,18 @@ class OhMyZshModule(BaseModule):
         if ctx.dry_run:
             return StepResult("ok", "[DRY-RUN] Would update Oh My Zsh")
 
-        _, old_head, _ = ctx.run_cmd(["git", "-C", omz_dir, "rev-parse", "--short", "HEAD"], read_only=True)
+        _, old_head, _ = ctx.run_cmd(
+            ["git", "-C", omz_dir, "rev-parse", "--short", "HEAD"], read_only=True
+        )
         old_commit = old_head.strip()
 
-        code, out, err = ctx.run_cmd(["git", "-C", omz_dir, "pull", "--rebase", "--stat", "origin", "master"])
+        code, out, err = ctx.run_cmd(
+            ["git", "-C", omz_dir, "pull", "--rebase", "--stat", "origin", "master"]
+        )
         if code != 0:
-            return StepResult("error", "Oh My Zsh update failed", error_output=err or out)
+            return StepResult(
+                "error", "Oh My Zsh update failed", error_output=err or out
+            )
 
         if "Already up to date" in out or "Already up-to-date" in out:
             return StepResult("unchanged")
@@ -39,7 +45,9 @@ class OhMyZshModule(BaseModule):
         if m:
             ver_change = f"{m.group(1)} -> {m.group(2)}"
         else:
-            _, new_head, _ = ctx.run_cmd(["git", "-C", omz_dir, "rev-parse", "--short", "HEAD"], read_only=True)
+            _, new_head, _ = ctx.run_cmd(
+                ["git", "-C", omz_dir, "rev-parse", "--short", "HEAD"], read_only=True
+            )
             new_commit = new_head.strip()
             if old_commit and new_commit and old_commit != new_commit:
                 ver_change = f"{old_commit} -> {new_commit}"
@@ -69,15 +77,25 @@ class RustupModule(BaseModule):
         if "unchanged" in out and "update available" not in out:
             return StepResult("unchanged")
 
-        matches = re.findall(r"([\w\.\-]+)\s+updated\s+-\s+rustc\s+([^\s]+).*?->\s+rustc\s+([^\s]+)", out)
+        matches = re.findall(
+            r"([\w\.\-]+)\s+updated\s+-\s+rustc\s+([^\s]+).*?->\s+rustc\s+([^\s]+)", out
+        )
         if matches:
             details = [f"{tc}: {old} -> {new}" for tc, old, new in matches]
             count = len(details)
-            return StepResult("ok", f"{count} toolchain{'s' if count != 1 else ''} updated", details=details)
+            return StepResult(
+                "ok",
+                f"{count} toolchain{'s' if count != 1 else ''} updated",
+                details=details,
+            )
 
         m_self = re.search(r"rustup updated.*?([0-9\.]+)\s+to\s+([0-9\.]+)", out)
         if m_self:
-            return StepResult("ok", "1 toolchain updated", details=[f"rustup: {m_self.group(1)} -> {m_self.group(2)}"])
+            return StepResult(
+                "ok",
+                "1 toolchain updated",
+                details=[f"rustup: {m_self.group(1)} -> {m_self.group(2)}"],
+            )
 
         return StepResult("ok", "toolchain updated")
 
@@ -139,19 +157,29 @@ class NpmModule(BaseModule):
         if ctx.dry_run:
             return StepResult("ok", "[DRY-RUN] Would check and update NPM packages")
 
-        code, out, err = ctx.run_cmd(["npm", "outdated", "-g", "--json"], read_only=True)
+        code, out, err = ctx.run_cmd(
+            ["npm", "outdated", "-g", "--json"], read_only=True
+        )
         if code not in (0, 1):
-            return StepResult("error", "npm outdated check failed", error_output=err or out)
+            return StepResult(
+                "error", "npm outdated check failed", error_output=err or out
+            )
 
         try:
             outdated = json.loads(out) if out.strip() else {}
         except json.JSONDecodeError:
-            return StepResult("error", "npm outdated returned invalid JSON", error_output=err or out)
+            return StepResult(
+                "error", "npm outdated returned invalid JSON", error_output=err or out
+            )
 
         if not isinstance(outdated, dict):
-            return StepResult("error", "npm outdated returned unexpected data", error_output=out)
+            return StepResult(
+                "error", "npm outdated returned unexpected data", error_output=out
+            )
         if code == 1 and not outdated:
-            return StepResult("error", "npm outdated check failed", error_output=err or out)
+            return StepResult(
+                "error", "npm outdated check failed", error_output=err or out
+            )
 
         if not outdated:
             return StepResult("unchanged")
@@ -159,7 +187,9 @@ class NpmModule(BaseModule):
         pkg_names = list(outdated.keys())
         up_code, up_out, up_err = ctx.run_cmd(["npm", "update", "-g"])
         if up_code != 0:
-            return StepResult("error", "npm update failed", error_output=up_err or up_out)
+            return StepResult(
+                "error", "npm update failed", error_output=up_err or up_out
+            )
 
         details = []
         for pkg, info in outdated.items():
@@ -173,7 +203,9 @@ class NpmModule(BaseModule):
                 details.append(pkg)
 
         count = len(pkg_names)
-        return StepResult("ok", f"{count} package{'s' if count != 1 else ''} updated", details=details)
+        return StepResult(
+            "ok", f"{count} package{'s' if count != 1 else ''} updated", details=details
+        )
 
 
 class PnpmModule(BaseModule):
@@ -211,17 +243,23 @@ class PnpmModule(BaseModule):
         if "no global packages found" in ls_output.lower() or not ls_output.strip():
             return StepResult("unchanged")
         if ls_code != 0:
-            return StepResult("error", "pnpm package list failed", error_output=ls_err or ls_out)
+            return StepResult(
+                "error", "pnpm package list failed", error_output=ls_err or ls_out
+            )
 
         # Query outdated packages to capture versions
-        outdated_code, outdated_out, _ = ctx.run_cmd(["pnpm", "outdated", "-g", "--format", "json"])
+        outdated_code, outdated_out, _ = ctx.run_cmd(
+            ["pnpm", "outdated", "-g", "--format", "json"]
+        )
         outdated = {}
         metadata_warning = None
         if outdated_code == 0 and outdated_out.strip():
             try:
                 outdated = json.loads(outdated_out)
                 if not isinstance(outdated, dict):
-                    raise json.JSONDecodeError("Expected a JSON object", outdated_out, 0)
+                    raise json.JSONDecodeError(
+                        "Expected a JSON object", outdated_out, 0
+                    )
             except json.JSONDecodeError:
                 metadata_warning = "Could not parse pnpm outdated package metadata"
         elif outdated_code != 0:
@@ -232,14 +270,21 @@ class PnpmModule(BaseModule):
         code, out, err = ctx.run_cmd(["pnpm", "update", "-g"])
         combined = ((out or "") + "\n" + (err or "")).lower()
 
-        if "no global packages" in combined or "already up to date" in combined or "nothing to update" in combined:
+        if (
+            "no global packages" in combined
+            or "already up to date" in combined
+            or "nothing to update" in combined
+        ):
             return StepResult("unchanged")
 
         if code != 0:
             return StepResult("error", "pnpm update failed", error_output=err or out)
 
         if outdated:
-            details = [f"{pkg} -> {info.get('latest', 'latest')}" for pkg, info in outdated.items()]
+            details = [
+                f"{pkg} -> {info.get('latest', 'latest')}"
+                for pkg, info in outdated.items()
+            ]
             return StepResult(
                 "ok",
                 f"{len(details)} package{'s' if len(details) != 1 else ''} updated",
@@ -258,7 +303,9 @@ class BunModule(BaseModule):
     def _availability(self, ctx: UpdateContext) -> str:
         if ctx.which("bun") is None:
             return "not-installed"
-        code, out, err = ctx.run_cmd(["bun", "pm", "ls", "-g"], timeout=10, read_only=True)
+        code, out, err = ctx.run_cmd(
+            ["bun", "pm", "ls", "-g"], timeout=10, read_only=True
+        )
         output = f"{out}\n{err}".strip().lower()
         if (
             "no package.json was found" in output
@@ -294,7 +341,9 @@ class BunModule(BaseModule):
         ):
             return StepResult("unchanged")
         if ls_code != 0:
-            return StepResult("error", "Bun global package list failed", error_output=ls_err or ls_out)
+            return StepResult(
+                "error", "Bun global package list failed", error_output=ls_err or ls_out
+            )
 
         code, out, err = ctx.run_cmd(["bun", "update", "-g"])
         combined = (out or "") + "\n" + (err or "")
@@ -307,7 +356,11 @@ class BunModule(BaseModule):
         matches = re.findall(r"(?:installed|\+)\s+([@\w\.\-\/]+)@([\w\.\-]+)", combined)
         if matches:
             details = [f"{p} -> {v}" for p, v in matches]
-            return StepResult("ok", f"{len(details)} package{'s' if len(details) != 1 else ''} updated", details=details)
+            return StepResult(
+                "ok",
+                f"{len(details)} package{'s' if len(details) != 1 else ''} updated",
+                details=details,
+            )
 
         return StepResult("ok", "updated")
 
@@ -327,21 +380,29 @@ class MicroModule(BaseModule):
 
         code, out, err = ctx.run_cmd(["micro", "-plugin", "update"])
         if code != 0:
-            return StepResult("error", "micro plugin update failed", error_output=err or out)
+            return StepResult(
+                "error", "micro plugin update failed", error_output=err or out
+            )
 
         if "Nothing to install" in out or "Nothing to update" in out:
             return StepResult("unchanged")
 
         plugins = []
         for line in out.splitlines():
-            m = re.search(r"(?:Updated|Installed|Updating)\s+plugin\s+([\w\.\-_]+)", line, re.I)
+            m = re.search(
+                r"(?:Updated|Installed|Updating)\s+plugin\s+([\w\.\-_]+)", line, re.I
+            )
             if m:
                 plugins.append(m.group(1))
         plugins = list(dict.fromkeys(plugins))
 
         if plugins:
             count = len(plugins)
-            return StepResult("ok", f"{count} plugin{'s' if count != 1 else ''} updated", details=plugins)
+            return StepResult(
+                "ok",
+                f"{count} plugin{'s' if count != 1 else ''} updated",
+                details=plugins,
+            )
 
         return StepResult("ok", "updated")
 
@@ -361,16 +422,25 @@ class GhExtensionsModule(BaseModule):
 
         code, out, err = ctx.run_cmd(["gh", "extension", "upgrade", "--all"])
         if code != 0:
-            return StepResult("error", "gh extension upgrade failed", error_output=err or out)
+            return StepResult(
+                "error", "gh extension upgrade failed", error_output=err or out
+            )
 
         if "no installed extensions found" in out.lower() or not out.strip():
             return StepResult("unchanged")
 
-        matches = re.findall(r"[Uu]pgraded\s+([\w\.\-\/]+)(?:\s+to\s+|\s+->\s+|\s+\([^)]*->\s*)([v\w\.\-]+)", out)
+        matches = re.findall(
+            r"[Uu]pgraded\s+([\w\.\-\/]+)(?:\s+to\s+|\s+->\s+|\s+\([^)]*->\s*)([v\w\.\-]+)",
+            out,
+        )
         if matches:
             details = [f"{ext} -> {ver.rstrip(')')}" for ext, ver in matches]
             count = len(details)
-            return StepResult("ok", f"{count} extension{'s' if count != 1 else ''} updated", details=details)
+            return StepResult(
+                "ok",
+                f"{count} extension{'s' if count != 1 else ''} updated",
+                details=details,
+            )
 
         return StepResult("ok", "updated")
 
@@ -413,7 +483,9 @@ class SkillsModule(BaseModule):
                 return StepResult("unchanged")
             return StepResult("ok", f"{count} skill{'s' if count != 1 else ''} updated")
 
-        return StepResult("ok", f"{count} skill{'s' if count != 1 else ''} updated", details=skills)
+        return StepResult(
+            "ok", f"{count} skill{'s' if count != 1 else ''} updated", details=skills
+        )
 
 
 class AntigravityModule(BaseModule):
@@ -427,19 +499,29 @@ class AntigravityModule(BaseModule):
 
     def run(self, ctx: UpdateContext) -> StepResult:
         if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would run antigravity --update-extensions")
+            return StepResult(
+                "ok", "[DRY-RUN] Would run antigravity --update-extensions"
+            )
 
         code, out, err = ctx.run_cmd(["antigravity", "--update-extensions"])
-        clean_err = "\n".join(l for l in err.splitlines() if "antigravityAnalytics" not in l).strip()
+        clean_err = "\n".join(
+            l for l in err.splitlines() if "antigravityAnalytics" not in l
+        ).strip()
         if code != 0 and clean_err:
-            return StepResult("error", "Antigravity update failed", error_output=clean_err)
+            return StepResult(
+                "error", "Antigravity update failed", error_output=clean_err
+            )
 
         if "No extension to update" in out:
             return StepResult("unchanged")
 
         exts = []
         for line in out.splitlines():
-            m = re.search(r"Extension\s+'([^']+)'\s+(?:v[^\s]+\s+)?was successfully updated", line, re.I)
+            m = re.search(
+                r"Extension\s+'([^']+)'\s+(?:v[^\s]+\s+)?was successfully updated",
+                line,
+                re.I,
+            )
             if not m:
                 m = re.search(r"Updated\s+extension\s+([^\s]+)", line, re.I)
             if m:
@@ -448,7 +530,11 @@ class AntigravityModule(BaseModule):
 
         if exts:
             count = len(exts)
-            return StepResult("ok", f"{count} extension{'s' if count != 1 else ''} updated", details=exts)
+            return StepResult(
+                "ok",
+                f"{count} extension{'s' if count != 1 else ''} updated",
+                details=exts,
+            )
 
         return StepResult("ok", "updated")
 
@@ -492,7 +578,9 @@ class UvModule(BaseModule):
         ctx.run_cmd(["uv", "self", "update"], timeout=30)
         code, out, err = ctx.run_cmd(["uv", "tool", "upgrade", "--all"], timeout=180)
         if code != 0:
-            return StepResult("error", "uv tool upgrade failed", error_output=err or out)
+            return StepResult(
+                "error", "uv tool upgrade failed", error_output=err or out
+            )
 
         if "Nothing to upgrade" in out or not out.strip():
             return StepResult("unchanged")
@@ -515,9 +603,14 @@ class PipxModule(BaseModule):
 
         code, out, err = ctx.run_cmd(["pipx", "upgrade-all"], timeout=300)
         if code != 0:
-            return StepResult("error", "pipx upgrade-all failed", error_output=err or out)
+            return StepResult(
+                "error", "pipx upgrade-all failed", error_output=err or out
+            )
 
-        if "versions are already at latest" in out.lower() or "no packages to upgrade" in out.lower():
+        if (
+            "versions are already at latest" in out.lower()
+            or "no packages to upgrade" in out.lower()
+        ):
             return StepResult("unchanged")
 
         return StepResult("ok", "updated")
@@ -559,7 +652,9 @@ class CondaModule(BaseModule):
         if ctx.dry_run:
             return StepResult("ok", "[DRY-RUN] Would run conda update -n base --all -y")
 
-        code, out, err = ctx.run_cmd(["conda", "update", "-n", "base", "--all", "-y"], timeout=300)
+        code, out, err = ctx.run_cmd(
+            ["conda", "update", "-n", "base", "--all", "-y"], timeout=300
+        )
         if code != 0:
             return StepResult("error", "conda update failed", error_output=err or out)
 
@@ -584,15 +679,24 @@ class CargoUpdateModule(BaseModule):
 
         code, out, err = ctx.run_cmd(["cargo", "install-update", "-a"], timeout=600)
         if code != 0:
-            return StepResult("error", "cargo install-update failed", error_output=err or out)
+            return StepResult(
+                "error", "cargo install-update failed", error_output=err or out
+            )
 
         if "No packages need updating" in out or "Everything is up to date" in out:
             return StepResult("unchanged")
 
-        matches = re.findall(r"(?:Updating\s+)?([\w\.\-_]+)\s+(?:from\s+v?[\w\.\-_]+\s+to|->)\s+v?([\w\.\-_]+)", out)
+        matches = re.findall(
+            r"(?:Updating\s+)?([\w\.\-_]+)\s+(?:from\s+v?[\w\.\-_]+\s+to|->)\s+v?([\w\.\-_]+)",
+            out,
+        )
         if matches:
             details = [f"{crate} -> {ver}" for crate, ver in matches]
-            return StepResult("ok", f"{len(details)} crate{'s' if len(details) != 1 else ''} updated", details=details)
+            return StepResult(
+                "ok",
+                f"{len(details)} crate{'s' if len(details) != 1 else ''} updated",
+                details=details,
+            )
 
         return StepResult("ok", "updated")
 
@@ -608,12 +712,16 @@ class ComposerModule(BaseModule):
 
     def run(self, ctx: UpdateContext) -> StepResult:
         if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would update Composer and global packages")
+            return StepResult(
+                "ok", "[DRY-RUN] Would update Composer and global packages"
+            )
 
         ctx.run_cmd(["composer", "self-update"], timeout=60)
         code, out, err = ctx.run_cmd(["composer", "global", "update"], timeout=180)
         if code != 0:
-            return StepResult("error", "composer global update failed", error_output=err or out)
+            return StepResult(
+                "error", "composer global update failed", error_output=err or out
+            )
 
         if "Nothing to modify in lock file" in out or "Nothing to install" in out:
             return StepResult("unchanged")
@@ -655,7 +763,9 @@ class MiseModule(BaseModule):
 
     def run(self, ctx: UpdateContext) -> StepResult:
         if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would run mise self-update and mise upgrade")
+            return StepResult(
+                "ok", "[DRY-RUN] Would run mise self-update and mise upgrade"
+            )
 
         ctx.run_cmd(["mise", "self-update", "-y"], timeout=60)
         code, out, err = ctx.run_cmd(["mise", "upgrade", "-y"], timeout=300)
@@ -680,7 +790,9 @@ class AsdfModule(BaseModule):
 
         code, out, err = ctx.run_cmd(["asdf", "plugin", "update", "--all"], timeout=120)
         if code != 0:
-            return StepResult("error", "asdf plugin update failed", error_output=err or out)
+            return StepResult(
+                "error", "asdf plugin update failed", error_output=err or out
+            )
 
         return StepResult("ok", "updated")
 
@@ -701,9 +813,13 @@ class NeovimModule(BaseModule):
         if ctx.dry_run:
             return StepResult("ok", "[DRY-RUN] Would run nvim Lazy sync")
 
-        code, out, err = ctx.run_cmd(["nvim", "--headless", "+Lazy! sync", "+qa"], timeout=120)
+        code, out, err = ctx.run_cmd(
+            ["nvim", "--headless", "+Lazy! sync", "+qa"], timeout=120
+        )
         if code != 0:
-            return StepResult("error", "Neovim Lazy sync failed", error_output=err or out)
+            return StepResult(
+                "error", "Neovim Lazy sync failed", error_output=err or out
+            )
 
         return StepResult("ok", "updated")
 
