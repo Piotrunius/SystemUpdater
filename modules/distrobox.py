@@ -4,12 +4,14 @@ from ui import StepResult
 
 
 class DistroboxModule(BaseModule):
-    name = "Distrobox Containers"
+    name = "Distrobox"
     key = "distrobox"
     category = "Applications & Gaming"
     description = (
         "Upgrades packages inside all active Distrobox containers across distributions"
     )
+    unit_name = "container"
+    unit_name_plural = "containers"
 
     def _availability(self, ctx: UpdateContext) -> str:
         if ctx.which("distrobox") is None:
@@ -39,9 +41,6 @@ class DistroboxModule(BaseModule):
         }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would run distrobox upgrade --all")
-
         code, out, err = ctx.run_cmd(["distrobox", "upgrade", "--all"])
 
         if code != 0:

@@ -8,10 +8,12 @@ from ui import StepResult
 
 
 class PodmanModule(BaseModule):
-    name = "Podman Containers"
+    name = "Podman"
     key = "podman"
     category = "Containers & Packages"
     description = "Updates containers using podman auto-update"
+    unit_name = "container"
+    unit_name_plural = "containers"
 
     def _availability(self, ctx: UpdateContext) -> str:
         if ctx.which("podman") is None:
@@ -38,9 +40,6 @@ class PodmanModule(BaseModule):
         }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would run podman auto-update")
-
         code, out, err = ctx.run_cmd(["podman", "auto-update"], timeout=300)
         if code != 0:
             return StepResult(
@@ -54,10 +53,12 @@ class PodmanModule(BaseModule):
 
 
 class VagrantModule(BaseModule):
-    name = "Vagrant Boxes"
+    name = "Vagrant"
     key = "vagrant"
     category = "Containers & Packages"
     description = "Checks and updates installed Vagrant boxes"
+    unit_name = "box"
+    unit_name_plural = "boxes"
 
     def is_available(self, ctx: UpdateContext) -> bool:
         return self._availability(ctx) == "active"
@@ -83,9 +84,6 @@ class VagrantModule(BaseModule):
         }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would run vagrant box update")
-
         code, out, err = ctx.run_cmd(["vagrant", "box", "update"], timeout=300)
         if code != 0:
             return StepResult(

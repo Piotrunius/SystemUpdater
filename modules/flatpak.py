@@ -8,7 +8,7 @@ from ui import StepResult
 
 
 class FlatpakModule(BaseModule):
-    name = "Flatpak Packages"
+    name = "Flatpak"
     key = "flatpak"
     category = "Applications & Gaming"
     description = "Updates user and system Flatpak applications and runtimes"
@@ -17,11 +17,6 @@ class FlatpakModule(BaseModule):
         return ctx.which("flatpak") is not None
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult(
-                "ok", "[DRY-RUN] Would update Flatpak user and system packages"
-            )
-
         updated_items = []
         errors = []
         support_warnings = []

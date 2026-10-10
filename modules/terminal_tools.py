@@ -17,9 +17,6 @@ class TealdeerModule(BaseModule):
         return ctx.which("tldr") is not None
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would run tldr --update")
-
         code, out, err = ctx.run_cmd(["tldr", "--update"], timeout=60)
         if code != 0:
             return StepResult("error", "tldr update failed", error_output=err or out)
@@ -32,6 +29,8 @@ class FisherModule(BaseModule):
     key = "fisher"
     category = "Development Environment"
     description = "Updates Fish shell plugins via Fisher"
+    unit_name = "plugin"
+    unit_name_plural = "plugins"
 
     def is_available(self, ctx: UpdateContext) -> bool:
         if ctx.which("fish") is None:
@@ -40,9 +39,6 @@ class FisherModule(BaseModule):
         return os.path.isfile(fisher_path)
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would run fish -c 'fisher update'")
-
         code, out, err = ctx.run_cmd(["fish", "-c", "fisher update"], timeout=120)
         if code != 0:
             return StepResult("error", "fisher update failed", error_output=err or out)
@@ -55,6 +51,8 @@ class ZinitModule(BaseModule):
     key = "zinit"
     category = "Development Environment"
     description = "Updates Zsh plugins via Zinit"
+    unit_name = "plugin"
+    unit_name_plural = "plugins"
 
     def is_available(self, ctx: UpdateContext) -> bool:
         zinit_dirs = [
@@ -66,9 +64,6 @@ class ZinitModule(BaseModule):
         )
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would run zinit update --parallel")
-
         cmd = [
             "zsh",
             "-c",

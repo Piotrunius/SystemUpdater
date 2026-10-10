@@ -7,7 +7,7 @@ from ui import StepResult
 
 
 class ChezmoiModule(BaseModule):
-    name = "Chezmoi Dotfiles"
+    name = "Chezmoi"
     key = "chezmoi"
     category = "Development Environment"
     description = "Updates managed dotfiles via chezmoi update"
@@ -16,9 +16,6 @@ class ChezmoiModule(BaseModule):
         return ctx.which("chezmoi") is not None
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would run chezmoi update")
-
         code, out, err = ctx.run_cmd(["chezmoi", "update"], timeout=120)
         if code != 0:
             return StepResult("error", "chezmoi update failed", error_output=err or out)
@@ -27,7 +24,7 @@ class ChezmoiModule(BaseModule):
 
 
 class YadmModule(BaseModule):
-    name = "Yadm Dotfiles"
+    name = "Yadm"
     key = "yadm"
     category = "Development Environment"
     description = "Updates dotfiles via yadm pull"
@@ -36,9 +33,6 @@ class YadmModule(BaseModule):
         return ctx.which("yadm") is not None
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would run yadm pull")
-
         code, out, err = ctx.run_cmd(["yadm", "pull"], timeout=120)
         if code != 0:
             return StepResult("error", "yadm pull failed", error_output=err or out)

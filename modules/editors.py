@@ -8,10 +8,12 @@ from ui import StepResult
 
 
 class VsCodeModule(BaseModule):
-    name = "VS Code Extensions"
+    name = "VS Code"
     key = "vscode"
     category = "Development Environment"
     description = "Updates installed VS Code extensions"
+    unit_name = "extension"
+    unit_name_plural = "extensions"
 
     def _availability(self, ctx: UpdateContext) -> str:
         if ctx.which("code") is None:
@@ -48,9 +50,6 @@ class VsCodeModule(BaseModule):
         }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would run code --update-extensions")
-
         code, out, err = ctx.run_cmd(["code", "--update-extensions"], timeout=180)
         if code != 0:
             return StepResult(
@@ -61,10 +60,12 @@ class VsCodeModule(BaseModule):
 
 
 class CursorModule(BaseModule):
-    name = "Cursor Extensions"
+    name = "Cursor"
     key = "cursor"
     category = "Development Environment"
     description = "Updates installed Cursor extensions"
+    unit_name = "extension"
+    unit_name_plural = "extensions"
 
     def _availability(self, ctx: UpdateContext) -> str:
         if ctx.which("cursor") is None:
@@ -101,9 +102,6 @@ class CursorModule(BaseModule):
         }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would run cursor --update-extensions")
-
         code, out, err = ctx.run_cmd(["cursor", "--update-extensions"], timeout=180)
         if code != 0:
             return StepResult(
@@ -114,10 +112,12 @@ class CursorModule(BaseModule):
 
 
 class VscodiumModule(BaseModule):
-    name = "VSCodium Extensions"
+    name = "VSCodium"
     key = "codium"
     category = "Development Environment"
     description = "Updates installed VSCodium extensions"
+    unit_name = "extension"
+    unit_name_plural = "extensions"
 
     def _availability(self, ctx: UpdateContext) -> str:
         if ctx.which("codium") is None:
@@ -154,9 +154,6 @@ class VscodiumModule(BaseModule):
         }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would run codium --update-extensions")
-
         code, out, err = ctx.run_cmd(["codium", "--update-extensions"], timeout=180)
         if code != 0:
             return StepResult(
@@ -167,18 +164,17 @@ class VscodiumModule(BaseModule):
 
 
 class HelixModule(BaseModule):
-    name = "Helix Grammars"
+    name = "Helix"
     key = "helix"
     category = "Development Environment"
     description = "Updates Helix editor tree-sitter grammars"
+    unit_name = "grammar"
+    unit_name_plural = "grammars"
 
     def is_available(self, ctx: UpdateContext) -> bool:
         return ctx.which("hx") is not None
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would run hx --grammar fetch and build")
-
         code, out, err = ctx.run_cmd(["hx", "--grammar", "fetch"], timeout=120)
         if code != 0:
             return StepResult(

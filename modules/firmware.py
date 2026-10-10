@@ -9,20 +9,17 @@ from ui import StepResult
 
 
 class FirmwareModule(BaseModule):
-    name = "Device Firmware"
+    name = "Firmware"
     key = "firmware"
     category = "System Core"
     description = "Checks and applies hardware/UEFI firmware updates via fwupdmgr"
+    unit_name = "device"
+    unit_name_plural = "devices"
 
     def is_available(self, ctx: UpdateContext) -> bool:
         return ctx.which("fwupdmgr") is not None
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult(
-                "ok", "[DRY-RUN] Would refresh and apply firmware updates"
-            )
-
         # Refresh metadata, but retain refresh failures when cached data is still usable.
         _, refresh_out, refresh_err = ctx.run_cmd(
             ["fwupdmgr", "refresh", "--force"], timeout=30
@@ -86,7 +83,7 @@ class FirmwareModule(BaseModule):
             ]
             count = len(details) or len(devices)
             msg = (
-                f"{count} package{'s' if count != 1 else ''} updated"
+                f"{count} device{'s' if count != 1 else ''} updated"
                 if count
                 else "updated"
             )

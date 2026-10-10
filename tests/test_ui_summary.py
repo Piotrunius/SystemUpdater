@@ -344,6 +344,44 @@ class SummaryFormattingTests(unittest.TestCase):
             "System reboot required to complete pending updates", res.warnings
         )
 
+    def test_personalized_unit_nouns_in_summary_and_resolve(self):
+        ui = UI(is_interactive=False, verbose=False)
+        gearlever_res = StepResult(
+            "ok", "updated", details=["Waywallen", "Steam Art Manager"]
+        )
+        msg = ui._resolve_ok_msg("Gear Lever", gearlever_res)
+        self.assertEqual(msg, "2 appimages updated")
+
+        firmware_res = StepResult("ok", "updated", details=["UEFI System Firmware"])
+        msg_fw = ui._resolve_ok_msg("Device Firmware", firmware_res)
+        self.assertEqual(msg_fw, "1 device updated")
+
+        docker_res = StepResult(
+            "ok", "updated", details=["mariadb:10.11", "redis:alpine"]
+        )
+        msg_docker = ui._resolve_ok_msg("Docker", docker_res)
+        self.assertEqual(msg_docker, "2 images updated")
+
+        distrobox_res = StepResult("ok", "updated", details=["arch", "fedora"])
+        msg_distrobox = ui._resolve_ok_msg("Distrobox", distrobox_res)
+        self.assertEqual(msg_distrobox, "2 containers updated")
+
+        rust_res = StepResult("ok", "updated", details=["stable", "nightly"])
+        msg_rust = ui._resolve_ok_msg("Rust", rust_res)
+        self.assertEqual(msg_rust, "2 toolchains updated")
+
+        agents_res = StepResult("ok", "updated", details=["skill-a", "skill-b"])
+        msg_agents = ui._resolve_ok_msg("Agents", agents_res)
+        self.assertEqual(msg_agents, "2 skills updated")
+
+        uv_res = StepResult("ok", "updated", details=["ruff", "black"])
+        msg_uv = ui._resolve_ok_msg("uv", uv_res)
+        self.assertEqual(msg_uv, "2 tools updated")
+
+        pipx_res = StepResult("ok", "updated", details=["ansible", "httpie"])
+        msg_pipx = ui._resolve_ok_msg("Pipx", pipx_res)
+        self.assertEqual(msg_pipx, "2 apps updated")
+
 
 if __name__ == "__main__":
     unittest.main()

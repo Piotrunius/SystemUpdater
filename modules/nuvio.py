@@ -58,10 +58,6 @@ class NuvioModule(BaseModule):
                     "warning",
                     "Nuvio application JAR was not found; image patch was skipped",
                 )
-            if ctx.dry_run:
-                if not self._is_jar_patched(target_jar):
-                    return StepResult("ok", "[DRY-RUN] Would re-apply image patch")
-                return StepResult("unchanged")
             # Verify and ensure patch is applied on current jar
             patch_applied = self._ensure_patched(ctx)
             if patch_applied:
@@ -75,9 +71,6 @@ class NuvioModule(BaseModule):
                 "warning",
                 f"New version {latest_tag} found, but no compatible RPM asset found",
             )
-
-        if ctx.dry_run:
-            return StepResult("ok", f"[DRY-RUN] Would update to {latest_tag}")
 
         fd, temp_rpm = tempfile.mkstemp(prefix="Nuvio-update-", suffix=".rpm")
         os.close(fd)
@@ -162,10 +155,9 @@ class NuvioModule(BaseModule):
             m = re.match(r"^1\.(\d+\.\d+)", rpm_ver)
             if m:
                 tag = f"0.{m.group(1)}-alpha"
-                if not ctx.dry_run:
-                    os.makedirs(os.path.dirname(TAG_FILE), exist_ok=True)
-                    with open(TAG_FILE, "w") as f:
-                        f.write(tag + "\n")
+                os.makedirs(os.path.dirname(TAG_FILE), exist_ok=True)
+                with open(TAG_FILE, "w") as f:
+                    f.write(tag + "\n")
                 return tag
         return ""
 
@@ -307,9 +299,6 @@ class NuvioModule(BaseModule):
             return False
 
         if not force and self._is_jar_patched(target_jar):
-            return False
-
-        if ctx.dry_run:
             return False
 
         # Generate a private temporary jar instead of using a predictable /tmp path.

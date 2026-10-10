@@ -21,7 +21,7 @@ class GemModuleTests(unittest.TestCase):
 
         result = GemModule().run(context)
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.message, "1 package updated")
+        self.assertEqual(result.message, "1 gem updated")
         self.assertEqual(result.details, ["rubygems-update: 4.0.21 -> 4.0.22"])
 
     def test_gem_module_reports_unchanged_when_already_latest(self):

@@ -15,7 +15,7 @@ from ui import StepResult
 
 
 class AptModule(BaseModule):
-    name = "System Packages"
+    name = "System"
     key = "apt"
     aliases = ["deb", "debian", "ubuntu", "system"]
     category = "System Core"
@@ -26,11 +26,6 @@ class AptModule(BaseModule):
         return ctx.which("apt-get") is not None and ctx.which("dpkg") is not None
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult(
-                "ok", "[DRY-RUN] Would run apt-get update && apt-get dist-upgrade"
-            )
-
         env = {"DEBIAN_FRONTEND": "noninteractive"}
 
         # 1. Update package lists
@@ -111,7 +106,7 @@ class AptModule(BaseModule):
 
 
 class PacmanModule(BaseModule):
-    name = "System Packages"
+    name = "System"
     key = "pacman"
     aliases = ["arch", "aur", "yay", "paru", "system"]
     category = "System Core"
@@ -138,9 +133,6 @@ class PacmanModule(BaseModule):
             cmd = [aur_helper, "-Syu", "--noconfirm"]
         else:
             cmd = ["sudo", "pacman", "-Syu", "--noconfirm"]
-
-        if ctx.dry_run:
-            return StepResult("ok", f"[DRY-RUN] Would run {' '.join(cmd)}")
 
         code, out, err = ctx.run_cmd(cmd, timeout=600)
         if code != 0:
@@ -176,7 +168,7 @@ class PacmanModule(BaseModule):
 
 
 class ZypperModule(BaseModule):
-    name = "System Packages"
+    name = "System"
     key = "zypper"
     aliases = ["suse", "opensuse", "system"]
     category = "System Core"
@@ -193,11 +185,6 @@ class ZypperModule(BaseModule):
             or "tumbleweed" in os_info.get("PRETTY_NAME", "").lower()
         )
         subcmd = "dup" if is_tumbleweed else "update"
-
-        if ctx.dry_run:
-            return StepResult(
-                "ok", f"[DRY-RUN] Would run zypper --non-interactive {subcmd}"
-            )
 
         # Do not proceed with stale repository metadata if refresh fails.
         refresh_code, refresh_out, refresh_err = ctx.run_cmd(
@@ -251,7 +238,7 @@ class ZypperModule(BaseModule):
 
 
 class ApkModule(BaseModule):
-    name = "System Packages"
+    name = "System"
     key = "apk"
     aliases = ["alpine", "system"]
     category = "System Core"
@@ -262,9 +249,6 @@ class ApkModule(BaseModule):
         return ctx.which("apk") is not None
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would run apk upgrade --update")
-
         code, out, err = ctx.run_cmd(
             ["sudo", "apk", "upgrade", "--update"], timeout=300
         )
@@ -294,7 +278,7 @@ class ApkModule(BaseModule):
 
 
 class XbpsModule(BaseModule):
-    name = "System Packages"
+    name = "System"
     key = "xbps"
     aliases = ["void", "system"]
     category = "System Core"
@@ -305,9 +289,6 @@ class XbpsModule(BaseModule):
         return ctx.which("xbps-install") is not None
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would run xbps-install -Syu")
-
         code, out, err = ctx.run_cmd(
             ["sudo", "xbps-install", "-Syu", "-y"], timeout=600
         )

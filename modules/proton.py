@@ -9,20 +9,19 @@ from ui import StepResult
 
 
 class ProtonPlusModule(BaseModule):
-    name = "ProtonPlus Runners"
+    name = "ProtonPlus"
     key = "proton"
     category = "Applications & Gaming"
     description = (
         "Updates compatibility tools like Proton-GE, CachyOS, and Wine via ProtonPlus"
     )
+    unit_name = "runner"
+    unit_name_plural = "runners"
 
     def is_available(self, ctx: UpdateContext) -> bool:
         return ctx.which("protonplus") is not None
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would update Proton runners")
-
         # Fast health check for GitHub API before launching libsoup queries that could stall
         try:
             req = urllib.request.Request(

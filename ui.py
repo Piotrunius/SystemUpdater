@@ -311,6 +311,8 @@ class UI:
 
             for output in outputs:
                 for line in output.splitlines():
+                    if "antigravityAnalytics" in line:
+                        continue
                     if DIAGNOSTIC_LINE_PATTERN.search(line):
                         warning_lines.append(line.strip())
 
@@ -408,7 +410,11 @@ class UI:
         self, label: str, res: StepResult, module: Optional[Any] = None
     ) -> str:
         msg_text = self._clean_ok_message(label, res.message)
-        item_meta = {"name": label, "key": getattr(res, "key", ""), "module": module}
+        item_meta = {
+            "name": label,
+            "key": getattr(res, "key", "") or getattr(module, "key", ""),
+            "module": module,
+        }
         if (
             not is_single_entity_module(item_meta)
             and res.details
@@ -418,9 +424,8 @@ class UI:
                 d for d in res.details if d and not str(d).strip().startswith("... and")
             ]
             if valid:
-                msg_text = (
-                    f"{len(valid)} package{'s' if len(valid) != 1 else ''} updated"
-                )
+                unit = get_module_unit_name(item_meta, len(valid))
+                msg_text = f"{len(valid)} {unit} updated"
         return msg_text
 
     def _print_static_result(
@@ -540,7 +545,8 @@ class UI:
                             and not str(d).strip().startswith("(+")
                         ]
                         if valid:
-                            msg_text = f"{len(valid)} package{'s' if len(valid) != 1 else ''} updated"
+                            unit = get_module_unit_name(item, len(valid))
+                            msg_text = f"{len(valid)} {unit} updated"
                     print(f"    • {item['name']}: {msg_text}")
                     formatted_details = format_package_list(
                         res.details, msg_text, limit=10
@@ -602,13 +608,21 @@ class UI:
 SINGLE_ENTITY_NAMES = {
     "nuvio desktop",
     "oh my zsh",
+    "systemupdater",
     "self update",
+    "pip",
     "python pip",
+    "poetry",
     "python poetry",
+    "ghcup",
     "ghcup (haskell)",
+    "flutter",
     "flutter sdk",
+    "pyenv",
     "pyenv runtimes",
+    "sdkman",
     "sdkman (java/jvm)",
+    "manual pages db",
     "manual pages database",
 }
 
@@ -625,6 +639,107 @@ SINGLE_ENTITY_KEYS = {
     "maintenance",
     "mandb",
 }
+
+MODULE_UNIT_NAMES: Dict[str, Tuple[str, str]] = {
+    "gearlever": ("appimage", "appimages"),
+    "firmware": ("device", "devices"),
+    "proton": ("runner", "runners"),
+    "distrobox": ("container", "containers"),
+    "docker": ("image", "images"),
+    "podman": ("container", "containers"),
+    "vagrant": ("box", "boxes"),
+    "rustup": ("toolchain", "toolchains"),
+    "cargo": ("crate", "crates"),
+    "gem": ("gem", "gems"),
+    "skills": ("skill", "skills"),
+    "antigravity": ("extension", "extensions"),
+    "vscode": ("extension", "extensions"),
+    "cursor": ("extension", "extensions"),
+    "codium": ("extension", "extensions"),
+    "gh": ("extension", "extensions"),
+    "neovim": ("plugin", "plugins"),
+    "micro": ("plugin", "plugins"),
+    "tmux": ("plugin", "plugins"),
+    "asdf": ("plugin", "plugins"),
+    "zinit": ("plugin", "plugins"),
+    "fisher": ("plugin", "plugins"),
+    "helix": ("grammar", "grammars"),
+    "git": ("repository", "repositories"),
+    "snapshot": ("snapshot", "snapshots"),
+    "snap": ("snap", "snaps"),
+    "uv": ("tool", "tools"),
+    "pipx": ("app", "apps"),
+}
+
+
+def get_module_unit_name(item_meta: Dict[str, Any], count: int = 1) -> str:
+    """Return lowercase unit noun (singular or plural) for a given module."""
+    mod = item_meta.get("module")
+    if mod is not None:
+        if count == 1 and getattr(mod, "unit_name", None):
+            return str(mod.unit_name).lower()
+        if count != 1 and getattr(mod, "unit_name_plural", None):
+            return str(mod.unit_name_plural).lower()
+
+    key = str(item_meta.get("key") or "").lower().strip()
+    if not key and mod is not None:
+        key = getattr(mod, "key", "").lower().strip()
+
+    name = str(item_meta.get("name") or "").lower().strip()
+    if not name and mod is not None:
+        name = getattr(mod, "name", "").lower().strip()
+
+    pair = MODULE_UNIT_NAMES.get(key)
+    if not pair:
+        if "extension" in name or name in (
+            "vscode",
+            "cursor",
+            "vscodium",
+            "antigravity",
+            "github cli",
+        ):
+            pair = ("extension", "extensions")
+        elif "container" in name or name in ("distrobox", "podman"):
+            pair = ("container", "containers")
+        elif "runner" in name or name == "protonplus":
+            pair = ("runner", "runners")
+        elif "plugin" in name or name in (
+            "asdf",
+            "neovim",
+            "micro",
+            "tmux",
+            "zinit",
+            "fisher",
+        ):
+            pair = ("plugin", "plugins")
+        elif "toolchain" in name or name == "rust":
+            pair = ("toolchain", "toolchains")
+        elif "agent" in name or "skill" in name:
+            pair = ("skill", "skills")
+        elif "gear lever" in name or "appimage" in name:
+            pair = ("appimage", "appimages")
+        elif "firmware" in name:
+            pair = ("device", "devices")
+        elif "docker" in name:
+            pair = ("image", "images")
+        elif "box" in name or name == "vagrant":
+            pair = ("box", "boxes")
+        elif "gem" in name or name == "ruby":
+            pair = ("gem", "gems")
+        elif "crate" in name or "binary" in name or name == "cargo":
+            pair = ("crate", "crates")
+        elif "grammar" in name or name == "helix":
+            pair = ("grammar", "grammars")
+        elif "repository" in name or "repo" in name or name == "git":
+            pair = ("repository", "repositories")
+        elif name == "uv":
+            pair = ("tool", "tools")
+        elif name == "pipx":
+            pair = ("app", "apps")
+        else:
+            pair = ("package", "packages")
+
+    return pair[0] if count == 1 else pair[1]
 
 
 def is_single_entity_module(item: Dict[str, Any]) -> bool:

@@ -84,7 +84,7 @@ def parse_dnf_packages(output: str) -> list:
 
 
 class RepoSyncModule(BaseModule):
-    name = "Repository Sync"
+    name = "Repositories"
     key = "reposync"
     aliases = ["repos"]
     category = "System Core"
@@ -100,11 +100,6 @@ class RepoSyncModule(BaseModule):
         return os_info.get("ID") == "nobara" or os.path.exists("/etc/nobara-release")
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult(
-                "ok", "[DRY-RUN] Would sync Nobara repositories and GPG keys"
-            )
-
         sync_cmd = [
             "sudo",
             "dnf",
@@ -141,7 +136,7 @@ class RepoSyncModule(BaseModule):
 
 
 class SystemPackagesModule(BaseModule):
-    name = "System Packages"
+    name = "System"
     key = "system"
     aliases = ["dnf", "rpm"]
     category = "System Core"
@@ -152,9 +147,6 @@ class SystemPackagesModule(BaseModule):
         return ctx.which("dnf") is not None
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would upgrade DNF system packages")
-
         code, out, err = ctx.run_cmd(
             ["sudo", "dnf", "upgrade", "--refresh", "-y"],
             timeout=600,

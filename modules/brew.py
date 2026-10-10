@@ -22,9 +22,6 @@ class BrewModule(BaseModule):
     def run(self, ctx: UpdateContext) -> StepResult:
         brew_bin = ctx.which("brew") or "/home/linuxbrew/.linuxbrew/bin/brew"
 
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would run brew update and brew upgrade")
-
         # 1. brew update
         u_code, u_out, u_err = ctx.run_cmd([brew_bin, "update"])
         if u_code != 0:

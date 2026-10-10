@@ -288,7 +288,6 @@ def parse_args():
         epilog=f"""
 Examples:
   {prog_name}                 Run complete system update
-  {prog_name} --dry-run       Simulate updates without making changes
   {prog_name} --only dnf,brew Update only DNF and Homebrew packages
   {prog_name} --category dev  Update all development environment tools
   {prog_name} --no-sudo       Run only unprivileged updates without sudo
@@ -306,12 +305,6 @@ Examples:
         action=VersionAction,
         nargs=0,
         help="Show installed version and latest available version",
-    )
-    parser.add_argument(
-        "-n",
-        "--dry-run",
-        action="store_true",
-        help="Simulate update process without downloading or installing changes",
     )
     parser.add_argument(
         "-f",
@@ -442,15 +435,13 @@ def main():
         sys.exit(0)
 
     self_update_result = None
-    if not is_homebrew_install() and not (
-        args.dry_run or args.list or args.edit_config
-    ):
+    if not is_homebrew_install() and not (args.list or args.edit_config):
         self_update_result = self_update()
 
     if args.edit_config:
         edit_config(args.config or DEFAULT_CONFIG_PATH)
 
-    ctx = UpdateContext(dry_run=args.dry_run, force=args.force, verbose=args.verbose)
+    ctx = UpdateContext(force=args.force, verbose=False)
     cfg = get_config(config_path=args.config)
     all_modules: List[BaseModule] = get_all_modules(cfg)
 
@@ -509,13 +500,14 @@ def main():
 
     # Check if any selected module requires sudo upfront
     needs_sudo = any(getattr(m, "requires_sudo", False) for m in modules_to_run)
-    if needs_sudo and not args.dry_run:
+    if needs_sudo:
         if not sudo.init_sudo(interactive=sys.stdin.isatty()):
             print(
                 "Error: Administrator privileges (sudo) required but could not be obtained."
             )
             sys.exit(1)
 
+    ctx.verbose = args.verbose
     ui = UI(quiet=args.quiet, verbose=args.verbose)
     ui.print_header("System Updater")
 
@@ -549,12 +541,12 @@ def main():
                         details=self_update_result[3],
                     )
                     ui.print_result(
-                        "Self Update",
+                        "SystemUpdater",
                         self_update_step,
                     )
                     results.append(
                         {
-                            "name": "Self Update",
+                            "name": "SystemUpdater",
                             "key": "self_update",
                             "result": self_update_step,
                         }
@@ -581,12 +573,12 @@ def main():
                 details=self_update_result[3],
             )
             ui.print_result(
-                "Self Update",
+                "SystemUpdater",
                 self_update_step,
             )
             results.append(
                 {
-                    "name": "Self Update",
+                    "name": "SystemUpdater",
                     "key": "self_update",
                     "result": self_update_step,
                 }
@@ -650,7 +642,7 @@ def main():
         getattr(r.get("result"), "reboot_required", False) for r in results
     )
 
-    if args.reboot and reboot_needed and not ctx.dry_run:
+    if args.reboot and reboot_needed:
         print("Rebooting system as requested by --reboot...")
         sys.stdout.flush()
         try:

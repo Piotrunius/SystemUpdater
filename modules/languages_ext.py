@@ -8,7 +8,7 @@ from ui import StepResult
 
 
 class PipenvModule(BaseModule):
-    name = "Python Pipenv"
+    name = "Pipenv"
     key = "pipenv"
     category = "Development Environment"
     description = "Updates pipenv packaging tool"
@@ -17,9 +17,6 @@ class PipenvModule(BaseModule):
         return ctx.which("pipenv") is not None
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would run pip install --upgrade pipenv")
-
         pip_bin = ctx.which("pip3") or ctx.which("pip") or "pip"
         code, out, err = ctx.run_cmd(
             [pip_bin, "install", "--upgrade", "pipenv"], timeout=180
@@ -34,7 +31,7 @@ class PipenvModule(BaseModule):
 
 
 class PyenvModule(BaseModule):
-    name = "pyenv Runtimes"
+    name = "pyenv"
     key = "pyenv"
     category = "Development Environment"
     description = "Updates pyenv and python definitions via pyenv update"
@@ -46,9 +43,6 @@ class PyenvModule(BaseModule):
         return os.path.isdir(os.path.expanduser("~/.pyenv/plugins/pyenv-update"))
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would run pyenv update")
-
         code, out, err = ctx.run_cmd(["pyenv", "update"], timeout=120)
         if code != 0:
             return StepResult("error", "pyenv update failed", error_output=err or out)
@@ -70,9 +64,6 @@ class SdkmanModule(BaseModule):
         return os.path.isfile(os.path.expanduser("~/.sdkman/bin/sdkman-init.sh"))
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would run sdk selfupdate && sdk update")
-
         cmd = [
             "bash",
             "-c",
@@ -96,9 +87,6 @@ class GhcupModule(BaseModule):
         return ctx.which("ghcup") is not None
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would run ghcup upgrade")
-
         code, out, err = ctx.run_cmd(["ghcup", "upgrade"], timeout=180)
         if code != 0:
             return StepResult("error", "ghcup upgrade failed", error_output=err or out)
@@ -115,7 +103,7 @@ class GhcupModule(BaseModule):
 
 
 class FlutterModule(BaseModule):
-    name = "Flutter SDK"
+    name = "Flutter"
     key = "flutter"
     category = "Development Environment"
     description = "Updates Flutter SDK toolchain"
@@ -125,9 +113,6 @@ class FlutterModule(BaseModule):
         return ctx.which("flutter") is not None
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would run flutter upgrade")
-
         code, out, err = ctx.run_cmd(["flutter", "upgrade"], timeout=300)
         if code != 0:
             return StepResult(

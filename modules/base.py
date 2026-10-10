@@ -146,20 +146,15 @@ class UpdateContext:
     ) -> Tuple[int, str, str]:
         """
         Runs a command safely and captures output with stdin=DEVNULL to prevent hangs.
-        If read_only is True, executes even during dry_run (for system queries).
-        Read-only probes are hidden in verbose output unless explicitly enabled.
         Mark credential-producing commands with sensitive_output to suppress terminal echo.
         Includes automatic retry for transient glitches if retries > 0.
         """
-        if self.dry_run and not read_only:
-            return 0, f"[DRY-RUN] Would run: {' '.join(cmd)}", ""
-
         run_env = self.env.copy()
         if env_extra:
             run_env.update(env_extra)
 
         attempts = 1 + max(0, retries)
-        show_live_output = not read_only if display_output is None else display_output
+        show_live_output = True if display_output is None else display_output
         is_verbose = self.verbose and show_live_output and not sensitive_output
         if is_verbose:
             self.notify_command_started()
@@ -323,9 +318,9 @@ class UpdateContext:
             {
                 "command": [redact_text(str(arg)) for arg in cmd],
                 "returncode": returncode,
-                "stdout": "" if read_only else limited_output(stdout),
-                "stderr": "" if read_only else limited_output(stderr),
-                "output_withheld": read_only,
+                "stdout": limited_output(stdout),
+                "stderr": limited_output(stderr),
+                "output_withheld": False,
                 "output_streamed": output_streamed,
                 "attempt": attempt + 1,
                 "duration": round(time.monotonic() - started, 3),
@@ -344,6 +339,8 @@ class BaseModule:
     description: str = ""
     requires_sudo: bool = False
     is_single_entity: bool = False
+    unit_name: str = "package"
+    unit_name_plural: str = "packages"
 
     def is_available(self, ctx: UpdateContext) -> bool:
         return True

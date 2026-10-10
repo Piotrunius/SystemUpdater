@@ -10,7 +10,9 @@ class GearLeverModule(BaseModule):
     name = "Gear Lever"
     key = "gearlever"
     category = "Applications & Gaming"
-    description = "Checks and fetches AppImage updates via Gear Lever"
+    description = "Checks and fetches appimage updates via Gear Lever"
+    unit_name = "appimage"
+    unit_name_plural = "appimages"
 
     def is_available(self, ctx: UpdateContext) -> bool:
         if ctx.which("flatpak") is None:
@@ -21,12 +23,7 @@ class GearLeverModule(BaseModule):
         return "it.mijorus.gearlever" in out
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult(
-                "ok", "[DRY-RUN] Would check AppImage updates via Gear Lever"
-            )
-
-        code, out, err = ctx.run_cmd(
+        code, out, _ = ctx.run_cmd(
             [
                 "flatpak",
                 "run",
@@ -37,32 +34,45 @@ class GearLeverModule(BaseModule):
             ]
         )
         if code != 0:
-            # Gear Lever might not have GUI session or updates
             return StepResult("unchanged")
 
         import json
 
+        updates = []
         try:
             data = json.loads(out)
             updates = data.get("updates", [])
-            if not updates:
-                return StepResult("unchanged")
-            count = len(updates)
-            details = [
-                u.get("name", "AppImage") for u in updates if isinstance(u, dict)
-            ]
-            return StepResult(
-                "ok",
-                f"{count} update{'s' if count != 1 else ''} available",
-                details=details,
-            )
         except Exception:
-            if (
-                "No updates available" in out
-                or not out.strip()
-                or '"updates": []' in out
-            ):
-                return StepResult("unchanged")
-            return StepResult("ok", "AppImage updates available in Gear Lever")
+            pass
 
-        return StepResult("ok", "AppImage updates available in Gear Lever")
+        if not updates:
+            return StepResult("unchanged")
+
+        names = [u.get("name", "appimage") for u in updates if isinstance(u, dict)]
+
+        up_code, up_out, up_err = ctx.run_cmd(
+            [
+                "flatpak",
+                "run",
+                "--env=LC_ALL=C.UTF-8",
+                "it.mijorus.gearlever",
+                "--update",
+                "--all",
+                "--yes",
+            ],
+            timeout=300,
+        )
+
+        if up_code != 0:
+            return StepResult(
+                "error",
+                "Gear Lever appimage update failed",
+                error_output=up_err or up_out,
+            )
+
+        count = len(names)
+        return StepResult(
+            "ok",
+            f"{count} appimage{'s' if count != 1 else ''} updated",
+            details=names,
+        )

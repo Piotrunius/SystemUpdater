@@ -27,9 +27,6 @@ class CustomCommandModule(BaseModule):
         return bool(self.command.strip())
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", f"[DRY-RUN] Would run: {self.command}")
-
         # Execute using bash to support pipes and shell builtins if needed
         cmd = ["bash", "-c", self.command]
         code, out, err = ctx.run_cmd(cmd, timeout=300)

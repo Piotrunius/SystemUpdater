@@ -23,9 +23,6 @@ class OhMyZshModule(BaseModule):
 
     def run(self, ctx: UpdateContext) -> StepResult:
         omz_dir = os.path.expanduser("~/.oh-my-zsh")
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would update Oh My Zsh")
-
         _, old_head, _ = ctx.run_cmd(
             ["git", "-C", omz_dir, "rev-parse", "--short", "HEAD"], read_only=True
         )
@@ -59,10 +56,12 @@ class OhMyZshModule(BaseModule):
 
 
 class RustupModule(BaseModule):
-    name = "Rust Toolchains"
+    name = "Rust"
     key = "rustup"
     category = "Development Environment"
     description = "Updates Rust compiler toolchains and rustup itself"
+    unit_name = "toolchain"
+    unit_name_plural = "toolchains"
 
     def _availability(self, ctx: UpdateContext) -> str:
         if ctx.which("rustup") is None:
@@ -99,9 +98,6 @@ class RustupModule(BaseModule):
         }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would run rustup update")
-
         code, out, err = ctx.run_cmd(["rustup", "update"])
         if code != 0:
             return StepResult("error", "rustup update failed", error_output=err or out)
@@ -133,7 +129,7 @@ class RustupModule(BaseModule):
 
 
 class PipModule(BaseModule):
-    name = "Python Pip"
+    name = "Pip"
     key = "pip"
     category = "Development Environment"
     description = "Upgrades pip user installation to the latest version"
@@ -174,9 +170,6 @@ class PipModule(BaseModule):
         return self._get_target(ctx) is not None
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would upgrade pip")
-
         target = self._get_target(ctx)
         if not target:
             return StepResult("skipped", "pip not available or externally managed")
@@ -214,7 +207,7 @@ class PipModule(BaseModule):
 
 
 class NpmModule(BaseModule):
-    name = "NPM Packages"
+    name = "Npm"
     key = "npm"
     category = "Development Environment"
     description = "Updates globally installed Node.js npm packages"
@@ -247,9 +240,6 @@ class NpmModule(BaseModule):
         }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would check and update NPM packages")
-
         code, out, err = ctx.run_cmd(
             ["npm", "outdated", "-g", "--json"], read_only=True
         )
@@ -302,7 +292,7 @@ class NpmModule(BaseModule):
 
 
 class PnpmModule(BaseModule):
-    name = "PNPM Packages"
+    name = "Pnpm"
     key = "pnpm"
     category = "Development Environment"
     description = "Updates globally installed pnpm packages"
@@ -328,9 +318,6 @@ class PnpmModule(BaseModule):
         }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would update PNPM packages")
-
         ls_code, ls_out, ls_err = ctx.run_cmd(["pnpm", "ls", "-g"])
         ls_output = f"{ls_out}\n{ls_err}"
         if "no global packages found" in ls_output.lower() or not ls_output.strip():
@@ -388,7 +375,7 @@ class PnpmModule(BaseModule):
 
 
 class BunModule(BaseModule):
-    name = "Bun Packages"
+    name = "Bun"
     key = "bun"
     category = "Development Environment"
     description = "Updates globally installed Bun packages"
@@ -421,9 +408,6 @@ class BunModule(BaseModule):
         }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would run bun update -g")
-
         ls_code, ls_out, ls_err = ctx.run_cmd(["bun", "pm", "ls", "-g"])
         ls_output = f"{ls_out}\n{ls_err}"
         if (
@@ -459,10 +443,12 @@ class BunModule(BaseModule):
 
 
 class MicroModule(BaseModule):
-    name = "Micro Plugins"
+    name = "Micro"
     key = "micro"
     category = "Development Environment"
     description = "Updates plugins installed in the Micro text editor"
+    unit_name = "plugin"
+    unit_name_plural = "plugins"
 
     def _availability(self, ctx: UpdateContext) -> str:
         if ctx.which("micro") is None:
@@ -501,9 +487,6 @@ class MicroModule(BaseModule):
         }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would run micro -plugin update")
-
         code, out, err = ctx.run_cmd(["micro", "-plugin", "update"])
         if code != 0:
             return StepResult(
@@ -534,10 +517,12 @@ class MicroModule(BaseModule):
 
 
 class GhExtensionsModule(BaseModule):
-    name = "GitHub CLI Extensions"
+    name = "GitHub CLI"
     key = "gh"
     category = "Development Environment"
     description = "Updates installed GitHub CLI extensions"
+    unit_name = "extension"
+    unit_name_plural = "extensions"
 
     def _availability(self, ctx: UpdateContext) -> str:
         if ctx.which("gh") is None:
@@ -571,9 +556,6 @@ class GhExtensionsModule(BaseModule):
         }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would run gh extension upgrade --all")
-
         code, out, err = ctx.run_cmd(["gh", "extension", "upgrade", "--all"])
         if code != 0:
             return StepResult(
@@ -600,10 +582,12 @@ class GhExtensionsModule(BaseModule):
 
 
 class SkillsModule(BaseModule):
-    name = "Agent Skills"
+    name = "Agents"
     key = "skills"
     category = "Development Environment"
     description = "Updates global Agent Skills via npx skills"
+    unit_name = "skill"
+    unit_name_plural = "skills"
 
     def _availability(self, ctx: UpdateContext) -> str:
         if ctx.which("npx") is None:
@@ -639,9 +623,6 @@ class SkillsModule(BaseModule):
         }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would run npx -y skills update --global")
-
         code, out, err = ctx.run_cmd(["npx", "-y", "skills", "update", "--global"])
         if code != 0:
             return StepResult("error", "Skills update failed", error_output=err or out)
@@ -678,10 +659,12 @@ class SkillsModule(BaseModule):
 
 
 class AntigravityModule(BaseModule):
-    name = "Antigravity Extensions"
+    name = "Antigravity"
     key = "antigravity"
     category = "Development Environment"
     description = "Updates Antigravity extensions"
+    unit_name = "extension"
+    unit_name_plural = "extensions"
 
     def _availability(self, ctx: UpdateContext) -> str:
         if ctx.which("antigravity") is None:
@@ -722,15 +705,12 @@ class AntigravityModule(BaseModule):
         }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult(
-                "ok", "[DRY-RUN] Would run antigravity --update-extensions"
-            )
-
         code, out, err = ctx.run_cmd(["antigravity", "--update-extensions"])
         clean_err = "\n".join(
             l for l in err.splitlines() if "antigravityAnalytics" not in l
         ).strip()
+        if ctx.command_log:
+            ctx.command_log[-1]["stderr"] = clean_err
         if code != 0 and clean_err:
             return StepResult(
                 "error", "Antigravity update failed", error_output=clean_err
@@ -764,7 +744,7 @@ class AntigravityModule(BaseModule):
 
 
 class YarnModule(BaseModule):
-    name = "Yarn Packages"
+    name = "Yarn"
     key = "yarn"
     category = "Development Environment"
     description = "Updates globally installed Yarn packages"
@@ -773,9 +753,6 @@ class YarnModule(BaseModule):
         return ctx.which("yarn") is not None
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would run yarn global upgrade")
-
         code, out, err = ctx.run_cmd(["yarn", "global", "upgrade"], timeout=180)
         if code != 0:
             return StepResult("error", "yarn upgrade failed", error_output=err or out)
@@ -787,18 +764,17 @@ class YarnModule(BaseModule):
 
 
 class UvModule(BaseModule):
-    name = "uv Tools"
+    name = "uv"
     key = "uv"
     category = "Development Environment"
     description = "Updates uv executable and all installed uv tools"
+    unit_name = "tool"
+    unit_name_plural = "tools"
 
     def is_available(self, ctx: UpdateContext) -> bool:
         return ctx.which("uv") is not None
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would update uv and uv tools")
-
         ctx.run_cmd(["uv", "self", "update"], timeout=30)
         code, out, err = ctx.run_cmd(["uv", "tool", "upgrade", "--all"], timeout=180)
         if code != 0:
@@ -813,10 +789,12 @@ class UvModule(BaseModule):
 
 
 class PipxModule(BaseModule):
-    name = "Python Pipx Applications"
+    name = "Pipx"
     key = "pipx"
     category = "Development Environment"
     description = "Updates all pipx-installed CLI applications"
+    unit_name = "app"
+    unit_name_plural = "apps"
 
     def _availability(self, ctx: UpdateContext) -> str:
         if ctx.which("pipx") is None:
@@ -845,9 +823,6 @@ class PipxModule(BaseModule):
         }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would run pipx upgrade-all")
-
         code, out, err = ctx.run_cmd(["pipx", "upgrade-all"], timeout=300)
         if code != 0:
             return StepResult(
@@ -864,7 +839,7 @@ class PipxModule(BaseModule):
 
 
 class PoetryModule(BaseModule):
-    name = "Python Poetry"
+    name = "Poetry"
     key = "poetry"
     category = "Development Environment"
     description = "Updates Poetry packaging tool"
@@ -873,9 +848,6 @@ class PoetryModule(BaseModule):
         return ctx.which("poetry") is not None
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would run poetry self update")
-
         code, out, err = ctx.run_cmd(["poetry", "self", "update"], timeout=120)
         if code != 0:
             return StepResult("error", "poetry update failed", error_output=err or out)
@@ -887,7 +859,7 @@ class PoetryModule(BaseModule):
 
 
 class CondaModule(BaseModule):
-    name = "Conda Environment"
+    name = "Conda"
     key = "conda"
     category = "Development Environment"
     description = "Updates Conda base environment packages"
@@ -896,9 +868,6 @@ class CondaModule(BaseModule):
         return ctx.which("conda") is not None
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would run conda update -n base --all -y")
-
         code, out, err = ctx.run_cmd(
             ["conda", "update", "-n", "base", "--all", "-y"], timeout=300
         )
@@ -912,10 +881,12 @@ class CondaModule(BaseModule):
 
 
 class CargoUpdateModule(BaseModule):
-    name = "Cargo Binaries"
+    name = "Cargo"
     key = "cargo"
     category = "Development Environment"
     description = "Updates installed cargo crates via cargo-update"
+    unit_name = "crate"
+    unit_name_plural = "crates"
 
     def _availability(self, ctx: UpdateContext) -> str:
         if ctx.which("cargo-install-update") is None:
@@ -944,9 +915,6 @@ class CargoUpdateModule(BaseModule):
         }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would run cargo install-update -a")
-
         code, out, err = ctx.run_cmd(["cargo", "install-update", "-a"], timeout=600)
         if code != 0:
             return StepResult(
@@ -972,7 +940,7 @@ class CargoUpdateModule(BaseModule):
 
 
 class ComposerModule(BaseModule):
-    name = "PHP Composer"
+    name = "Composer"
     key = "composer"
     category = "Development Environment"
     description = "Updates Composer executable and global dependencies"
@@ -981,11 +949,6 @@ class ComposerModule(BaseModule):
         return ctx.which("composer") is not None
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult(
-                "ok", "[DRY-RUN] Would update Composer and global packages"
-            )
-
         ctx.run_cmd(["composer", "self-update"], timeout=60)
         code, out, err = ctx.run_cmd(["composer", "global", "update"], timeout=180)
         if code != 0:
@@ -1000,10 +963,12 @@ class ComposerModule(BaseModule):
 
 
 class GemModule(BaseModule):
-    name = "Ruby Gems"
+    name = "Ruby"
     key = "gem"
     category = "Development Environment"
     description = "Updates RubyGems system and installed gems"
+    unit_name = "gem"
+    unit_name_plural = "gems"
 
     def _availability(self, ctx: UpdateContext) -> str:
         if ctx.which("gem") is None:
@@ -1038,9 +1003,6 @@ class GemModule(BaseModule):
         }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would run gem update --system")
-
         # Capture old RubyGems version
         old_ver_code, old_ver_out, _ = ctx.run_cmd(["gem", "--version"], read_only=True)
         old_system_ver = (
@@ -1073,14 +1035,14 @@ class GemModule(BaseModule):
 
         count = len(details)
         if count > 0:
-            msg = f"{count} package{'s' if count != 1 else ''} updated"
+            msg = f"{count} gem{'s' if count != 1 else ''} updated"
             return StepResult("ok", msg, details=details)
 
-        return StepResult("ok", "1 package updated")
+        return StepResult("ok", "1 gem updated")
 
 
 class MiseModule(BaseModule):
-    name = "Mise Runtime Tools"
+    name = "Mise"
     key = "mise"
     category = "Development Environment"
     description = "Updates mise CLI and installed dev toolchains"
@@ -1089,11 +1051,6 @@ class MiseModule(BaseModule):
         return ctx.which("mise") is not None
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult(
-                "ok", "[DRY-RUN] Would run mise self-update and mise upgrade"
-            )
-
         ctx.run_cmd(["mise", "self-update", "-y"], timeout=60)
         code, out, err = ctx.run_cmd(["mise", "upgrade", "-y"], timeout=300)
         if code != 0:
@@ -1103,18 +1060,17 @@ class MiseModule(BaseModule):
 
 
 class AsdfModule(BaseModule):
-    name = "asdf Plugins"
+    name = "asdf"
     key = "asdf"
     category = "Development Environment"
     description = "Updates asdf version manager plugins"
+    unit_name = "plugin"
+    unit_name_plural = "plugins"
 
     def is_available(self, ctx: UpdateContext) -> bool:
         return ctx.which("asdf") is not None
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would run asdf plugin update --all")
-
         code, out, err = ctx.run_cmd(["asdf", "plugin", "update", "--all"], timeout=120)
         if code != 0:
             return StepResult(
@@ -1125,10 +1081,12 @@ class AsdfModule(BaseModule):
 
 
 class NeovimModule(BaseModule):
-    name = "Neovim Plugins"
+    name = "Neovim"
     key = "neovim"
     category = "Development Environment"
     description = "Updates Neovim plugins via Lazy.nvim"
+    unit_name = "plugin"
+    unit_name_plural = "plugins"
 
     def is_available(self, ctx: UpdateContext) -> bool:
         if ctx.which("nvim") is None:
@@ -1137,9 +1095,6 @@ class NeovimModule(BaseModule):
         return os.path.isdir(lazy_dir)
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would run nvim Lazy sync")
-
         code, out, err = ctx.run_cmd(
             ["nvim", "--headless", "+Lazy! sync", "+qa"], timeout=120
         )
@@ -1152,19 +1107,18 @@ class NeovimModule(BaseModule):
 
 
 class TmuxPluginsModule(BaseModule):
-    name = "Tmux Plugins"
+    name = "Tmux"
     key = "tmux"
     category = "Development Environment"
     description = "Updates tmux plugins via TPM"
+    unit_name = "plugin"
+    unit_name_plural = "plugins"
 
     def is_available(self, ctx: UpdateContext) -> bool:
         tpm_script = os.path.expanduser("~/.tmux/plugins/tpm/bin/update_plugins")
         return os.path.isfile(tpm_script)
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would run TPM update_plugins all")
-
         tpm_script = os.path.expanduser("~/.tmux/plugins/tpm/bin/update_plugins")
         code, out, err = ctx.run_cmd([tpm_script, "all"], timeout=120)
         if code != 0:

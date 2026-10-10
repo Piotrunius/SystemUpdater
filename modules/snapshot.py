@@ -24,7 +24,7 @@ def _root_filesystem_type() -> str | None:
 
 
 class SnapshotModule(BaseModule):
-    name = "Btrfs Snapshot"
+    name = "Snapshot"
     key = "snapshot"
     category = "System Protection"
     description = "Creates a protective Btrfs root snapshot via Snapper before updates"
@@ -59,9 +59,6 @@ class SnapshotModule(BaseModule):
             diff_min = int((time.time() - stamp_mtime) // 60)
             if diff_min < cooldown_minutes:
                 return StepResult("unchanged", "cooldown active")
-
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would create Btrfs root snapshot")
 
         code, out, err = ctx.run_cmd(
             [

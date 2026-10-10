@@ -20,22 +20,24 @@ class CommandLoggingTests(unittest.TestCase):
         self.assertEqual(context.command_log[0]["stdout"], "token=[REDACTED]\n")
         self.assertEqual(context.command_log[0]["command"][1], "password=[REDACTED]")
 
-    def test_read_only_command_output_is_not_saved(self):
+    def test_read_only_command_output_is_saved(self):
         context = UpdateContext()
         completed = subprocess.CompletedProcess(
-            args=["gh"],
+            args=["git"],
             returncode=0,
-            stdout="ghp_sensitive_value_12345678901234567890",
+            stdout="abc1234\n",
             stderr="",
         )
 
         with patch("modules.base.subprocess.run", return_value=completed):
-            code, stdout, _ = context.run_cmd(["gh", "auth", "token"], read_only=True)
+            code, stdout, _ = context.run_cmd(
+                ["git", "rev-parse", "HEAD"], read_only=True
+            )
 
         self.assertEqual(code, 0)
-        self.assertIn("ghp_sensitive_value", stdout)
-        self.assertEqual(context.command_log[0]["stdout"], "")
-        self.assertTrue(context.command_log[0]["output_withheld"])
+        self.assertEqual(stdout, "abc1234\n")
+        self.assertEqual(context.command_log[0]["stdout"], "abc1234\n")
+        self.assertFalse(context.command_log[0]["output_withheld"])
 
 
 if __name__ == "__main__":

@@ -10,7 +10,7 @@ from ui import StepResult
 
 
 class GitReposModule(BaseModule):
-    name = "Git Repositories"
+    name = "Git"
     key = "git"
     category = "Development Environment"
     description = "Pulls latest commits for repositories configured in config.toml"
@@ -27,18 +27,12 @@ class GitReposModule(BaseModule):
         if ctx.which("git") is None:
             return "[Not Installed]"
         if not self.config.git_repos:
-            return "[Unconfigured]"
+            return "[No Targets]"
         return "[Active]"
 
     def run(self, ctx: UpdateContext) -> StepResult:
         if not self.config.git_repos:
             return StepResult("unchanged")
-
-        if ctx.dry_run:
-            return StepResult(
-                "ok",
-                f"[DRY-RUN] Would pull {len(self.config.git_repos)} configured git repositories",
-            )
 
         updated = []
         errors = []

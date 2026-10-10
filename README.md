@@ -15,7 +15,7 @@ SystemUpdater runs supported system package managers, application sources, conta
 - **Target-Aware Modules**: Container, developer tool, and service updates run only when there are local Docker images, Distrobox containers, unmanaged Python pip installations, active Agent Skills, or Vagrant projects to update.
 - **Run History & Inspection**: Securely stores the last 30 update runs with redacted logs, queryable via `--history` and `--show-log`.
 - **Sudo Keepalive**: Maintains the sudo timestamp during long update runs.
-- **Dry Run and Verbose Modes**: Preview commands with `-n` or stream command output with `-v`.
+- **Verbose Mode**: Stream live command output with `-v`.
 - **Configuration**: Disable modules, set custom commands, and list Git repositories in `~/.config/sysupdate/config.toml`.
 - **Managed Updates**: Git installs update clean checkouts; Homebrew installs are updated by Homebrew.
 
@@ -90,14 +90,13 @@ alias update="sysupdate"
 ## Usage
 
 ```text
-usage: sysupdate [-h] [--version] [-n] [-f] [-q] [-v] [--only ONLY] [--skip SKIP]
+usage: sysupdate [-h] [--version] [-f] [-q] [-v] [--only ONLY] [--skip SKIP]
                  [-c CATEGORY] [--no-sudo] [--no-snapshot] [--config PATH]
                  [--edit-config] [-l] [-r] [--history [COUNT] | --show-log RUN_ID]
 
 options:
   -h, --help            show this help message and exit
   --version             Show installed version and latest available version
-  -n, --dry-run         Simulate update process without downloading or installing changes
   -f, --force           Force execution (e.g. bypass Btrfs snapshot cooldown)
   -q, --quiet           Suppress live step progress, display only the final summary and errors
   -v, --verbose         Stream update output live while keeping internal probes quiet
@@ -120,9 +119,6 @@ options:
 ```bash
 # Run complete system update
 sysupdate
-
-# Preview updates without modifying the system
-sysupdate --dry-run
 
 # Run updates and reboot automatically if required by kernel, systemd, or firmware
 sysupdate --reboot

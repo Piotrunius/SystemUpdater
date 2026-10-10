@@ -7,10 +7,12 @@ from ui import StepResult
 
 
 class DockerModule(BaseModule):
-    name = "Docker Containers"
+    name = "Docker"
     key = "docker"
     category = "Containers & Packages"
     description = "Pulls latest versions of all locally tracked Docker container images"
+    unit_name = "image"
+    unit_name_plural = "images"
 
     def _availability(self, ctx: UpdateContext) -> str:
         if ctx.which("docker") is None:
@@ -39,9 +41,6 @@ class DockerModule(BaseModule):
         }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would pull latest Docker images")
-
         code, out, err = ctx.run_cmd(
             ["docker", "images", "--format", "{{.Repository}}:{{.Tag}}"]
         )

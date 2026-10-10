@@ -7,7 +7,7 @@ from ui import StepResult
 
 
 class SnapModule(BaseModule):
-    name = "Snap Packages"
+    name = "Snap"
     key = "snap"
     category = "Containers & Packages"
     description = "Updates installed Snap packages via snap refresh"
@@ -17,9 +17,6 @@ class SnapModule(BaseModule):
         return ctx.which("snap") is not None
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult("ok", "[DRY-RUN] Would run sudo snap refresh")
-
         code, out, err = ctx.run_cmd(["sudo", "snap", "refresh"], timeout=300)
         if code != 0:
             return StepResult("error", "snap refresh failed", error_output=err or out)
@@ -31,7 +28,7 @@ class SnapModule(BaseModule):
 
 
 class NixModule(BaseModule):
-    name = "Nix Packages"
+    name = "Nix"
     key = "nix"
     category = "Containers & Packages"
     description = "Updates Nix package channels and user environment"
@@ -40,11 +37,6 @@ class NixModule(BaseModule):
         return ctx.which("nix-channel") is not None and ctx.which("nix-env") is not None
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        if ctx.dry_run:
-            return StepResult(
-                "ok", "[DRY-RUN] Would update nix channels and environment"
-            )
-
         channel_code, channel_out, channel_err = ctx.run_cmd(
             ["nix-channel", "--update"], timeout=180
         )
