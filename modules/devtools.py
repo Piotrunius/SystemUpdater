@@ -589,26 +589,55 @@ class SkillsModule(BaseModule):
     unit_name = "skill"
     unit_name_plural = "skills"
 
+    @classmethod
+    def _find_lock_file(cls) -> Optional[str]:
+        xdg_state = os.environ.get("XDG_STATE_HOME")
+        if xdg_state:
+            candidate = os.path.join(xdg_state, "skills", ".skill-lock.json")
+            if os.path.isfile(candidate):
+                return candidate
+        local_state = os.path.expanduser(
+            "~/.local/state/skills/.skill-lock.json"
+        )
+        if os.path.isfile(local_state):
+            return local_state
+        legacy = os.path.expanduser("~/.agents/.skill-lock.json")
+        if os.path.isfile(legacy):
+            return legacy
+        return None
+
     def _availability(self, ctx: UpdateContext) -> str:
         if ctx.which("npx") is None:
             return "not-installed"
-        lock_file = os.path.expanduser("~/.agents/.skill-lock.json")
-        if os.path.isfile(lock_file):
-            try:
-                with open(lock_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                if isinstance(data, dict) and bool(data.get("skills")):
-                    return "active"
-            except Exception:
-                pass
-        skills_dir = os.path.expanduser("~/.agents/skills")
-        if os.path.isdir(skills_dir):
-            try:
-                entries = [e for e in os.listdir(skills_dir) if not e.startswith(".")]
-                if entries:
-                    return "active"
-            except OSError:
-                pass
+        lock_file = self._find_lock_file()
+        if not lock_file:
+            return "no-targets"
+        try:
+            with open(lock_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                skills = data.get("skills")
+                if isinstance(skills, dict):
+                    has_updatable = any(
+                        isinstance(entry, dict)
+                        and entry.get("sourceType") != "local"
+                        and (
+                            (
+                                entry.get("skillFolderHash")
+                                and entry.get("skillPath")
+                            )
+                            or (
+                                entry.get("sourceType") == "well-known"
+                                and entry.get("sourceBaseUrl")
+                            )
+                            or bool(entry.get("source"))
+                        )
+                        for entry in skills.values()
+                    )
+                    if has_updatable:
+                        return "active"
+        except Exception:
+            pass
         return "no-targets"
 
     def is_available(self, ctx: UpdateContext) -> bool:
@@ -623,8 +652,8 @@ class SkillsModule(BaseModule):
         }[self._availability(ctx)]
 
     def _read_skill_hashes(self) -> dict[str, str]:
-        lock_file = os.path.expanduser("~/.agents/.skill-lock.json")
-        if not os.path.isfile(lock_file):
+        lock_file = self._find_lock_file()
+        if not lock_file or not os.path.isfile(lock_file):
             return {}
         try:
             with open(lock_file, "r", encoding="utf-8") as f:
@@ -639,8 +668,23 @@ class SkillsModule(BaseModule):
             return {}
 
     def run(self, ctx: UpdateContext) -> StepResult:
+        lock_file = self._find_lock_file()
+        env_extra = {}
+        xdg_state = os.environ.get("XDG_STATE_HOME")
+        if (
+            xdg_state
+            and lock_file
+            and not os.path.isfile(
+                os.path.join(xdg_state, "skills", ".skill-lock.json")
+            )
+        ):
+            env_extra["XDG_STATE_HOME"] = ""
+
         before_hashes = self._read_skill_hashes()
-        code, out, err = ctx.run_cmd(["npx", "-y", "skills", "update", "--global"])
+        code, out, err = ctx.run_cmd(
+            ["npx", "-y", "skills", "update", "--global"],
+            env_extra=env_extra or None,
+        )
         if code != 0:
             return StepResult("error", "Skills update failed", error_output=err or out)
 
@@ -800,8 +844,53 @@ class YarnModule(BaseModule):
     category = "Development Environment"
     description = "Updates globally installed Yarn packages"
 
+    def _availability(self, ctx: UpdateContext) -> str:
+        if ctx.which("yarn") is None:
+            return "not-installed"
+        global_files = [
+            os.path.expanduser("~/.config/yarn/global/package.json"),
+            os.path.expanduser("~/.local/share/yarn/global/package.json"),
+            os.path.expanduser("~/.yarn/global/package.json"),
+        ]
+        xdg_config = os.environ.get("XDG_CONFIG_HOME")
+        if xdg_config:
+            global_files.insert(
+                0, os.path.join(xdg_config, "yarn", "global", "package.json")
+            )
+        for p in global_files:
+            if os.path.isfile(p):
+                try:
+                    with open(p, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    if isinstance(data, dict) and bool(data.get("dependencies")):
+                        return "active"
+                except Exception:
+                    pass
+        code, out, _ = ctx.run_cmd(
+            ["yarn", "global", "list", "--depth=0"], timeout=10, read_only=True
+        )
+        if code != 0:
+            return "unavailable"
+        lines = [
+            l.strip()
+            for l in out.splitlines()
+            if l.strip()
+            and not l.startswith("yarn global")
+            and not l.startswith("Done in")
+            and not l.startswith("info ")
+        ]
+        return "active" if lines else "no-targets"
+
     def is_available(self, ctx: UpdateContext) -> bool:
-        return ctx.which("yarn") is not None
+        return self._availability(ctx) in ("active", "unavailable")
+
+    def availability_status(self, ctx: UpdateContext) -> str:
+        return {
+            "not-installed": "[Not Installed]",
+            "no-targets": "[No Targets]",
+            "unavailable": "[Unavailable]",
+            "active": "[Active]",
+        }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
         code, out, err = ctx.run_cmd(["yarn", "global", "upgrade"], timeout=180)
@@ -1118,8 +1207,41 @@ class AsdfModule(BaseModule):
     unit_name = "plugin"
     unit_name_plural = "plugins"
 
+    def _availability(self, ctx: UpdateContext) -> str:
+        if ctx.which("asdf") is None:
+            return "not-installed"
+        plugins_dir = os.path.expanduser("~/.asdf/plugins")
+        if os.path.isdir(plugins_dir):
+            try:
+                entries = [
+                    e for e in os.listdir(plugins_dir) if not e.startswith(".")
+                ]
+                if entries:
+                    return "active"
+            except OSError:
+                pass
+        code, out, _ = ctx.run_cmd(
+            ["asdf", "plugin", "list"], timeout=10, read_only=True
+        )
+        if code != 0:
+            return "unavailable"
+        lines = [
+            l.strip()
+            for l in out.splitlines()
+            if l.strip() and "no plugins" not in l.lower()
+        ]
+        return "active" if lines else "no-targets"
+
     def is_available(self, ctx: UpdateContext) -> bool:
-        return ctx.which("asdf") is not None
+        return self._availability(ctx) in ("active", "unavailable")
+
+    def availability_status(self, ctx: UpdateContext) -> str:
+        return {
+            "not-installed": "[Not Installed]",
+            "no-targets": "[No Targets]",
+            "unavailable": "[Unavailable]",
+            "active": "[Active]",
+        }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
         code, out, err = ctx.run_cmd(["asdf", "plugin", "update", "--all"], timeout=120)

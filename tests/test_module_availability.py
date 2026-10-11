@@ -7,6 +7,7 @@ from unittest.mock import patch, mock_open
 from modules.containers_ext import PodmanModule, VagrantModule
 from modules.devtools import (
     AntigravityModule,
+    AsdfModule,
     BunModule,
     CargoUpdateModule,
     GemModule,
@@ -17,6 +18,7 @@ from modules.devtools import (
     PnpmModule,
     RustupModule,
     SkillsModule,
+    YarnModule,
 )
 from modules.distrobox import DistroboxModule
 from modules.docker import DockerModule
@@ -124,6 +126,50 @@ class ModuleAvailabilityTests(unittest.TestCase):
         self.assertTrue(bun.is_available(probe_error))
         self.assertEqual(bun.availability_status(probe_error), "[Unavailable]")
 
+    def test_yarn_and_asdf_require_targets(self):
+        yarn = YarnModule()
+        with patch("modules.devtools.os.path.isfile", return_value=False):
+            self.assertFalse(
+                yarn.is_available(FakeContext(output="info 0 packages\n"))
+            )
+            self.assertEqual(
+                yarn.availability_status(FakeContext(output="info 0 packages\n")),
+                "[No Targets]",
+            )
+            self.assertTrue(
+                yarn.is_available(FakeContext(output="foo@1.0.0\n"))
+            )
+            self.assertEqual(
+                yarn.availability_status(FakeContext(output="foo@1.0.0\n")),
+                "[Active]",
+            )
+        self.assertFalse(yarn.is_available(FakeContext(installed=False)))
+        self.assertEqual(
+            yarn.availability_status(FakeContext(installed=False)),
+            "[Not Installed]",
+        )
+
+        asdf = AsdfModule()
+        with patch("modules.devtools.os.path.isdir", return_value=False):
+            self.assertFalse(
+                asdf.is_available(FakeContext(output="No plugins installed\n"))
+            )
+            self.assertEqual(
+                asdf.availability_status(FakeContext(output="No plugins installed\n")),
+                "[No Targets]",
+            )
+            nodejs_out = "nodejs https://github.com/asdf-vm/asdf-nodejs.git\n"
+            self.assertTrue(asdf.is_available(FakeContext(output=nodejs_out)))
+            self.assertEqual(
+                asdf.availability_status(FakeContext(output=nodejs_out)),
+                "[Active]",
+            )
+        self.assertFalse(asdf.is_available(FakeContext(installed=False)))
+        self.assertEqual(
+            asdf.availability_status(FakeContext(installed=False)),
+            "[Not Installed]",
+        )
+
     def test_gh_extensions_requires_installed_extensions(self):
         gh = GhExtensionsModule()
         with patch("modules.devtools.os.path.isdir", return_value=False):
@@ -173,31 +219,59 @@ class ModuleAvailabilityTests(unittest.TestCase):
 
     def test_skills_requires_skills_in_lock_or_directory(self):
         skills = SkillsModule()
-        with patch("modules.devtools.os.path.isdir", return_value=False):
-            empty_data = json.dumps({"version": 3, "skills": {}})
-            with (
-                patch("builtins.open", mock_open(read_data=empty_data)),
-                patch("modules.devtools.os.path.isfile", return_value=True),
-            ):
-                self.assertFalse(skills.is_available(FakeContext()))
-                self.assertEqual(
-                    skills.availability_status(FakeContext()), "[No Targets]"
-                )
-
-            active_data = json.dumps(
-                {"version": 3, "skills": {"cloudflare": {"source": "foo"}}}
+        with patch("modules.devtools.os.path.isfile", return_value=False):
+            self.assertFalse(skills.is_available(FakeContext()))
+            self.assertEqual(
+                skills.availability_status(FakeContext()), "[No Targets]"
             )
-            with (
-                patch("builtins.open", mock_open(read_data=active_data)),
-                patch("modules.devtools.os.path.isfile", return_value=True),
-            ):
-                self.assertTrue(skills.is_available(FakeContext()))
-                self.assertEqual(skills.availability_status(FakeContext()), "[Active]")
+
+        empty_data = json.dumps({"version": 3, "skills": {}})
+        with (
+            patch("builtins.open", mock_open(read_data=empty_data)),
+            patch("modules.devtools.os.path.isfile", return_value=True),
+        ):
+            self.assertFalse(skills.is_available(FakeContext()))
+            self.assertEqual(
+                skills.availability_status(FakeContext()), "[No Targets]"
+            )
+
+        local_only_data = json.dumps(
+            {"version": 3, "skills": {"custom": {"sourceType": "local"}}}
+        )
+        with (
+            patch("builtins.open", mock_open(read_data=local_only_data)),
+            patch("modules.devtools.os.path.isfile", return_value=True),
+        ):
+            self.assertFalse(skills.is_available(FakeContext()))
+            self.assertEqual(
+                skills.availability_status(FakeContext()), "[No Targets]"
+            )
+
+        active_data = json.dumps(
+            {"version": 3, "skills": {"cloudflare": {"source": "foo"}}}
+        )
+        with (
+            patch("builtins.open", mock_open(read_data=active_data)),
+            patch("modules.devtools.os.path.isfile", return_value=True),
+        ):
+            self.assertTrue(skills.is_available(FakeContext()))
+            self.assertEqual(skills.availability_status(FakeContext()), "[Active]")
 
         self.assertFalse(skills.is_available(FakeContext(installed=False)))
         self.assertEqual(
             skills.availability_status(FakeContext(installed=False)), "[Not Installed]"
         )
+
+    def test_skills_finds_xdg_lock_file(self):
+        with patch.dict("os.environ", {"XDG_STATE_HOME": "/custom/state"}):
+            def fake_isfile(path):
+                return path == "/custom/state/skills/.skill-lock.json"
+
+            with patch("modules.devtools.os.path.isfile", side_effect=fake_isfile):
+                self.assertEqual(
+                    SkillsModule._find_lock_file(),
+                    "/custom/state/skills/.skill-lock.json",
+                )
 
     def test_antigravity_requires_extensions(self):
         ag = AntigravityModule()
