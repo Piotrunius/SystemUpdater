@@ -2,9 +2,7 @@
 ProtonPlus runners update module.
 """
 
-import urllib.error
-import urllib.request
-from modules.base import BaseModule, UpdateContext
+from modules.base import BaseModule, UpdateContext, check_github_api
 from ui import StepResult
 
 
@@ -22,25 +20,15 @@ class ProtonPlusModule(BaseModule):
         return ctx.which("protonplus") is not None
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        # Fast health check for GitHub API before launching libsoup queries that could stall
-        try:
-            req = urllib.request.Request(
-                "https://api.github.com/", headers={"User-Agent": "SystemUpdater"}
-            )
-            with urllib.request.urlopen(req, timeout=3.0):
-                pass
-        except (OSError, TimeoutError, urllib.error.URLError) as error:
-            reason = str(error).strip() or type(error).__name__
-            if "rate limit" in reason.casefold() or getattr(error, "code", None) == 429:
-                message = "GitHub API rate limit reached"
-            else:
-                message = f"GitHub API unreachable or timed out: {reason}"
-            return StepResult("warning", message)
+        # Fast health check for GitHub API before launching queries that could stall
+        gh_check = check_github_api()
+        if gh_check is not None:
+            return gh_check
 
         code, out, err = ctx.run_cmd(["protonplus", "update", "all"], timeout=35)
         combined = (out or "") + "\n" + (err or "")
 
-        if "API limit reached" in combined:
+        if "api limit reached" in combined.casefold() or "rate limit" in combined.casefold():
             return StepResult("warning", "GitHub API rate limit reached")
 
         if code != 0:

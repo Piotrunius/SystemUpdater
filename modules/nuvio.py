@@ -10,10 +10,11 @@ import os
 import platform
 import re
 import tempfile
+import urllib.error
 import urllib.request
 import zipfile
 from typing import Optional, Tuple
-from modules.base import BaseModule, UpdateContext
+from modules.base import BaseModule, UpdateContext, check_github_api
 from ui import StepResult
 
 REPO = "NuvioMedia/NuvioDesktop"
@@ -34,16 +35,49 @@ class NuvioModule(BaseModule):
     def is_available(self, ctx: UpdateContext) -> bool:
         return os.path.exists("/opt/nuvio") or ctx.which("nuvio") is not None
 
+    def _get_github_token(self, ctx: UpdateContext) -> Optional[str]:
+        token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+        if not token:
+            code, out, _ = ctx.run_cmd(
+                ["gh", "auth", "token"], read_only=True, sensitive_output=True
+            )
+            if code == 0 and out.strip():
+                token = out.strip()
+        return token or None
+
     def run(self, ctx: UpdateContext) -> StepResult:
         installed_tag = self._get_installed_tag(ctx)
 
+        # Check GitHub API reachability if no authentication token is available
+        token = self._get_github_token(ctx)
+        if not token:
+            gh_check = check_github_api()
+            if gh_check is not None:
+                return gh_check
+
         # Fetch latest release from GitHub
         try:
-            release = self._fetch_latest_release(ctx)
-        except Exception as e:
+            release = self._fetch_latest_release(ctx, token=token)
+        except urllib.error.HTTPError as error:
+            if (
+                error.code in (403, 429)
+                or getattr(error, "headers", {}).get("x-ratelimit-remaining") == "0"
+                or "rate limit" in str(error).casefold()
+            ):
+                return StepResult("warning", "GitHub API rate limit reached")
+            reason = str(error).strip() or type(error).__name__
+            return StepResult("warning", f"Unable to check GitHub: {reason}")
+        except (OSError, TimeoutError, urllib.error.URLError) as e:
             err_msg = str(e).lower()
+            if "rate limit" in err_msg:
+                return StepResult("warning", "GitHub API rate limit reached")
             if "timed out" in err_msg or "timeout" in err_msg:
                 return StepResult("warning", "GitHub API timed out")
+            return StepResult("warning", f"Unable to check GitHub: {e}")
+        except Exception as e:
+            err_msg = str(e).lower()
+            if "rate limit" in err_msg:
+                return StepResult("warning", "GitHub API rate limit reached")
             return StepResult("warning", f"Unable to check GitHub: {e}")
 
         latest_tag = release.get("tag_name", "")
@@ -236,22 +270,17 @@ class NuvioModule(BaseModule):
 
         return None, ""
 
-    def _fetch_latest_release(self, ctx: UpdateContext) -> dict:
+    def _fetch_latest_release(
+        self, ctx: UpdateContext, token: Optional[str] = None
+    ) -> dict:
         url = f"https://api.github.com/repos/{REPO}/releases/latest"
         headers = {
             "User-Agent": "SystemUpdater-Nuvio",
             "Accept": "application/vnd.github.v3+json",
         }
-        token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
-        if not token:
-            code, out, _ = ctx.run_cmd(
-                ["gh", "auth", "token"], read_only=True, sensitive_output=True
-            )
-            if code == 0 and out.strip():
-                token = out.strip()
-
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
+        active_token = token if token is not None else self._get_github_token(ctx)
+        if active_token:
+            headers["Authorization"] = f"Bearer {active_token}"
 
         req = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(req, timeout=5) as resp:

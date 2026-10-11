@@ -453,13 +453,11 @@ def main():
                 f"using defaults. {cfg.load_error}",
                 file=sys.stderr,
             )
-        print("\nRegistered Update Modules:")
         print(f"{'Key':<14} {'Name':<28} {'Status':<16} {'Description'}")
-        print("─" * 85)
+        print("─" * 80)
         for m in all_modules:
             status = m.availability_status(ctx)
             print(f"{m.key:<14} {m.name:<28} {status:<16} {m.description}")
-        print()
         sys.exit(0)
 
     # Filter modules

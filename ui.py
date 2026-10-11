@@ -109,12 +109,10 @@ class UI:
             return
         width = min(self.terminal_width, 80)
         time_str = time.strftime("%H:%M:%S")
+        prefix = f"── {title} ─ {time_str} "
+        dashes = "─" * max(0, width - len(prefix))
         print()
-        print(
-            f"{Colors.BOLD}{Colors.CYAN}── {title} ─ {time_str} {Colors.RESET}"
-            + "─" * max(0, width - len(title) - len(time_str) - 8)
-        )
-        print()
+        print(f"{Colors.BOLD}{Colors.CYAN}{prefix}{dashes}{Colors.RESET}")
 
     def run_step(
         self,
@@ -516,16 +514,15 @@ class UI:
             return lines
 
         def print_diagnostic_heading(title: str):
-            fill = "─" * max(0, width - len(title) - 4)
-            print(f"{Colors.BOLD_CYAN}── {title} {fill}{Colors.RESET}")
+            prefix = f"── {title} "
+            fill = "─" * max(0, width - len(prefix))
+            print(f"{Colors.BOLD_CYAN}{prefix}{fill}{Colors.RESET}")
 
         # ── 1. Summary Section ────────────────────────────────────────────────
+        summary_prefix = f"── Summary ─ {duration_str} "
+        summary_dashes = "─" * max(0, width - len(summary_prefix))
         print()
-        print(
-            f"{Colors.BOLD}{Colors.CYAN}── Summary ─ {duration_str} "
-            + "─" * max(0, width - len(duration_str) - 14)
-            + Colors.RESET
-        )
+        print(f"{Colors.BOLD}{Colors.CYAN}{summary_prefix}{summary_dashes}{Colors.RESET}")
         if package_updates:
             print("  Updates applied:")
             for item in package_updates:

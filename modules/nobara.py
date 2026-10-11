@@ -1,4 +1,5 @@
 import os
+import re
 from modules.base import BaseModule, UpdateContext, get_os_release
 from ui import StepResult
 

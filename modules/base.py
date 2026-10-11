@@ -9,6 +9,8 @@ import shlex
 import subprocess
 import time
 import threading
+import urllib.error
+import urllib.request
 from typing import List, Tuple, Optional, Dict
 
 NON_FATAL_PATTERNS = [
@@ -74,6 +76,40 @@ def detect_warning(text: str) -> Optional[str]:
     for pattern, label in NON_FATAL_PATTERNS:
         if pattern.search(text):
             return label
+    return None
+
+
+def check_github_api(timeout: float = 3.0) -> Optional[object]:
+    """
+    Fast health check for GitHub API before launching tools that query GitHub.
+    Returns StepResult("warning", ...) if rate limited or unreachable, or None if healthy.
+    """
+    from ui import StepResult
+
+    try:
+        req = urllib.request.Request(
+            "https://api.github.com/", headers={"User-Agent": "SystemUpdater"}
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            if resp.headers.get("x-ratelimit-remaining") == "0":
+                return StepResult("warning", "GitHub API rate limit reached")
+    except urllib.error.HTTPError as error:
+        if (
+            error.code in (403, 429)
+            or error.headers.get("x-ratelimit-remaining") == "0"
+            or "rate limit" in str(error).casefold()
+        ):
+            return StepResult("warning", "GitHub API rate limit reached")
+        reason = str(error).strip() or type(error).__name__
+        return StepResult("warning", f"GitHub API unreachable or timed out: {reason}")
+    except (OSError, TimeoutError, urllib.error.URLError) as error:
+        reason = str(error).strip() or type(error).__name__
+        if "rate limit" in reason.casefold() or getattr(error, "code", None) in (403, 429):
+            message = "GitHub API rate limit reached"
+        else:
+            message = f"GitHub API unreachable or timed out: {reason}"
+        return StepResult("warning", message)
+
     return None
 
 
@@ -186,15 +222,28 @@ class UpdateContext:
                     def stream_reader(pipe, accumulator):
                         from history_store import redact_text
 
+                        pending_blank = False
+                        has_printed_non_empty = False
                         try:
                             for line in iter(pipe.readline, ""):
                                 accumulator.append(line)
                                 if is_verbose:
-                                    display_line = redact_text(line.rstrip("\r\n"))
-                                    print(
-                                        f"        \033[2m{display_line}\033[0m",
-                                        flush=True,
-                                    )
+                                    clean_line = redact_text(line.rstrip("\r\n"))
+                                    if not clean_line.strip():
+                                        if has_printed_non_empty:
+                                            pending_blank = True
+                                    else:
+                                        if pending_blank:
+                                            print(
+                                                "        \033[2m\033[0m",
+                                                flush=True,
+                                            )
+                                            pending_blank = False
+                                        print(
+                                            f"        \033[2m{clean_line}\033[0m",
+                                            flush=True,
+                                        )
+                                        has_printed_non_empty = True
                         except OSError:
                             return
                         finally:

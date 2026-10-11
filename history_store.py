@@ -240,14 +240,16 @@ def print_history(runs: List[Dict[str, Any]], limit: int = 10) -> None:
         )
         previous_runs.append(run)
 
-    print(f"{'RUN ID':<26}  {'STARTED':<19}  {'STATUS':<12}  {'DURATION':<10}  UPDATES")
+    header = f"{'Run ID':<26}  {'Started':<19}  {'Status':<11}  {'Duration':<9}  Updates"
+    print(header)
+    print("─" * 80)
     for run in runs[: max(1, limit)]:
         duration = f"{float(run.get('duration', 0)):.1f}s"
         print(
             f"{run.get('id', ''):<26}  "
             f"{_display_time(run.get('started_at', '')):<19}  "
-            f"{calculated_statuses.get(run.get('id'), run.get('status', 'unknown')):<12}  "
-            f"{duration:<10}  "
+            f"{calculated_statuses.get(run.get('id'), run.get('status', 'unknown')):<11}  "
+            f"{duration:<9}  "
             f"{run.get('update_count', 0)}"
         )
 
@@ -255,12 +257,12 @@ def print_history(runs: List[Dict[str, Any]], limit: int = 10) -> None:
 def print_run_log(run: Dict[str, Any]) -> None:
     modules = run.get("modules", [])
     status = str(run.get("status", "unknown"))
-    print(f"── Update Run ──────────────────────────────────────────────────────")
+    print("── Update Run " + "─" * 66)
     print(f"  ID:       {run.get('id', 'unknown')}")
     print(f"  Started:  {_display_time(run.get('started_at', ''))}")
     print(f"  Duration: {float(run.get('duration', 0)):.1f}s")
 
-    print("\n── Modules ─────────────────────────────────────────────────────────")
+    print("\n── Modules " + "─" * 69)
     for module in modules:
         module_status = str(module.get("status", "unknown"))
         if module_status == "unchanged" and module.get("warnings"):
@@ -271,7 +273,7 @@ def print_run_log(run: Dict[str, Any]) -> None:
             f"{module_label:<12} {float(module.get('duration', 0)):.1f}s"
         )
 
-    print("\n── Command Output ──────────────────────────────────────────────────")
+    print("\n── Command Output " + "─" * 62)
 
     for module in modules:
         message = str(module.get("message", "")).strip()
@@ -325,10 +327,17 @@ def print_run_log(run: Dict[str, Any]) -> None:
                 print("    [output withheld for a read-only command]")
             for stream_name in ("stdout", "stderr"):
                 output = command.get(stream_name, "")
-                if output:
+                if output and output.strip():
                     print(f"    {stream_name}:")
-                    for line in output.rstrip().splitlines():
-                        print(f"      {line}")
+                    pending_blank = False
+                    for line in output.strip().splitlines():
+                        if not line.strip():
+                            pending_blank = True
+                        else:
+                            if pending_blank:
+                                print()
+                                pending_blank = False
+                            print(f"      {line.rstrip()}")
         if error_output:
             diagnostic_lines = [
                 line.rstrip() for line in error_output.rstrip().splitlines()

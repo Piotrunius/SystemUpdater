@@ -622,7 +622,24 @@ class SkillsModule(BaseModule):
             "active": "[Active]",
         }[self._availability(ctx)]
 
+    def _read_skill_hashes(self) -> dict[str, str]:
+        lock_file = os.path.expanduser("~/.agents/.skill-lock.json")
+        if not os.path.isfile(lock_file):
+            return {}
+        try:
+            with open(lock_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            skills = data.get("skills", {})
+            return {
+                name: info["skillFolderHash"][:7]
+                for name, info in skills.items()
+                if isinstance(info, dict) and "skillFolderHash" in info
+            }
+        except (OSError, json.JSONDecodeError, KeyError, TypeError):
+            return {}
+
     def run(self, ctx: UpdateContext) -> StepResult:
+        before_hashes = self._read_skill_hashes()
         code, out, err = ctx.run_cmd(["npx", "-y", "skills", "update", "--global"])
         if code != 0:
             return StepResult("error", "Skills update failed", error_output=err or out)
@@ -637,14 +654,48 @@ class SkillsModule(BaseModule):
         skills = []
         for line in out.splitlines():
             line_s = line.strip()
+            if re.search(r"[Uu]pdated\s+\d+\s+skill", line_s):
+                continue
             m = re.search(r"[Uu]pdated\s+([@\w\.\-\/]+)", line_s)
             if m:
                 cand = m.group(1).rstrip("…").rstrip(".")
-                if "skill" not in cand.lower() and not cand.startswith("from"):
+                if (
+                    not cand.isdigit()
+                    and "skill" not in cand.lower()
+                    and not cand.startswith("from")
+                ):
                     skills.append(cand)
         skills = list(dict.fromkeys(skills))
 
-        count = len(skills)
+        after_hashes = self._read_skill_hashes()
+        lock_changed = {
+            k: (before_hashes[k], after_hashes[k])
+            for k in after_hashes
+            if k in before_hashes and before_hashes[k] != after_hashes[k]
+        }
+
+        details = []
+        seen = set()
+        for cand in skills:
+            seen.add(cand)
+            if cand in lock_changed:
+                old_h, new_h = lock_changed[cand]
+                details.append(f"{cand}: {old_h} -> {new_h}")
+            elif (
+                cand in before_hashes
+                and cand in after_hashes
+                and before_hashes[cand] != after_hashes[cand]
+            ):
+                details.append(f"{cand}: {before_hashes[cand]} -> {after_hashes[cand]}")
+            else:
+                details.append(cand)
+
+        for k, (old_h, new_h) in lock_changed.items():
+            if k not in seen:
+                details.append(f"{k}: {old_h} -> {new_h}")
+                seen.add(k)
+
+        count = len(details)
         if count == 0:
             m_cnt = re.search(r"[Uu]pdated\s+(\d+)\s+skill", out)
             if m_cnt:
@@ -654,7 +705,7 @@ class SkillsModule(BaseModule):
             return StepResult("ok", f"{count} skill{'s' if count != 1 else ''} updated")
 
         return StepResult(
-            "ok", f"{count} skill{'s' if count != 1 else ''} updated", details=skills
+            "ok", f"{count} skill{'s' if count != 1 else ''} updated", details=details
         )
 
 

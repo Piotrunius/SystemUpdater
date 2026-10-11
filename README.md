@@ -23,15 +23,13 @@ SystemUpdater runs supported system package managers, application sources, conta
 
 ## Supported Ecosystems
 
-| Category                  | Modules & Integrations                                                                                                                                                                                                                                                                    |
-| :------------------------ | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **System Core**           | DNF / DNF5 (Fedora / Nobara / RHEL), APT (Debian / Ubuntu / Mint / Pop!_OS), Pacman & AUR (Arch / Manjaro / CachyOS via `yay` / `paru`), Zypper (openSUSE Tumbleweed & Leap), APK (Alpine), XBPS (Void), Device Firmware (`fwupdmgr` with safe staging & reboot detection), Btrfs Snapper |
-| **Applications & Gaming** | Flatpak (User & System), ProtonPlus Runners, Gear Lever AppImages, Nuvio Desktop                                                                                                                                                                                                          |
-| **Containers**            | Distrobox (`upgrade --all`), Docker (`docker pull`), Podman (`auto-update`), Vagrant                                                                                                                                                                                                      |
-| **Package Managers**      | Homebrew (Formulae & Casks), Snap, Nix                                                                                                                                                                                                                                                    |
-| **Development Runtimes**  | Rustup, Cargo, Python (`pip`, `pipx`, `pipenv`, `poetry`, `pyenv`, `uv`), Node (`npm`, `pnpm`, `bun`, `yarn`), PHP (`composer`), Ruby (`gem`), Mise, asdf, SDKMAN, GHCup, Flutter                                                                                                         |
-| **Editors & Shells**      | Oh My Zsh, Zinit, Fisher (Fish), Micro Plugins, Neovim (Lazy.nvim), Helix Grammars, VS Code, Cursor, VSCodium, Tmux (TPM), Chezmoi, Yadm                                                                                                                                                  |
-| **Tools & CLI**           | GitHub CLI Extensions, Agent Skills, Tealdeer (`tldr`), Antigravity Extensions, Manual Pages Database (`mandb`), Custom Git Repositories                                                                                                                                                  |
+| Category                  | Modules & Integrations                                                                                                                                                                                                                                                                                     |
+| :------------------------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **System Protection**     | Snapshot (`snapshot` - Btrfs root snapshot via Snapper with configurable cooldown)                                                                                                                                                                                                                         |
+| **System Core**           | Repositories (`reposync` - Nobara repository configs & GPG keys), System (`system` - DNF / DNF5, `apt` - APT, `pacman` - Pacman & AUR via `yay` / `paru`, `zypper` - Zypper, `apk` - APK, `xbps` - XBPS), Firmware (`firmware` - `fwupdmgr` with safe staging & reboot detection)                      |
+| **Applications & Gaming** | Flatpak (`flatpak` - User & System), Nuvio Desktop (`nuvio` - GitHub release RPM & Coil3 patch), Gear Lever (`gearlever` - AppImages), ProtonPlus (`proton` - Proton-GE, CachyOS, Wine), Distrobox (`distrobox` - `upgrade --all` across containers)                                                  |
+| **Containers & Packages** | Homebrew (`brew` - Formulae & Casks), Docker (`docker` - container images & Compose service auto-recreate), Podman (`podman` - `auto-update`), Vagrant (`vagrant` boxes), Snap (`snap`), Nix (`nix` channels & profile), Chezmoi (`chezmoi`), Yadm (`yadm`)                                            |
+| **Development Environment** | Oh My Zsh (`omz`), Zinit (`zinit`), Fisher (`fisher`), Tealdeer (`tldr`), Rust (`rustup`), Cargo (`cargo`), Pip (`pip`), uv (`uv`), Pipx (`pipx`), Pipenv (`pipenv`), Poetry (`poetry`), Conda (`conda`), pyenv (`pyenv`), Npm (`npm`), Pnpm (`pnpm`), Bun (`bun`), Yarn (`yarn`), Composer (`composer`), Ruby (`gem`), Mise (`mise`), asdf (`asdf`), SDKMAN (`sdkman`), GHCup (`ghcup`), Flutter (`flutter`), Neovim (`neovim`), Micro (`micro`), Helix (`helix`), VS Code (`vscode`), Cursor (`cursor`), VSCodium (`codium`), Tmux (`tmux`), GitHub CLI (`gh`), Agents (`skills` via `npx skills`), Antigravity (`antigravity`), Git (`git`) |
 
 ---
 
@@ -268,12 +266,13 @@ SystemUpdater/
     ├── test_distrobox.py           # Distrobox update detection and results
     ├── test_firmware.py            # Firmware update states and metadata warnings
     ├── test_flatpak.py             # Preserving and displaying advisory warnings
+    ├── test_gearlever.py           # Gear Lever, ProtonPlus, Skills and Docker version formatting and GitHub rate-limiting
     ├── test_gem_module.py          # Reporting Ruby gem update failures
     ├── test_history_store.py       # Private run history, selection, and redaction
     ├── test_module_availability.py # Installed tools and update target detection
     ├── test_module_registry.py     # Custom configuration passed to modules
     ├── test_npm_module.py          # Reporting npm registry check failures
-    ├── test_nuvio.py               # Architecture-aware RPM selection
+    ├── test_nuvio.py               # Architecture-aware RPM selection and GitHub rate-limit handling
     ├── test_package_signature_checks.py # Keeping package signature checks enabled
     ├── test_partial_failures.py    # Reporting failures after partial updates
     ├── test_pip_module.py          # Reporting pip registry check failures

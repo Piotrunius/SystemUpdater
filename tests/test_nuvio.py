@@ -36,6 +36,45 @@ class NuvioAssetTests(unittest.TestCase):
 
         self.assertEqual(url, "generic-url")
 
+    def test_nuvio_skips_when_no_token_and_github_rate_limited(self):
+        from modules.base import UpdateContext
+        from ui import StepResult
+
+        context = UpdateContext()
+        module = NuvioModule()
+
+        with patch.object(module, "_get_installed_tag", return_value="0.1.0-alpha"):
+            with patch.object(module, "_get_github_token", return_value=None):
+                with patch(
+                    "modules.nuvio.check_github_api",
+                    return_value=StepResult("warning", "GitHub API rate limit reached"),
+                ):
+                    result = module.run(context)
+                    self.assertEqual(result.status, "warning")
+                    self.assertIn("GitHub API rate limit reached", result.message)
+
+    def test_nuvio_handles_http_403_rate_limit_exception(self):
+        import urllib.error
+        from modules.base import UpdateContext
+
+        context = UpdateContext()
+        module = NuvioModule()
+
+        http_err = urllib.error.HTTPError(
+            url="https://api.github.com/...",
+            code=403,
+            msg="rate limit exceeded",
+            hdrs={"x-ratelimit-remaining": "0"},
+            fp=None,
+        )
+
+        with patch.object(module, "_get_installed_tag", return_value="0.1.0-alpha"):
+            with patch.object(module, "_get_github_token", return_value="fake_token"):
+                with patch.object(module, "_fetch_latest_release", side_effect=http_err):
+                    result = module.run(context)
+                    self.assertEqual(result.status, "warning")
+                    self.assertEqual(result.message, "GitHub API rate limit reached")
+
 
 if __name__ == "__main__":
     unittest.main()

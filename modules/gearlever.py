@@ -2,7 +2,7 @@
 Gear Lever AppImage manager module.
 """
 
-from modules.base import BaseModule, UpdateContext
+from modules.base import BaseModule, UpdateContext, check_github_api
 from ui import StepResult
 
 
@@ -23,7 +23,11 @@ class GearLeverModule(BaseModule):
         return "it.mijorus.gearlever" in out
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        code, out, _ = ctx.run_cmd(
+        gh_check = check_github_api()
+        if gh_check is not None:
+            return gh_check
+
+        code, out, err = ctx.run_cmd(
             [
                 "flatpak",
                 "run",
@@ -33,6 +37,10 @@ class GearLeverModule(BaseModule):
                 "--json",
             ]
         )
+        combined = (out or "") + "\n" + (err or "")
+        if "rate limit" in combined.casefold() or "api limit reached" in combined.casefold():
+            return StepResult("warning", "GitHub API rate limit reached")
+
         if code != 0:
             return StepResult("unchanged")
 
@@ -40,15 +48,29 @@ class GearLeverModule(BaseModule):
 
         updates = []
         try:
-            data = json.loads(out)
-            updates = data.get("updates", [])
+            json_start = out.find("{")
+            if json_start != -1:
+                data = json.loads(out[json_start:])
+                updates = data.get("updates", [])
         except Exception:
             pass
 
         if not updates:
             return StepResult("unchanged")
 
-        names = [u.get("name", "appimage") for u in updates if isinstance(u, dict)]
+        details = []
+        for u in updates:
+            if not isinstance(u, dict):
+                continue
+            name = u.get("name", "appimage")
+            cur = u.get("current_version")
+            avail = u.get("available_version")
+            if cur and avail and str(cur) != str(avail):
+                details.append(f"{name}: {cur} -> {avail}")
+            elif avail:
+                details.append(f"{name}: -> {avail}")
+            else:
+                details.append(name)
 
         up_code, up_out, up_err = ctx.run_cmd(
             [
@@ -62,6 +84,12 @@ class GearLeverModule(BaseModule):
             ],
             timeout=300,
         )
+        up_combined = (up_out or "") + "\n" + (up_err or "")
+        if (
+            "rate limit" in up_combined.casefold()
+            or "api limit reached" in up_combined.casefold()
+        ):
+            return StepResult("warning", "GitHub API rate limit reached")
 
         if up_code != 0:
             return StepResult(
@@ -70,9 +98,9 @@ class GearLeverModule(BaseModule):
                 error_output=up_err or up_out,
             )
 
-        count = len(names)
+        count = len(details)
         return StepResult(
             "ok",
             f"{count} appimage{'s' if count != 1 else ''} updated",
-            details=names,
+            details=details,
         )
