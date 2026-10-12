@@ -26,7 +26,7 @@ STATUS_MARKERS: dict[str, str] = {
     "✓": f"{Colors.DIM}[{Colors.RESET}{Colors.BOLD_GREEN}✓{Colors.RESET}{Colors.DIM}]{Colors.RESET}",
     "!": f"{Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET}",
     "✗": f"{Colors.DIM}[{Colors.RESET}{Colors.BOLD_RED}✗{Colors.RESET}{Colors.DIM}]{Colors.RESET}",
-    "—": f"{Colors.DIM}[{Colors.RESET}{Colors.GRAY}—{Colors.RESET}{Colors.DIM}]{Colors.RESET}",
+    "—": f"{Colors.DIM}[—]{Colors.RESET}",
     ":": f"{Colors.DIM}[{Colors.RESET}{Colors.BOLD_CYAN}:{Colors.RESET}{Colors.DIM}]{Colors.RESET}",
     "~": f"{Colors.DIM}[{Colors.RESET}{Colors.BOLD_MAGENTA}~{Colors.RESET}{Colors.DIM}]{Colors.RESET}",
 }

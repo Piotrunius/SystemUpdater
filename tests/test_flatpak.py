@@ -1,4 +1,5 @@
 import io
+import re
 import unittest
 from contextlib import redirect_stdout
 from typing import Any, cast
@@ -79,7 +80,8 @@ class FlatpakTests(unittest.TestCase):
             )
 
         self.assertIn("Device Firmware: up to date", output.getvalue())
-        self.assertIn("[—]", output.getvalue())
+        plain = re.sub(r"\x1b\[[0-9;]*m", "", output.getvalue())
+        self.assertIn("[—]", plain)
         self.assertNotIn("!", output.getvalue())
 
     def test_verbose_step_keeps_warning_indicator(self):
