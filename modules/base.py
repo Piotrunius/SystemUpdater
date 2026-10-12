@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 if TYPE_CHECKING:
     from ui import StepResult
 
+from colors import Colors
 from ui import detect_warning
 
 
@@ -147,7 +148,9 @@ class UpdateContext:
             from history_store import redact_text
 
             printable_command = shlex.join([redact_text(str(arg)) for arg in cmd])
-            print(f"      \033[2m$ {printable_command}\033[0m")
+            print(
+                f"      {Colors.DIM}${Colors.RESET} {Colors.BOLD}{printable_command}{Colors.RESET}"
+            )
 
         last_code = 1
         last_out = ""
@@ -165,40 +168,66 @@ class UpdateContext:
                         cmd,
                         stdin=subprocess.DEVNULL,
                         stdout=subprocess.PIPE,
-                        stderr=subprocess.STDOUT,
+                        stderr=subprocess.PIPE,
                         text=True,
                         errors="replace",
                         bufsize=1,
                         env=run_env,
                     )
                     out_chunks = []
+                    err_chunks = []
+                    stream_lock = threading.Lock()
+                    active_stream = [None]
+                    stream_printed_header = set()
 
-                    def stream_reader(pipe, accumulator):
+                    def stream_reader(
+                        pipe,
+                        accumulator,
+                        stream_name,
+                        lock=stream_lock,
+                        headers=stream_printed_header,
+                        current=active_stream,
+                    ):
                         from history_store import redact_text
 
                         pending_blank = False
-                        has_printed_non_empty = False
                         try:
                             for line in iter(pipe.readline, ""):
                                 accumulator.append(line)
                                 self.last_activity_time = time.monotonic()
                                 if is_verbose:
                                     clean_line = redact_text(line.rstrip("\r\n"))
-                                    if not clean_line.strip():
-                                        if has_printed_non_empty:
-                                            pending_blank = True
-                                    else:
-                                        if pending_blank:
+                                    with lock:
+                                        if not clean_line.strip():
+                                            if stream_name in headers:
+                                                pending_blank = True
+                                        else:
+                                            if stream_name not in headers:
+                                                print(
+                                                    f"        {Colors.DIM}{stream_name}:{Colors.RESET}",
+                                                    flush=True,
+                                                )
+                                                headers.add(stream_name)
+                                                current[0] = stream_name
+                                                pending_blank = False
+                                            elif current[0] != stream_name:
+                                                print(
+                                                    f"        {Colors.DIM}{stream_name}:{Colors.RESET}",
+                                                    flush=True,
+                                                )
+                                                current[0] = stream_name
+                                                pending_blank = False
+
+                                            if pending_blank:
+                                                print(
+                                                    f"          {Colors.DIM}{Colors.RESET}",
+                                                    flush=True,
+                                                )
+                                                pending_blank = False
                                             print(
-                                                "        \033[2m\033[0m",
+                                                f"          {Colors.DIM}{clean_line}{Colors.RESET}",
                                                 flush=True,
                                             )
-                                            pending_blank = False
-                                        print(
-                                            f"        \033[2m{clean_line}\033[0m",
-                                            flush=True,
-                                        )
-                                        has_printed_non_empty = True
                         except OSError:
                             return
                         finally:
@@ -206,10 +235,16 @@ class UpdateContext:
 
                     t_out = threading.Thread(
                         target=stream_reader,
-                        args=(proc.stdout, out_chunks),
+                        args=(proc.stdout, out_chunks, "stdout"),
+                        daemon=True,
+                    )
+                    t_err = threading.Thread(
+                        target=stream_reader,
+                        args=(proc.stderr, err_chunks, "stderr"),
                         daemon=True,
                     )
                     t_out.start()
+                    t_err.start()
                     output_was_streamed = True
 
                     try:
@@ -218,6 +253,7 @@ class UpdateContext:
                         proc.kill()
                         proc.wait()
                         t_out.join(timeout=0.5)
+                        t_err.join(timeout=0.5)
                         last_code = 124
                         last_out = "".join(out_chunks)
                         last_err = (
@@ -242,9 +278,10 @@ class UpdateContext:
                             with contextlib.suppress(OSError):
                                 proc.kill()
                         t_out.join(timeout=0.5)
+                        t_err.join(timeout=0.5)
                         last_code = 130
                         last_out = "".join(out_chunks)
-                        last_err = "Command interrupted by user"
+                        last_err = "".join(err_chunks) or "Command interrupted by user"
                         self._record_command(
                             cmd,
                             last_code,
@@ -258,9 +295,10 @@ class UpdateContext:
                         raise
 
                     t_out.join(timeout=1.0)
+                    t_err.join(timeout=1.0)
                     last_code = proc.returncode
                     last_out = "".join(out_chunks)
-                    last_err = ""
+                    last_err = "".join(err_chunks)
                 except OSError as e:
                     last_code = 1
                     last_out = ""
@@ -285,7 +323,9 @@ class UpdateContext:
                     except subprocess.TimeoutExpired:
                         last_code = 124
                         last_out = ""
-                        last_err = f"Command timed out after {timeout}s: {shlex.join(cmd)}"
+                        last_err = (
+                            f"Command timed out after {timeout}s: {shlex.join(cmd)}"
+                        )
                     except KeyboardInterrupt:
                         self._record_command(
                             cmd,

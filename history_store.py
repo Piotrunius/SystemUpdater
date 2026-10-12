@@ -267,7 +267,9 @@ def print_history(runs: list[dict[str, Any]], limit: int = 10) -> None:
     print(f"{c_dim}" + "─" * 80 + f"{c_reset}")
     for run in runs[: max(1, limit)]:
         duration = f"{float(run.get('duration', 0)):.1f}s"
-        status_val = calculated_statuses.get(run.get("id"), run.get("status", "unknown"))
+        status_val = calculated_statuses.get(
+            run.get("id"), run.get("status", "unknown")
+        )
         print(
             f"{run.get('id', ''):<26}  "
             f"{_display_time(run.get('started_at', '')):<19}  "
@@ -425,7 +427,9 @@ def print_run_log(run: dict[str, Any]) -> None:
             current_category = cat
             is_new_category = True
             cat_prefix = f"── {current_category} "
-            print(f"\n{c_cyan}{cat_prefix}{'─' * max(0, width - len(cat_prefix))}{c_reset}")
+            print(
+                f"\n{c_cyan}{cat_prefix}{'─' * max(0, width - len(cat_prefix))}{c_reset}"
+            )
 
         message = str(module.get("message", "")).strip()
         module_status = str(module.get("status", "unknown"))
@@ -480,7 +484,9 @@ def print_run_log(run: dict[str, Any]) -> None:
             command_text = shlex.join(command.get("command", []))
             print(f"      {c_dim}${c_reset} {c_bold}{command_text}{c_reset}")
             if command.get("output_withheld"):
-                print(f"        {c_dim}[output withheld for a read-only command]{c_reset}")
+                print(
+                    f"        {c_dim}[output withheld for a read-only command]{c_reset}"
+                )
             for stream_name in ("stdout", "stderr"):
                 output = command.get(stream_name, "")
                 if output and output.strip():

@@ -408,7 +408,8 @@ def _format_history_modules(results: list[dict[str, Any]]) -> list[dict[str, Any
         {
             "name": item["name"],
             "key": item.get("key", ""),
-            "category": getattr(item.get("module"), "category", "") or item.get("category", ""),
+            "category": getattr(item.get("module"), "category", "")
+            or item.get("category", ""),
             "status": item["result"].status,
             "message": redact_text(item["result"].message),
             "duration": round(item["result"].duration, 2),
@@ -562,7 +563,10 @@ def main():
                 if m.category != current_category:
                     current_category = m.category
                     ui.print_category(current_category)
-                    if current_category == "Containers & Packages" and self_update_result:
+                    if (
+                        current_category == "Containers & Packages"
+                        and self_update_result
+                    ):
                         self_update_step = StepResult(
                             *self_update_result[:2],
                             duration=self_update_result[2],
@@ -686,7 +690,9 @@ def main():
                     "name": "Run History",
                     "key": "history",
                     "result": StepResult(
-                        "warning", "Could not save update history", error_output=str(error)
+                        "warning",
+                        "Could not save update history",
+                        error_output=str(error),
                     ),
                 }
             )

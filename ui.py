@@ -270,7 +270,7 @@ class UI:
                     if self._category_has_output:
                         print()
                     frame = f"{Colors.DIM}[{Colors.RESET}{Colors.BOLD_CYAN}:{Colors.RESET}{Colors.DIM}]{Colors.RESET}"
-                    print(f"  {frame} {label}...")
+                    print(f"  {frame} {Colors.BOLD}{label}{Colors.RESET}...")
                     self._last_step_multiline = True
                     self._category_has_output = True
 
@@ -518,9 +518,15 @@ class UI:
                 if record.get("output_withheld") or record.get("output_streamed"):
                     continue
                 for stream_name in ("stdout", "stderr"):
-                    for line in record.get(stream_name, "").splitlines():
-                        if line.strip():
-                            print(f"        {Colors.DIM}{line.rstrip()}{Colors.RESET}")
+                    lines = [
+                        line.rstrip()
+                        for line in record.get(stream_name, "").splitlines()
+                        if line.strip()
+                    ]
+                    if lines:
+                        print(f"        {Colors.DIM}{stream_name}:{Colors.RESET}")
+                        for line in lines:
+                            print(f"          {Colors.DIM}{line}{Colors.RESET}")
 
     def _spinner_worker(
         self,
@@ -794,9 +800,7 @@ class UI:
                 ):
                     details.insert(0, res.message)
                 marker = f"{Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET}"
-                print(
-                    f"  {marker} {item['name']}: {message}"
-                )
+                print(f"  {marker} {item['name']}: {message}")
                 print_details(details, indent="    ")
 
         if error_items:

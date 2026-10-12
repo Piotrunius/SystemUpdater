@@ -241,7 +241,11 @@ class HistoryStoreTests(unittest.TestCase):
             "update_count": 0,
             "modules": [
                 {"key": "dnf", "status": "ok", "message": "updated"},
-                {"key": "distrobox", "status": "interrupted", "message": "Cancelled by user"},
+                {
+                    "key": "distrobox",
+                    "status": "interrupted",
+                    "message": "Cancelled by user",
+                },
             ],
         }
         self.assertEqual(classify_run_status(run, []), "interrupted")
@@ -344,7 +348,6 @@ class HistoryStoreTests(unittest.TestCase):
         self.assertIn("        stdout:", rendered)
         self.assertIn("          Nothing to do.", rendered)
 
-
     def test_no_history_flag_is_parsed_without_short_alias(self):
         from unittest.mock import patch
 
@@ -361,4 +364,3 @@ class HistoryStoreTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

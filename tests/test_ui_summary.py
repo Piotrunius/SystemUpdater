@@ -64,7 +64,10 @@ class SummaryFormattingTests(unittest.TestCase):
 
         rendered = raw_output.getvalue()
         self.assertIn("\033[1;36m── Warnings ", rendered)
-        self.assertIn("\033[2m[\033[0m\033[1;33m!\033[0m\033[2m]\033[0m Example Module: warning", rendered)
+        self.assertIn(
+            "\033[2m[\033[0m\033[1;33m!\033[0m\033[2m]\033[0m Example Module: warning",
+            rendered,
+        )
         warning_section = rendered.split("\033[0m", 1)[1].split("\033[36m", 1)[0]
         self.assertNotIn("\033[1;31m", warning_section)
 
@@ -78,7 +81,10 @@ class SummaryFormattingTests(unittest.TestCase):
 
         rendered = raw_output.getvalue()
         self.assertIn("\033[1;36m── Errors ", rendered)
-        self.assertIn("\033[2m[\033[0m\033[1;31m✗\033[0m\033[2m]\033[0m Example Module: failed", rendered)
+        self.assertIn(
+            "\033[2m[\033[0m\033[1;31m✗\033[0m\033[2m]\033[0m Example Module: failed",
+            rendered,
+        )
 
     def test_warnings_remain_hidden_without_verbose_mode(self):
         output = render_summary(
@@ -411,7 +417,10 @@ class SummaryFormattingTests(unittest.TestCase):
             ui.print_interrupted()
         raw = output.getvalue()
         self.assertIn("\033[1;36m── Interrupted ", raw)
-        self.assertIn("\033[2m[\033[0m\033[1;35m~\033[0m\033[2m]\033[0m Update cancelled by user.", raw)
+        self.assertIn(
+            "\033[2m[\033[0m\033[1;35m~\033[0m\033[2m]\033[0m Update cancelled by user.",
+            raw,
+        )
         self.assertTrue(raw.startswith("\n"))
         self.assertNotIn("State preserved", raw)
         self.assertNotIn("during", raw)
@@ -425,7 +434,10 @@ class SummaryFormattingTests(unittest.TestCase):
         self.assertIn("── Summary ─ 5s ", raw)
         self.assertIn("\033[2m[-]\033[0m No package updates were applied.", raw)
         self.assertIn("── Interrupted ", raw)
-        self.assertIn("\033[2m[\033[0m\033[1;35m~\033[0m\033[2m]\033[0m Update cancelled by user.", raw)
+        self.assertIn(
+            "\033[2m[\033[0m\033[1;35m~\033[0m\033[2m]\033[0m Update cancelled by user.",
+            raw,
+        )
         self.assertEqual(raw.count("── Summary ─"), 1)
         self.assertEqual(raw.count("── Interrupted "), 1)
 
@@ -446,6 +458,7 @@ class SummaryFormattingTests(unittest.TestCase):
 
     def test_running_frames_contains_three_rotations_without_hyphen(self):
         from ui import RUNNING_FRAMES
+
         self.assertEqual(len(RUNNING_FRAMES), 3)
         for frame in RUNNING_FRAMES:
             self.assertNotIn("-", frame)
@@ -458,9 +471,11 @@ class SummaryFormattingTests(unittest.TestCase):
         ctx = UpdateContext(verbose=True)
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
+
             def run_dummy():
                 ctx.notify_command_started()
                 return StepResult("ok", "done")
+
             ui.run_step("Test Verbose", run_dummy, ctx=ctx)
         plain = re.sub(r"\x1b\[[0-9;]*m", "", output.getvalue())
         self.assertIn("  [:] Test Verbose...", plain)
@@ -477,7 +492,11 @@ class SummaryFormattingTests(unittest.TestCase):
     def test_summary_sections_have_single_empty_line_between_them(self):
         ui = UI(is_interactive=False, verbose=True)
         results = [
-            {"name": "WarnMod", "key": "warn", "result": StepResult("warning", "warning")},
+            {
+                "name": "WarnMod",
+                "key": "warn",
+                "result": StepResult("warning", "warning"),
+            },
             {"name": "ErrMod", "key": "err", "result": StepResult("error", "failed")},
         ]
         output = io.StringIO()
@@ -529,7 +548,16 @@ class SummaryFormattingTests(unittest.TestCase):
         plain = re.sub(r"\x1b\[[0-9;]*m", "", output.getvalue())
         self.assertIn("(0.1s)\n\n  [:] Step 2...", plain)
 
+    def test_verbose_live_command_output_matches_log_format(self):
+        ctx = UpdateContext(verbose=True)
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            ctx.run_cmd(["echo", "hello world"])
+        raw = output.getvalue()
+        self.assertIn("\033[2m$\033[0m \033[1mecho 'hello world'\033[0m", raw)
+        self.assertIn("        \033[2mstdout:\033[0m", raw)
+        self.assertIn("          \033[2mhello world\033[0m", raw)
+
 
 if __name__ == "__main__":
     unittest.main()
-
