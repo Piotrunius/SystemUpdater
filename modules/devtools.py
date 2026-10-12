@@ -5,7 +5,7 @@ Developer tools, language runtimes, and shell extensions modules.
 import json
 import os
 import re
-from typing import List, Tuple, Optional
+
 from modules.base import BaseModule, UpdateContext
 from ui import StepResult
 
@@ -135,7 +135,7 @@ class PipModule(BaseModule):
     description = "Upgrades pip user installation to the latest version"
     is_single_entity = True
 
-    def _get_target(self, ctx: UpdateContext) -> Optional[Tuple[List[str], str]]:
+    def _get_target(self, ctx: UpdateContext) -> tuple[list[str], str] | None:
         # 1. Standalone pip binary (user pip in ~/.local/bin or system pip)
         pip_bin = ctx.which("pip3") or ctx.which("pip")
         if pip_bin:
@@ -155,9 +155,11 @@ class PipModule(BaseModule):
                     [
                         py_bin,
                         "-c",
-                        "import sysconfig, os, sys; "
-                        "stdlib = sysconfig.get_path('stdlib'); "
-                        "sys.exit(0 if os.path.exists(os.path.join(stdlib, 'EXTERNALLY-MANAGED')) else 1)",
+                        (
+                            "import sysconfig, os, sys; "
+                            "stdlib = sysconfig.get_path('stdlib'); "
+                            "sys.exit(0 if os.path.exists(os.path.join(stdlib, 'EXTERNALLY-MANAGED')) else 1)"
+                        ),
                     ],
                     read_only=True,
                 )
@@ -215,7 +217,7 @@ class NpmModule(BaseModule):
     def _availability(self, ctx: UpdateContext) -> str:
         if ctx.which("npm") is None:
             return "not-installed"
-        code, out, err = ctx.run_cmd(
+        code, out, _ = ctx.run_cmd(
             ["npm", "ls", "-g", "--depth=0", "--json"], timeout=10, read_only=True
         )
         if not out.strip() and code != 0:
@@ -223,9 +225,9 @@ class NpmModule(BaseModule):
         try:
             data = json.loads(out)
             deps = data.get("dependencies", {})
-            has_packages = any(pkg.lower() != "npm" for pkg in deps.keys())
+            has_packages = any(pkg.lower() != "npm" for pkg in deps)
             return "active" if has_packages else "no-targets"
-        except Exception:
+        except (json.JSONDecodeError, ValueError, TypeError):
             return "unavailable" if code != 0 else "no-targets"
 
     def is_available(self, ctx: UpdateContext) -> bool:
@@ -499,7 +501,9 @@ class MicroModule(BaseModule):
         plugins = []
         for line in out.splitlines():
             m = re.search(
-                r"(?:Updated|Installed|Updating)\s+plugin\s+([\w\.\-_]+)", line, re.I
+                r"(?:Updated|Installed|Updating)\s+plugin\s+([\w\.\-_]+)",
+                line,
+                re.IGNORECASE,
             )
             if m:
                 plugins.append(m.group(1))
@@ -590,15 +594,13 @@ class SkillsModule(BaseModule):
     unit_name_plural = "skills"
 
     @classmethod
-    def _find_lock_file(cls) -> Optional[str]:
+    def _find_lock_file(cls) -> str | None:
         xdg_state = os.environ.get("XDG_STATE_HOME")
         if xdg_state:
             candidate = os.path.join(xdg_state, "skills", ".skill-lock.json")
             if os.path.isfile(candidate):
                 return candidate
-        local_state = os.path.expanduser(
-            "~/.local/state/skills/.skill-lock.json"
-        )
+        local_state = os.path.expanduser("~/.local/state/skills/.skill-lock.json")
         if os.path.isfile(local_state):
             return local_state
         legacy = os.path.expanduser("~/.agents/.skill-lock.json")
@@ -622,10 +624,7 @@ class SkillsModule(BaseModule):
                         isinstance(entry, dict)
                         and entry.get("sourceType") != "local"
                         and (
-                            (
-                                entry.get("skillFolderHash")
-                                and entry.get("skillPath")
-                            )
+                            (entry.get("skillFolderHash") and entry.get("skillPath"))
                             or (
                                 entry.get("sourceType") == "well-known"
                                 and entry.get("sourceBaseUrl")
@@ -636,7 +635,7 @@ class SkillsModule(BaseModule):
                     )
                     if has_updatable:
                         return "active"
-        except Exception:
+        except (OSError, json.JSONDecodeError, ValueError, TypeError):
             pass
         return "no-targets"
 
@@ -819,10 +818,10 @@ class AntigravityModule(BaseModule):
             m = re.search(
                 r"Extension\s+'([^']+)'\s+(?:v[^\s]+\s+)?was successfully updated",
                 line,
-                re.I,
+                re.IGNORECASE,
             )
             if not m:
-                m = re.search(r"Updated\s+extension\s+([^\s]+)", line, re.I)
+                m = re.search(r"Updated\s+extension\s+([^\s]+)", line, re.IGNORECASE)
             if m:
                 exts.append(m.group(1))
         exts = list(dict.fromkeys(exts))
@@ -864,7 +863,7 @@ class YarnModule(BaseModule):
                         data = json.load(f)
                     if isinstance(data, dict) and bool(data.get("dependencies")):
                         return "active"
-                except Exception:
+                except (OSError, json.JSONDecodeError, ValueError, TypeError):
                     pass
         code, out, _ = ctx.run_cmd(
             ["yarn", "global", "list", "--depth=0"], timeout=10, read_only=True
@@ -1158,9 +1157,9 @@ class GemModule(BaseModule):
 
         details = []
         # Check if RubyGems version was updated
-        m_ver = re.search(r"RubyGems\s+([0-9\.]+)\s+installed", out, re.I) or re.search(
-            r"Installing RubyGems\s+([0-9\.]+)", out, re.I
-        )
+        m_ver = re.search(
+            r"RubyGems\s+([0-9\.]+)\s+installed", out, re.IGNORECASE
+        ) or re.search(r"Installing RubyGems\s+([0-9\.]+)", out, re.IGNORECASE)
         new_system_ver = m_ver.group(1) if m_ver else None
         if not new_system_ver:
             new_code, new_out, _ = ctx.run_cmd(["gem", "--version"], read_only=True)
@@ -1213,9 +1212,7 @@ class AsdfModule(BaseModule):
         plugins_dir = os.path.expanduser("~/.asdf/plugins")
         if os.path.isdir(plugins_dir):
             try:
-                entries = [
-                    e for e in os.listdir(plugins_dir) if not e.startswith(".")
-                ]
+                entries = [e for e in os.listdir(plugins_dir) if not e.startswith(".")]
                 if entries:
                     return "active"
             except OSError:

@@ -28,7 +28,10 @@ class ProtonPlusModule(BaseModule):
         code, out, err = ctx.run_cmd(["protonplus", "update", "all"], timeout=35)
         combined = (out or "") + "\n" + (err or "")
 
-        if "api limit reached" in combined.casefold() or "rate limit" in combined.casefold():
+        if (
+            "api limit reached" in combined.casefold()
+            or "rate limit" in combined.casefold()
+        ):
             return StepResult("warning", "GitHub API rate limit reached")
 
         if code != 0:

@@ -4,6 +4,7 @@ Firmware upgrades module using fwupdmgr.
 
 import json
 import re
+
 from modules.base import BaseModule, UpdateContext
 from ui import StepResult
 
@@ -32,7 +33,15 @@ class FirmwareModule(BaseModule):
                 if re.search(
                     r"(?:failed|error|unable|could not).*metadata|metadata.*(?:failed|error|unable|could not)",
                     line,
-                    re.I,
+                    re.IGNORECASE,
+                )
+                and not any(
+                    ign in line
+                    for ign in (
+                        "LVFS-Triaged-Issue",
+                        "dbx-does-not-apply-on-reboot",
+                        "Update failure is a known issue",
+                    )
                 )
             )
         )

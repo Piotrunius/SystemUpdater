@@ -7,9 +7,9 @@ Universal system package managers for all major Linux distributions:
 - XBPS (Void Linux)
 """
 
-import os
 import re
-from typing import List
+from typing import ClassVar
+
 from modules.base import BaseModule, UpdateContext, get_os_release
 from ui import StepResult
 
@@ -17,7 +17,7 @@ from ui import StepResult
 class AptModule(BaseModule):
     name = "System"
     key = "apt"
-    aliases = ["deb", "debian", "ubuntu", "system"]
+    aliases: ClassVar[list[str]] = ["deb", "debian", "ubuntu", "system"]
     category = "System Core"
     description = "Updates system packages via APT"
     requires_sudo = True
@@ -108,7 +108,7 @@ class AptModule(BaseModule):
 class PacmanModule(BaseModule):
     name = "System"
     key = "pacman"
-    aliases = ["arch", "aur", "yay", "paru", "system"]
+    aliases: ClassVar[list[str]] = ["arch", "aur", "yay", "paru", "system"]
     category = "System Core"
     description = "Updates system and AUR packages via Pacman / Yay / Paru"
     requires_sudo = True
@@ -170,7 +170,7 @@ class PacmanModule(BaseModule):
 class ZypperModule(BaseModule):
     name = "System"
     key = "zypper"
-    aliases = ["suse", "opensuse", "system"]
+    aliases: ClassVar[list[str]] = ["suse", "opensuse", "system"]
     category = "System Core"
     description = "Updates system packages via Zypper"
     requires_sudo = True
@@ -240,7 +240,7 @@ class ZypperModule(BaseModule):
 class ApkModule(BaseModule):
     name = "System"
     key = "apk"
-    aliases = ["alpine", "system"]
+    aliases: ClassVar[list[str]] = ["alpine", "system"]
     category = "System Core"
     description = "Updates system packages via APK"
     requires_sudo = True
@@ -280,7 +280,7 @@ class ApkModule(BaseModule):
 class XbpsModule(BaseModule):
     name = "System"
     key = "xbps"
-    aliases = ["void", "system"]
+    aliases: ClassVar[list[str]] = ["void", "system"]
     category = "System Core"
     description = "Updates system packages via XBPS"
     requires_sudo = True

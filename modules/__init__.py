@@ -4,84 +4,83 @@ Modules automatically detect whether their underlying tools are installed on the
 Also loads user custom commands and git repositories from ~/.config/sysupdate/config.toml.
 """
 
-from typing import List
-from modules.base import BaseModule
 from config import Config, get_config
+from modules.base import BaseModule
 
-# System Protection
-from modules.snapshot import SnapshotModule
+# Containers & Packages
+from modules.brew import BrewModule
+from modules.containers_ext import PodmanModule, VagrantModule
+from modules.custom import CustomCommandModule
 
-# System Core
-from modules.nobara import RepoSyncModule, SystemPackagesModule
-from modules.system_pm import (
-    AptModule,
-    PacmanModule,
-    ZypperModule,
-    ApkModule,
-    XbpsModule,
+# Development Environment - Languages & Toolchains
+from modules.devtools import (
+    AntigravityModule,
+    AsdfModule,
+    BunModule,
+    CargoUpdateModule,
+    ComposerModule,
+    CondaModule,
+    GemModule,
+    GhExtensionsModule,
+    MicroModule,
+    MiseModule,
+    NeovimModule,
+    NpmModule,
+    OhMyZshModule,
+    PipModule,
+    PipxModule,
+    PnpmModule,
+    PoetryModule,
+    RustupModule,
+    SkillsModule,
+    TmuxPluginsModule,
+    UvModule,
+    YarnModule,
+)
+from modules.distrobox import DistroboxModule
+from modules.docker import DockerModule
+from modules.dotfiles import ChezmoiModule, YadmModule
+from modules.editors import (
+    CursorModule,
+    HelixModule,
+    VsCodeModule,
+    VscodiumModule,
 )
 from modules.firmware import FirmwareModule
 
 # Applications & Gaming
 from modules.flatpak import FlatpakModule
-from modules.nuvio import NuvioModule
 from modules.gearlever import GearLeverModule
-from modules.proton import ProtonPlusModule
-from modules.distrobox import DistroboxModule
-
-# Containers & Packages
-from modules.brew import BrewModule
-from modules.docker import DockerModule
-from modules.containers_ext import PodmanModule, VagrantModule
-from modules.universal import SnapModule, NixModule
-
-# Development Environment - Languages & Toolchains
-from modules.devtools import (
-    OhMyZshModule,
-    RustupModule,
-    PipModule,
-    UvModule,
-    PipxModule,
-    PoetryModule,
-    CondaModule,
-    CargoUpdateModule,
-    NpmModule,
-    PnpmModule,
-    BunModule,
-    YarnModule,
-    ComposerModule,
-    GemModule,
-    MiseModule,
-    AsdfModule,
-    NeovimModule,
-    MicroModule,
-    TmuxPluginsModule,
-    GhExtensionsModule,
-    SkillsModule,
-    AntigravityModule,
-)
+from modules.git_repos import GitReposModule
 from modules.languages_ext import (
+    FlutterModule,
+    GhcupModule,
     PipenvModule,
     PyenvModule,
     SdkmanModule,
-    GhcupModule,
-    FlutterModule,
 )
-from modules.dotfiles import ChezmoiModule, YadmModule
-from modules.editors import (
-    VsCodeModule,
-    CursorModule,
-    VscodiumModule,
-    HelixModule,
+
+# System Core
+from modules.nobara import RepoSyncModule, SystemPackagesModule
+from modules.nuvio import NuvioModule
+from modules.proton import ProtonPlusModule
+
+# System Protection
+from modules.snapshot import SnapshotModule
+from modules.system_pm import (
+    ApkModule,
+    AptModule,
+    PacmanModule,
+    XbpsModule,
+    ZypperModule,
 )
-from modules.terminal_tools import TealdeerModule, FisherModule, ZinitModule
-from modules.git_repos import GitReposModule
-from modules.custom import CustomCommandModule
+from modules.terminal_tools import FisherModule, TealdeerModule, ZinitModule
+from modules.universal import NixModule, SnapModule
 
 
-def get_all_modules(cfg: Config | None = None) -> List[BaseModule]:
+def get_all_modules(cfg: Config | None = None) -> list[BaseModule]:
     cfg = cfg or get_config()
-    modules: List[BaseModule] = []
+    modules: list[BaseModule] = []
 
     # 1. Custom Pre-Commands (if defined in config.toml)
     for name, cmd in cfg.pre_commands.items():

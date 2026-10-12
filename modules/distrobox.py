@@ -1,4 +1,5 @@
 import re
+
 from modules.base import BaseModule, UpdateContext
 from ui import StepResult
 
@@ -67,12 +68,10 @@ class DistroboxModule(BaseModule):
             if any(
                 token in line_l
                 for token in ["upgrading ", "upgrading:", "installing:", "upgraded:"]
+            ) and (
+                "nothing to do" not in line_l and "there is nothing to do" not in line_l
             ):
-                if (
-                    "nothing to do" not in line_l
-                    and "there is nothing to do" not in line_l
-                ):
-                    box_had_update = True
+                box_had_update = True
 
         if current_box and box_had_update:
             updated_containers.append(current_box)

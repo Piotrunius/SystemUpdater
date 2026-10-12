@@ -5,12 +5,14 @@ import json
 import os
 import re
 import shlex
+import sys
 import tempfile
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
+from colors import Colors
 
 RUN_ID_PATTERN = re.compile(r"^\d{8}T\d{6}Z-[0-9a-f]{8}$")
 TOKEN_PATTERN = re.compile(
@@ -42,9 +44,9 @@ def redact_text(value: str) -> str:
     return FLAG_SECRET_PATTERN.sub(r"\1[REDACTED]", redacted)
 
 
-def _warning_signatures(module: Dict[str, Any]) -> set[str]:
+def _warning_signatures(module: dict[str, Any]) -> set[str]:
     status = str(module.get("status", ""))
-    if status == "skipped":
+    if status in ("skipped", "interrupted", "cancelled"):
         return set()
 
     messages = []
@@ -70,10 +72,10 @@ def _warning_signatures(module: Dict[str, Any]) -> set[str]:
 
 
 def has_new_warnings(
-    current_modules: List[Dict[str, Any]], previous_runs: List[Dict[str, Any]]
+    current_modules: list[dict[str, Any]], previous_runs: list[dict[str, Any]]
 ) -> bool:
     """Return whether a module has warning text absent from its latest previous run."""
-    latest_module_by_key: Dict[str, Dict[str, Any]] = {}
+    latest_module_by_key: dict[str, dict[str, Any]] = {}
     for run in previous_runs:
         for module in run.get("modules") or []:
             if module.get("status") == "skipped":
@@ -94,9 +96,13 @@ def has_new_warnings(
 
 
 def classify_run_status(
-    run: Dict[str, Any], previous_runs: List[Dict[str, Any]]
+    run: dict[str, Any], previous_runs: list[dict[str, Any]]
 ) -> str:
+    if run.get("status") in ("interrupted", "cancelled"):
+        return "interrupted"
     modules = run.get("modules") or []
+    if any(module.get("status") in ("interrupted", "cancelled") for module in modules):
+        return "interrupted"
     if run.get("status") == "error" or any(
         module.get("status") == "error" for module in modules
     ):
@@ -116,16 +122,16 @@ def _state_directory() -> Path:
 
 
 class HistoryStore:
-    def __init__(self, directory: Optional[Path] = None, retention: int = 30):
+    def __init__(self, directory: Path | None = None, retention: int = 30):
         self.directory = Path(directory) if directory else _state_directory()
         self.retention = max(1, retention)
 
     @staticmethod
-    def new_run_id(now: Optional[datetime] = None) -> str:
-        timestamp = now or datetime.now(timezone.utc)
+    def new_run_id(now: datetime | None = None) -> str:
+        timestamp = now or datetime.now(UTC)
         return f"{timestamp.strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:8]}"
 
-    def save(self, run_data: Dict[str, Any]) -> Path:
+    def save(self, run_data: dict[str, Any]) -> Path:
         self.directory.mkdir(mode=0o700, parents=True, exist_ok=True)
         with contextlib.suppress(OSError):
             os.chmod(self.directory.parent, 0o700)
@@ -153,7 +159,7 @@ class HistoryStore:
                 os.unlink(temporary_path)
             raise
 
-    def list_runs(self, limit: int = 10) -> List[Dict[str, Any]]:
+    def list_runs(self, limit: int = 10) -> list[dict[str, Any]]:
         if not self.directory.is_dir():
             return []
         files = sorted(
@@ -174,7 +180,7 @@ class HistoryStore:
                 continue
         return runs
 
-    def load(self, run_id: str) -> Optional[Dict[str, Any]]:
+    def load(self, run_id: str) -> dict[str, Any] | None:
         if not RUN_ID_PATTERN.fullmatch(run_id):
             return None
         path = self.directory / f"{run_id}.json"
@@ -214,23 +220,37 @@ def _status_label(status: str) -> tuple[str, str]:
         "skipped": ("-", "skipped"),
         "updated": ("✓", "updated"),
         "up-to-date": ("—", "up-to-date"),
+        "interrupted": ("~", "interrupted"),
+        "cancelled": ("~", "cancelled"),
     }
     return labels.get(status, ("?", status or "unknown"))
 
 
 def _status_marker(status: str) -> str:
     symbol, _ = _status_label(status)
-    colors = {"ok": "\033[32m", "warning": "\033[33m", "error": "\033[31m"}
-    if not os.isatty(1) or os.environ.get("NO_COLOR") is not None:
+    if not sys.stdout.isatty() or os.environ.get("NO_COLOR") is not None:
         return f"[{symbol}]"
-    color = colors.get(status, "\033[2m")
-    return f"{color}[{symbol}]\033[0m"
+    if status in ("ok", "updated"):
+        return f"{Colors.DIM}[{Colors.RESET}{Colors.BOLD_GREEN}✓{Colors.RESET}{Colors.DIM}]{Colors.RESET}"
+    if status == "warning":
+        return f"{Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET}"
+    if status == "error":
+        return f"{Colors.DIM}[{Colors.RESET}{Colors.BOLD_RED}✗{Colors.RESET}{Colors.DIM}]{Colors.RESET}"
+    if status in ("interrupted", "cancelled"):
+        return f"{Colors.DIM}[{Colors.RESET}{Colors.BOLD_MAGENTA}~{Colors.RESET}{Colors.DIM}]{Colors.RESET}"
+    if status == "skipped":
+        return f"{Colors.DIM}[-]{Colors.RESET}"
+    return f"{Colors.DIM}[—]{Colors.RESET}"
 
 
-def print_history(runs: List[Dict[str, Any]], limit: int = 10) -> None:
+def print_history(runs: list[dict[str, Any]], limit: int = 10) -> None:
     if not runs:
         print("No saved update runs.")
         return
+
+    use_color = sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
+    c_dim = Colors.DIM if use_color else ""
+    c_reset = Colors.RESET if use_color else ""
 
     calculated_statuses = {}
     previous_runs = []
@@ -240,42 +260,173 @@ def print_history(runs: List[Dict[str, Any]], limit: int = 10) -> None:
         )
         previous_runs.append(run)
 
-    header = f"{'Run ID':<26}  {'Started':<19}  {'Status':<11}  {'Duration':<9}  Updates"
+    header = (
+        f"{'Run ID':<26}  {'Started':<19}  {'Status':<11}  {'Duration':<9}  Updates"
+    )
     print(header)
-    print("─" * 80)
+    print(f"{c_dim}" + "─" * 80 + f"{c_reset}")
     for run in runs[: max(1, limit)]:
         duration = f"{float(run.get('duration', 0)):.1f}s"
+        status_val = calculated_statuses.get(run.get("id"), run.get("status", "unknown"))
         print(
             f"{run.get('id', ''):<26}  "
             f"{_display_time(run.get('started_at', '')):<19}  "
-            f"{calculated_statuses.get(run.get('id'), run.get('status', 'unknown')):<11}  "
+            f"{status_val:<11}  "
             f"{duration:<9}  "
             f"{run.get('update_count', 0)}"
         )
 
 
-def print_run_log(run: Dict[str, Any]) -> None:
-    modules = run.get("modules", [])
-    status = str(run.get("status", "unknown"))
-    print("── Update Run " + "─" * 66)
-    print(f"  ID:       {run.get('id', 'unknown')}")
-    print(f"  Started:  {_display_time(run.get('started_at', ''))}")
-    print(f"  Duration: {float(run.get('duration', 0)):.1f}s")
+KNOWN_CATEGORIES: dict[str, str] = {
+    # System Protection
+    "snapshot": "System Protection",
+    "config": "System Protection",
+    "configuration": "System Protection",
+    # System Core
+    "reposync": "System Core",
+    "repositories": "System Core",
+    "system": "System Core",
+    "nobara_repos": "System Core",
+    "nobara_system": "System Core",
+    "system_packages": "System Core",
+    "firmware": "System Core",
+    "device_firmware": "System Core",
+    "maintenance": "System Core",
+    "apt": "System Core",
+    "apt_packages": "System Core",
+    "pacman": "System Core",
+    "arch_packages": "System Core",
+    "dnf": "System Core",
+    "zypper": "System Core",
+    "zypper_packages": "System Core",
+    "apk": "System Core",
+    "alpine_packages": "System Core",
+    "xbps": "System Core",
+    "xbps_packages": "System Core",
+    # Applications & Gaming
+    "flatpak": "Applications & Gaming",
+    "gearlever": "Applications & Gaming",
+    "gear_lever": "Applications & Gaming",
+    "protonplus": "Applications & Gaming",
+    "proton": "Applications & Gaming",
+    "distrobox": "Applications & Gaming",
+    "nuvio": "Applications & Gaming",
+    "nuvio_desktop": "Applications & Gaming",
+    # Containers & Packages
+    "brew": "Containers & Packages",
+    "homebrew": "Containers & Packages",
+    "docker": "Containers & Packages",
+    "podman": "Containers & Packages",
+    "vagrant": "Containers & Packages",
+    "nix": "Containers & Packages",
+    "snap": "Containers & Packages",
+    "self_update": "Containers & Packages",
+    "systemupdater": "Containers & Packages",
+    # Development Environment
+    "asdf": "Development Environment",
+    "bun": "Development Environment",
+    "cargo_update": "Development Environment",
+    "cargo": "Development Environment",
+    "composer": "Development Environment",
+    "conda": "Development Environment",
+    "gem": "Development Environment",
+    "gh_extensions": "Development Environment",
+    "github_cli_extensions": "Development Environment",
+    "micro": "Development Environment",
+    "mise": "Development Environment",
+    "neovim": "Development Environment",
+    "npm": "Development Environment",
+    "oh_my_zsh": "Development Environment",
+    "pip": "Development Environment",
+    "pipx": "Development Environment",
+    "pnpm": "Development Environment",
+    "poetry": "Development Environment",
+    "rust": "Development Environment",
+    "rustup": "Development Environment",
+    "ruby": "Development Environment",
+    "skills": "Development Environment",
+    "agents": "Development Environment",
+    "tmux_plugins": "Development Environment",
+    "uv": "Development Environment",
+    "yarn": "Development Environment",
+    "chezmoi": "Development Environment",
+    "yadm": "Development Environment",
+    "cursor": "Development Environment",
+    "helix": "Development Environment",
+    "vscode": "Development Environment",
+    "vscodium": "Development Environment",
+    "git_repos": "Development Environment",
+    "flutter": "Development Environment",
+    "ghcup": "Development Environment",
+    "pipenv": "Development Environment",
+    "pyenv": "Development Environment",
+    "sdkman": "Development Environment",
+    "fisher": "Development Environment",
+    "tealdeer": "Development Environment",
+    "zinit": "Development Environment",
+    "antigravity": "Development Environment",
+}
 
-    print("\n── Modules " + "─" * 69)
+
+def _module_category(module: dict[str, Any]) -> str:
+    category = str(module.get("category", "")).strip()
+    if category:
+        return category
+    key = str(module.get("key", "")).strip().lower()
+    if key in KNOWN_CATEGORIES:
+        return KNOWN_CATEGORIES[key]
+    name = str(module.get("name", "")).strip().lower().replace(" ", "_")
+    if name in KNOWN_CATEGORIES:
+        return KNOWN_CATEGORIES[name]
+    name_no_spaces = name.replace("_", "")
+    for k, v in KNOWN_CATEGORIES.items():
+        if k.replace("_", "") == name_no_spaces:
+            return v
+    return "Other"
+
+
+def print_run_log(run: dict[str, Any]) -> None:
+    modules = run.get("modules", [])
+    width = 80
+    use_color = sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
+    c_cyan = Colors.BOLD_CYAN if use_color else ""
+    c_dim = Colors.DIM if use_color else ""
+    c_bold = Colors.BOLD if use_color else ""
+    c_gray = Colors.GRAY if use_color else ""
+    c_reset = Colors.RESET if use_color else ""
+
+    run_prefix = "── Update Run "
+    print(f"{c_cyan}{run_prefix}{'─' * max(0, width - len(run_prefix))}{c_reset}")
+    print(f"  {c_dim}ID:{c_reset}       {run.get('id', 'unknown')}")
+    print(f"  {c_dim}Started:{c_reset}  {_display_time(run.get('started_at', ''))}")
+    print(f"  {c_dim}Duration:{c_reset} {float(run.get('duration', 0)):.1f}s")
+
+    mod_prefix = "── Modules "
+    print(f"\n{c_cyan}{mod_prefix}{'─' * max(0, width - len(mod_prefix))}{c_reset}")
     for module in modules:
         module_status = str(module.get("status", "unknown"))
         if module_status == "unchanged" and module.get("warnings"):
             module_status = "warning"
         _, module_label = _status_label(module_status)
+        dur_str = f"{float(module.get('duration', 0)):.1f}s"
         print(
             f"  {_status_marker(module_status)} {module.get('name', 'Module'):<30} "
-            f"{module_label:<12} {float(module.get('duration', 0)):.1f}s"
+            f"{module_label:<12} {c_gray}{dur_str}{c_reset}"
         )
 
-    print("\n── Command Output " + "─" * 62)
+    cmd_prefix = "── Command Output "
+    print(f"\n{c_cyan}{cmd_prefix}{'─' * max(0, width - len(cmd_prefix))}{c_reset}")
 
+    current_category = None
     for module in modules:
+        cat = _module_category(module)
+        is_new_category = False
+        if cat != current_category:
+            current_category = cat
+            is_new_category = True
+            cat_prefix = f"── {current_category} "
+            print(f"\n{c_cyan}{cat_prefix}{'─' * max(0, width - len(cat_prefix))}{c_reset}")
+
         message = str(module.get("message", "")).strip()
         module_status = str(module.get("status", "unknown"))
         if module_status == "unchanged" and module.get("warnings"):
@@ -291,7 +442,9 @@ def print_run_log(run: Dict[str, Any]) -> None:
             for detail in module.get("details", [])
             if str(detail).strip()
         ]
-        if not has_command_output and module_status == "warning":
+        if module_status in ("interrupted", "cancelled"):
+            reason = ""
+        elif not has_command_output and module_status == "warning":
             reason_parts = (
                 [message] if message and message.casefold() != "warning" else []
             )
@@ -307,13 +460,16 @@ def print_run_log(run: Dict[str, Any]) -> None:
             reason = message
         else:
             reason = ""
-        module_heading = f"{_status_marker(module_status)} {module.get('name', 'Module')} · {module_label}"
+        module_heading = f"{_status_marker(module_status)} {c_bold}{module.get('name', 'Module')}{c_reset} {c_dim}·{c_reset} {module_label}"
         if reason:
-            module_heading += f" — {reason}"
-        print(f"\n{module_heading}")
+            module_heading += f" {c_dim}—{c_reset} {reason}"
+        if is_new_category:
+            print(f"  {module_heading}")
+        else:
+            print(f"\n  {module_heading}")
         if has_command_output:
             for detail in details:
-                print(f"  - {detail}")
+                print(f"      {c_dim}-{c_reset} {detail}")
         captured_lines = {
             " ".join(line.casefold().split())
             for command in commands
@@ -322,13 +478,13 @@ def print_run_log(run: Dict[str, Any]) -> None:
         }
         for command in commands:
             command_text = shlex.join(command.get("command", []))
-            print(f"  $ {command_text}")
+            print(f"      {c_dim}${c_reset} {c_bold}{command_text}{c_reset}")
             if command.get("output_withheld"):
-                print("    [output withheld for a read-only command]")
+                print(f"        {c_dim}[output withheld for a read-only command]{c_reset}")
             for stream_name in ("stdout", "stderr"):
                 output = command.get(stream_name, "")
                 if output and output.strip():
-                    print(f"    {stream_name}:")
+                    print(f"        {c_dim}{stream_name}:{c_reset}")
                     pending_blank = False
                     for line in output.strip().splitlines():
                         if not line.strip():
@@ -337,7 +493,7 @@ def print_run_log(run: Dict[str, Any]) -> None:
                             if pending_blank:
                                 print()
                                 pending_blank = False
-                            print(f"      {line.rstrip()}")
+                            print(f"          {c_dim}{line.rstrip()}{c_reset}")
         if error_output:
             diagnostic_lines = [
                 line.rstrip() for line in error_output.rstrip().splitlines()
@@ -348,6 +504,6 @@ def print_run_log(run: Dict[str, Any]) -> None:
                 if " ".join(line.casefold().split()) not in captured_lines
             ]
             if unseen_lines:
-                print("  Diagnostic output:")
+                print(f"      {c_dim}Diagnostic output:{c_reset}")
                 for line in unseen_lines:
-                    print(f"    {line}")
+                    print(f"        {c_dim}{line}{c_reset}")

@@ -19,15 +19,15 @@ Before system package updates, it can create a Btrfs snapshot through Snapper. I
 
 Availability depends on the operating system and tools installed on the machine. Run `sysupdate --list` to see which modules are available on your system.
 
-| Area | Sources |
-| --- | --- |
-| System | DNF/DNF5, APT, Pacman and AUR helpers (yay/paru), Zypper, APK, XBPS, Nobara repository sync |
-| Protection and firmware | Snapper Btrfs snapshots, Firmware (fwupdmgr) |
-| Apps and gaming | Flatpak, Nuvio Desktop, Gear Lever AppImages, ProtonPlus, Distrobox |
-| Containers and package tools | Homebrew, Docker images and Compose services, Podman auto-update, Vagrant boxes, Snap, Nix |
-| Development tools | Shell plugins, Tealdeer, Rust, Python tools, Node.js package managers, Composer, Ruby gems, Mise, asdf, SDKMAN, GHCup, Flutter |
-| Editors and extensions | Neovim, Micro, Helix, VS Code, Cursor, VSCodium, Tmux plugins, GitHub CLI extensions, Agent Skills, Antigravity |
-| User configuration | Chezmoi, Yadm, configured Git repositories, custom pre/update/post commands |
+| Area                         | Sources                                                                                                                        |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| System                       | DNF/DNF5, APT, Pacman and AUR helpers (yay/paru), Zypper, APK, XBPS, Nobara repository sync                                    |
+| Protection and firmware      | Snapper Btrfs snapshots, Firmware (fwupdmgr)                                                                                   |
+| Apps and gaming              | Flatpak, Nuvio Desktop, Gear Lever AppImages, ProtonPlus, Distrobox                                                            |
+| Containers and package tools | Homebrew, Docker images and Compose services, Podman auto-update, Vagrant boxes, Snap, Nix                                     |
+| Development tools            | Shell plugins, Tealdeer, Rust, Python tools, Node.js package managers, Composer, Ruby gems, Mise, asdf, SDKMAN, GHCup, Flutter |
+| Editors and extensions       | Neovim, Micro, Helix, VS Code, Cursor, VSCodium, Tmux plugins, GitHub CLI extensions, Agent Skills, Antigravity                |
+| User configuration           | Chezmoi, Yadm, configured Git repositories, custom pre/update/post commands                                                    |
 
 ## Requirements
 
@@ -84,24 +84,25 @@ alias update="sysupdate"
 
 ## Usage
 
-| Option | Description |
-| --- | --- |
-| `-h`, `--help` | Show command help |
-| `--version` | Show installed and latest available versions |
-| `-f`, `--force` | Bypass safeguards such as the snapshot cooldown |
-| `-q`, `--quiet` | Hide live progress; show the final summary and errors |
-| `-v`, `--verbose` | Stream update command output |
-| `--only KEYS` | Run only comma-separated module keys or aliases |
-| `--skip KEYS` | Skip comma-separated module keys |
+| Option                        | Description                                                                        |
+| ----------------------------- | ---------------------------------------------------------------------------------- |
+| `-h`, `--help`                | Show command help                                                                  |
+| `--version`                   | Show installed and latest available versions                                       |
+| `-f`, `--force`               | Bypass safeguards such as the snapshot cooldown                                    |
+| `-q`, `--quiet`               | Hide live progress; show the final summary and errors                              |
+| `-v`, `--verbose`             | Stream update command output                                                       |
+| `--only KEYS`                 | Run only comma-separated module keys or aliases                                    |
+| `--skip KEYS`                 | Skip comma-separated module keys                                                   |
 | `-c`, `--category CATEGORIES` | Run comma-separated categories, such as `system`, `containers`, `dev`, or `gaming` |
-| `--no-sudo` | Skip modules requiring administrator privileges |
-| `--no-snapshot` | Skip the protective Btrfs snapshot |
-| `--config PATH` | Use a configuration file at a custom path |
-| `--edit-config` | Open the configuration file in `$EDITOR` |
-| `-l`, `--list` | List registered modules and check availability |
-| `-r`, `--reboot` | Reboot after the summary and history are saved if updates require it |
-| `--history [COUNT]` | List recent runs (default 10, maximum 30) |
-| `--show-log RUN_ID` | Show the saved details for a run |
+| `--no-sudo`                   | Skip modules requiring administrator privileges                                    |
+| `--no-snapshot`               | Skip the protective Btrfs snapshot                                                 |
+| `--config PATH`               | Use a configuration file at a custom path                                          |
+| `--edit-config`               | Open the configuration file in `$EDITOR`                                           |
+| `-l`, `--list`                | List registered modules and check availability                                     |
+| `-r`, `--reboot`              | Reboot after the summary and history are saved if updates require it               |
+| `--no-history`                | Do not record this run or its command logs in history                              |
+| `--history [COUNT]`           | List recent runs (default 10, maximum 30)                                          |
+| `--show-log RUN_ID`           | Show the saved details for a run                                                   |
 
 Use `sysupdate --help` for the options supported by the installed version.
 

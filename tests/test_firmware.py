@@ -1,4 +1,5 @@
 import unittest
+from typing import Any, cast
 
 from modules.firmware import FirmwareModule
 
@@ -14,6 +15,9 @@ class FakeContext:
         self.commands.append(cmd)
         return next(self.responses)
 
+    def as_context(self) -> Any:
+        return cast(Any, self)
+
 
 class FirmwareTests(unittest.TestCase):
     def test_metadata_refresh_failure_is_reported_even_when_cached_check_is_empty(self):
@@ -25,7 +29,7 @@ class FirmwareTests(unittest.TestCase):
             ]
         )
 
-        result = FirmwareModule().run(context)
+        result = FirmwareModule().run(context.as_context())
 
         self.assertEqual(result.status, "unchanged")
         self.assertEqual(result.warnings, [warning])
@@ -42,7 +46,28 @@ class FirmwareTests(unittest.TestCase):
             ]
         )
 
-        result = FirmwareModule().run(context)
+        result = FirmwareModule().run(context.as_context())
+
+        self.assertEqual(result.status, "unchanged")
+        self.assertEqual(result.warnings, [])
+
+    def test_lvfs_triaged_issue_in_refresh_is_not_treated_as_warning(self):
+        context = FakeContext(
+            [
+                (
+                    0,
+                    (
+                        "Successfully downloaded new metadata:\n"
+                        "Update failure is a known issue, visit this URL for more information: "
+                        "https://github.com/fwupd/fwupd/wiki/LVFS-Triaged-Issue:-dbx-does-not-apply-on-reboot"
+                    ),
+                    "",
+                ),
+                (0, '{"Devices": []}', ""),
+            ]
+        )
+
+        result = FirmwareModule().run(context.as_context())
 
         self.assertEqual(result.status, "unchanged")
         self.assertEqual(result.warnings, [])
@@ -50,7 +75,7 @@ class FirmwareTests(unittest.TestCase):
     def test_update_check_failure_is_an_error(self):
         context = FakeContext([(0, "", ""), (1, "", "device service unavailable")])
 
-        result = FirmwareModule().run(context)
+        result = FirmwareModule().run(context.as_context())
 
         self.assertEqual(result.status, "error")
         self.assertEqual(result.error_output, "device service unavailable")
@@ -58,7 +83,7 @@ class FirmwareTests(unittest.TestCase):
     def test_invalid_device_entries_are_reported_as_invalid_data(self):
         context = FakeContext([(0, "", ""), (0, '{"Devices": [null]}', "")])
 
-        result = FirmwareModule().run(context)
+        result = FirmwareModule().run(context.as_context())
 
         self.assertEqual(result.status, "error")
         self.assertEqual(result.message, "Firmware update check returned invalid data")
@@ -72,7 +97,7 @@ class FirmwareTests(unittest.TestCase):
             ]
         )
 
-        result = FirmwareModule().run(context)
+        result = FirmwareModule().run(context.as_context())
 
         self.assertEqual(result.status, "error")
         self.assertEqual(result.error_output, "installation failed")
@@ -91,7 +116,7 @@ class FirmwareTests(unittest.TestCase):
             ]
         )
 
-        result = FirmwareModule().run(context)
+        result = FirmwareModule().run(context.as_context())
 
         self.assertEqual(result.status, "ok")
         self.assertTrue(result.reboot_required)
@@ -119,7 +144,7 @@ class FirmwareTests(unittest.TestCase):
             ]
         )
 
-        result = FirmwareModule().run(context)
+        result = FirmwareModule().run(context.as_context())
 
         self.assertEqual(result.status, "ok")
         self.assertFalse(result.reboot_required)

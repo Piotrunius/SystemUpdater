@@ -1,5 +1,6 @@
 import unittest
 from types import SimpleNamespace
+from typing import Any, cast
 from unittest.mock import Mock
 
 from modules.brew import BrewModule
@@ -21,7 +22,7 @@ class PartialFailureTests(unittest.TestCase):
             ),
         )
 
-        result = BrewModule().run(context)
+        result = BrewModule().run(cast(Any, context))
 
         self.assertEqual(result.status, "error")
         self.assertEqual(result.details, ["formula-one"])
@@ -39,7 +40,7 @@ class PartialFailureTests(unittest.TestCase):
             ),
         )
 
-        result = DockerModule().run(context)
+        result = DockerModule().run(cast(Any, context))
 
         self.assertEqual(result.status, "error")
         self.assertEqual(result.details, ["image-one:latest"])
@@ -58,7 +59,7 @@ class PartialFailureTests(unittest.TestCase):
             ),
         )
 
-        result = GitReposModule(config).run(context)
+        result = GitReposModule(cast(Any, config)).run(cast(Any, context))
 
         self.assertEqual(result.status, "error")
         self.assertEqual(result.details, ["updated"])

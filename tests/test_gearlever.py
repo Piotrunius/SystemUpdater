@@ -21,18 +21,20 @@ Transaction Summary:
  Replacing:          1 package
 """
         packages = parse_dnf_packages(output)
-        self.assertEqual(
-            packages, ["nobara-updater: 2.0.1-72.fc44 -> 2.0.1-75.fc44"]
-        )
+        self.assertEqual(packages, ["nobara-updater: 2.0.1-72.fc44 -> 2.0.1-75.fc44"])
 
     @patch("modules.base.urllib.request.urlopen")
     def test_gearlever_skips_when_github_api_rate_limited(self, mock_urlopen):
         # Simulate GitHub 403 rate limit
+        from email.message import Message
+
+        headers = Message()
+        headers["x-ratelimit-remaining"] = "0"
         error = urllib.error.HTTPError(
             url="https://api.github.com/",
             code=403,
             msg="rate limit exceeded",
-            hdrs={"x-ratelimit-remaining": "0"},
+            hdrs=headers,
             fp=None,
         )
         mock_urlopen.side_effect = error
@@ -106,11 +108,15 @@ Transaction Summary:
 
     @patch("modules.base.urllib.request.urlopen")
     def test_protonplus_skips_when_github_api_rate_limited(self, mock_urlopen):
+        from email.message import Message
+
+        headers = Message()
+        headers["x-ratelimit-remaining"] = "0"
         error = urllib.error.HTTPError(
             url="https://api.github.com/",
             code=403,
             msg="rate limit exceeded",
-            hdrs={"x-ratelimit-remaining": "0"},
+            hdrs=headers,
             fp=None,
         )
         mock_urlopen.side_effect = error

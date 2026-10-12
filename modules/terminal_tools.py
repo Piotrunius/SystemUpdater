@@ -3,6 +3,7 @@ Terminal utility and prompt update modules (Tealdeer/tldr, Fisher for Fish, Zini
 """
 
 import os
+
 from modules.base import BaseModule, UpdateContext
 from ui import StepResult
 

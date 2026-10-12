@@ -5,30 +5,28 @@ Crafted for Nobara Linux with modular architecture and flicker-free TUI.
 """
 
 import argparse
-from datetime import datetime, timezone
+import contextlib
 import os
 import re
+
+# Ensure script directory is in sys.path
+import shutil
 import signal
+import subprocess
 import sys
 import time
 import urllib.error
 import urllib.request
-from typing import List
-
-# Ensure script directory is in sys.path
-import shutil
-import subprocess
-from typing import Optional
+from datetime import UTC, datetime
+from typing import Any
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 SELF_UPDATE_REPOSITORY = "https://github.com/Piotrunius/SystemUpdater.git"
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 
-from modules.base import UpdateContext, BaseModule
-from modules import get_all_modules
-from ui import UI, StepResult
-from config import get_config, DEFAULT_CONFIG_PATH
+import sudo
+from config import DEFAULT_CONFIG_PATH, get_config
 from history_store import (
     HistoryStore,
     classify_run_status,
@@ -36,7 +34,9 @@ from history_store import (
     print_run_log,
     redact_text,
 )
-import sudo
+from modules import get_all_modules
+from modules.base import BaseModule, UpdateContext
+from ui import UI, StepResult, suppress_terminal_echo
 
 
 def git_output(*args, timeout=3):
@@ -44,6 +44,7 @@ def git_output(*args, timeout=3):
         result = subprocess.run(
             ["git", *args],
             cwd=SCRIPT_DIR,
+            check=False,
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -211,6 +212,7 @@ def self_update():
         fetched = subprocess.run(
             ["git", "fetch", "--quiet", remote, fetch_refspec],
             cwd=SCRIPT_DIR,
+            check=False,
             capture_output=True,
             timeout=20,
         )
@@ -233,6 +235,7 @@ def self_update():
     merged = subprocess.run(
         ["git", "merge", "--ff-only", "--quiet", update_ref],
         cwd=SCRIPT_DIR,
+        check=False,
         capture_output=True,
         timeout=10,
     )
@@ -271,7 +274,7 @@ def edit_config(config_path: str):
     if not editor:
         editor = "nano"
 
-    subprocess.run([editor, expanded])
+    subprocess.run([editor, expanded], check=False)
     sys.exit(0)
 
 
@@ -387,19 +390,41 @@ Examples:
         metavar="RUN_ID",
         help="Show the saved command output for a run listed by --history",
     )
+    parser.add_argument(
+        "--no-history",
+        action="store_true",
+        help="Do not record this run or its command logs in history",
+    )
 
     return parser.parse_args()
 
 
-def handle_interrupt(signum, frame):
-    sudo.stop_sudo_keeper()
-    print("\n\nUpdate cancelled by user.")
-    sys.exit(130)
+def handle_sigterm(signum, frame):
+    raise KeyboardInterrupt
+
+
+def _format_history_modules(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "name": item["name"],
+            "key": item.get("key", ""),
+            "category": getattr(item.get("module"), "category", "") or item.get("category", ""),
+            "status": item["result"].status,
+            "message": redact_text(item["result"].message),
+            "duration": round(item["result"].duration, 2),
+            "details": [redact_text(str(detail)) for detail in item["result"].details],
+            "warnings": [
+                redact_text(str(warning)) for warning in item["result"].warnings
+            ],
+            "error_output": redact_text(item["result"].error_output),
+            "commands": item.get("commands", []),
+        }
+        for item in results
+    ]
 
 
 def main():
-    signal.signal(signal.SIGINT, handle_interrupt)
-    signal.signal(signal.SIGTERM, handle_interrupt)
+    signal.signal(signal.SIGTERM, handle_sigterm)
 
     args = parse_args()
     history_store = HistoryStore()
@@ -443,7 +468,7 @@ def main():
 
     ctx = UpdateContext(force=args.force, verbose=False)
     cfg = get_config(config_path=args.config)
-    all_modules: List[BaseModule] = get_all_modules(cfg)
+    all_modules: list[BaseModule] = get_all_modules(cfg)
 
     # List modules mode
     if args.list:
@@ -472,7 +497,7 @@ def main():
     if args.no_snapshot:
         skip_keys.append("snapshot")
 
-    modules_to_run: List[BaseModule] = []
+    modules_to_run: list[BaseModule] = []
     for m in all_modules:
         m_identifiers = {m.key.lower(), *(a.lower() for a in getattr(m, "aliases", []))}
         if selected_keys and not (m_identifiers & set(selected_keys)):
@@ -498,12 +523,15 @@ def main():
 
     # Check if any selected module requires sudo upfront
     needs_sudo = any(getattr(m, "requires_sudo", False) for m in modules_to_run)
-    if needs_sudo:
-        if not sudo.init_sudo(interactive=sys.stdin.isatty()):
+    try:
+        if needs_sudo and not sudo.init_sudo(interactive=sys.stdin.isatty()):
             print(
                 "Error: Administrator privileges (sudo) required but could not be obtained."
             )
             sys.exit(1)
+    except KeyboardInterrupt:
+        sudo.stop_sudo_keeper()
+        sys.exit(130)
 
     ctx.verbose = args.verbose
     ui = UI(quiet=args.quiet, verbose=args.verbose)
@@ -515,6 +543,7 @@ def main():
             {
                 "name": "Configuration",
                 "key": "config",
+                "category": "System Protection",
                 "result": StepResult(
                     "warning",
                     f"Could not load configuration; using defaults: {cfg.load_error}",
@@ -522,70 +551,113 @@ def main():
             }
         )
     total_start = time.time()
-    started_at = datetime.now(timezone.utc)
+    started_at = datetime.now(UTC)
     run_id = history_store.new_run_id(started_at)
     current_category = None
     self_update_printed = False
 
     try:
-        for m in modules_to_run:
-            if m.category != current_category:
-                current_category = m.category
-                ui.print_category(current_category)
-                if current_category == "Containers & Packages" and self_update_result:
-                    self_update_step = StepResult(
-                        *self_update_result[:2],
-                        duration=self_update_result[2],
-                        details=self_update_result[3],
+        with suppress_terminal_echo():
+            for m in modules_to_run:
+                if m.category != current_category:
+                    current_category = m.category
+                    ui.print_category(current_category)
+                    if current_category == "Containers & Packages" and self_update_result:
+                        self_update_step = StepResult(
+                            *self_update_result[:2],
+                            duration=self_update_result[2],
+                            details=self_update_result[3],
+                        )
+                        ui.print_result(
+                            "SystemUpdater",
+                            self_update_step,
+                        )
+                        results.append(
+                            {
+                                "name": "SystemUpdater",
+                                "key": "self_update",
+                                "category": "Containers & Packages",
+                                "result": self_update_step,
+                            }
+                        )
+                        self_update_printed = True
+                command_start = len(ctx.command_log)
+                try:
+                    step_res = ui.run_step(
+                        m.name, lambda mod=m: mod.run(ctx), ctx=ctx, module=m
                     )
-                    ui.print_result(
-                        "SystemUpdater",
-                        self_update_step,
-                    )
+                except KeyboardInterrupt:
                     results.append(
                         {
-                            "name": "SystemUpdater",
-                            "key": "self_update",
-                            "result": self_update_step,
+                            "name": m.name,
+                            "key": m.key,
+                            "module": m,
+                            "result": getattr(ui, "last_interrupted_result", None)
+                            or StepResult(
+                                "interrupted",
+                                "Cancelled by user",
+                            ),
+                            "commands": ctx.command_log[command_start:],
                         }
                     )
-                    self_update_printed = True
-            command_start = len(ctx.command_log)
-            step_res = ui.run_step(
-                m.name, lambda mod=m: mod.run(ctx), ctx=ctx, module=m
-            )
-            results.append(
-                {
-                    "name": m.name,
-                    "key": m.key,
-                    "module": m,
-                    "result": step_res,
-                    "commands": ctx.command_log[command_start:],
-                }
-            )
-        if self_update_result and not self_update_printed:
-            ui.print_category("Containers & Packages")
-            self_update_step = StepResult(
-                *self_update_result[:2],
-                duration=self_update_result[2],
-                details=self_update_result[3],
-            )
-            ui.print_result(
-                "SystemUpdater",
-                self_update_step,
-            )
-            results.append(
-                {
-                    "name": "SystemUpdater",
-                    "key": "self_update",
-                    "result": self_update_step,
-                }
-            )
+                    raise
+                results.append(
+                    {
+                        "name": m.name,
+                        "key": m.key,
+                        "module": m,
+                        "result": step_res,
+                        "commands": ctx.command_log[command_start:],
+                    }
+                )
+            if self_update_result and not self_update_printed:
+                ui.print_category("Containers & Packages")
+                self_update_step = StepResult(
+                    *self_update_result[:2],
+                    duration=self_update_result[2],
+                    details=self_update_result[3],
+                )
+                ui.print_result(
+                    "SystemUpdater",
+                    self_update_step,
+                )
+                results.append(
+                    {
+                        "name": "SystemUpdater",
+                        "key": "self_update",
+                        "category": "Containers & Packages",
+                        "result": self_update_step,
+                    }
+                )
+    except KeyboardInterrupt:
+        sudo.stop_sudo_keeper()
+        total_elapsed = time.time() - total_start
+        update_count = sum(
+            r["result"].status == "ok"
+            and r.get("key") != "snapshot"
+            and getattr(r.get("module"), "category", "") != "System Protection"
+            for r in results
+        )
+        if not args.no_history:
+            history_data = {
+                "id": run_id,
+                "started_at": started_at.isoformat(),
+                "finished_at": datetime.now(UTC).isoformat(),
+                "duration": round(total_elapsed, 2),
+                "status": "interrupted",
+                "update_count": update_count,
+                "modules": _format_history_modules(results),
+            }
+            with contextlib.suppress(OSError):
+                history_store.save(history_data)
+
+        ui.print_summary(results, total_elapsed, interrupted=True)
+        sys.exit(130)
     finally:
         sudo.stop_sudo_keeper()
 
     total_elapsed = time.time() - total_start
-    finished_at = datetime.now(timezone.utc)
+    finished_at = datetime.now(UTC)
     has_failures = any(r["result"].status == "error" for r in results)
     update_count = sum(
         r["result"].status == "ok"
@@ -593,46 +665,31 @@ def main():
         and getattr(r.get("module"), "category", "") != "System Protection"
         for r in results
     )
-    history_modules = [
-        {
-            "name": item["name"],
-            "key": item.get("key", ""),
-            "status": item["result"].status,
-            "message": redact_text(item["result"].message),
-            "duration": round(item["result"].duration, 2),
-            "details": [redact_text(str(detail)) for detail in item["result"].details],
-            "warnings": [
-                redact_text(str(warning)) for warning in item["result"].warnings
-            ],
-            "error_output": redact_text(item["result"].error_output),
-            "commands": item.get("commands", []),
+    if not args.no_history:
+        history_data = {
+            "id": run_id,
+            "started_at": started_at.isoformat(),
+            "finished_at": finished_at.isoformat(),
+            "duration": round(total_elapsed, 2),
+            "status": "unknown",
+            "update_count": update_count,
+            "modules": _format_history_modules(results),
         }
-        for item in results
-    ]
-    history_data = {
-        "id": run_id,
-        "started_at": started_at.isoformat(),
-        "finished_at": finished_at.isoformat(),
-        "duration": round(total_elapsed, 2),
-        "status": "unknown",
-        "update_count": update_count,
-        "modules": history_modules,
-    }
-    history_data["status"] = classify_run_status(
-        history_data, history_store.list_runs(30)
-    )
-    try:
-        history_store.save(history_data)
-    except OSError as error:
-        results.append(
-            {
-                "name": "Run History",
-                "key": "history",
-                "result": StepResult(
-                    "warning", "Could not save update history", error_output=str(error)
-                ),
-            }
+        history_data["status"] = classify_run_status(
+            history_data, history_store.list_runs(30)
         )
+        try:
+            history_store.save(history_data)
+        except OSError as error:
+            results.append(
+                {
+                    "name": "Run History",
+                    "key": "history",
+                    "result": StepResult(
+                        "warning", "Could not save update history", error_output=str(error)
+                    ),
+                }
+            )
 
     ui.print_summary(results, total_elapsed)
 
@@ -655,4 +712,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        sys.exit(130)

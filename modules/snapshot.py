@@ -5,6 +5,7 @@ Directly replaces Topgrade/snapshot.sh.
 
 import os
 import time
+
 from modules.base import BaseModule, UpdateContext
 from ui import StepResult
 

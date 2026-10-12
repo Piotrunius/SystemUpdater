@@ -17,7 +17,7 @@ class GearLeverModule(BaseModule):
     def is_available(self, ctx: UpdateContext) -> bool:
         if ctx.which("flatpak") is None:
             return False
-        code, out, _ = ctx.run_cmd(
+        _, out, _ = ctx.run_cmd(
             ["flatpak", "list", "--app", "--columns=application"], read_only=True
         )
         return "it.mijorus.gearlever" in out
@@ -38,7 +38,10 @@ class GearLeverModule(BaseModule):
             ]
         )
         combined = (out or "") + "\n" + (err or "")
-        if "rate limit" in combined.casefold() or "api limit reached" in combined.casefold():
+        if (
+            "rate limit" in combined.casefold()
+            or "api limit reached" in combined.casefold()
+        ):
             return StepResult("warning", "GitHub API rate limit reached")
 
         if code != 0:
@@ -52,7 +55,7 @@ class GearLeverModule(BaseModule):
             if json_start != -1:
                 data = json.loads(out[json_start:])
                 updates = data.get("updates", [])
-        except Exception:
+        except (json.JSONDecodeError, ValueError, TypeError):
             pass
 
         if not updates:

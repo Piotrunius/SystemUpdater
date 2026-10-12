@@ -1,9 +1,9 @@
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
+from modules.base import UpdateContext
 from modules.nobara import RepoSyncModule
 from modules.system_pm import ZypperModule
-from modules.base import UpdateContext
 
 
 class PackageSignatureCheckTests(unittest.TestCase):
@@ -20,7 +20,7 @@ class PackageSignatureCheckTests(unittest.TestCase):
         context = UpdateContext()
         context.run_cmd = Mock(return_value=(0, "Nothing to do", ""))
 
-        with unittest.mock.patch(
+        with patch(
             "modules.system_pm.get_os_release",
             return_value={"ID": "opensuse-tumbleweed"},
         ):

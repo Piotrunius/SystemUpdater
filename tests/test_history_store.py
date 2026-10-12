@@ -3,7 +3,7 @@ import io
 import stat
 import tempfile
 import unittest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from history_store import (
@@ -20,7 +20,7 @@ class HistoryStoreTests(unittest.TestCase):
     def test_run_can_be_saved_listed_and_loaded(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             store = HistoryStore(Path(temp_dir))
-            run_id = store.new_run_id(datetime(2026, 10, 8, tzinfo=timezone.utc))
+            run_id = store.new_run_id(datetime(2026, 10, 8, tzinfo=UTC))
             run = {
                 "id": run_id,
                 "started_at": "2026-10-08T00:00:00+00:00",
@@ -235,6 +235,130 @@ class HistoryStoreTests(unittest.TestCase):
 
         self.assertEqual(classify_run_status(run, previous), "up-to-date")
 
+    def test_classify_run_status_identifies_interrupted_run(self):
+        run = {
+            "status": "interrupted",
+            "update_count": 0,
+            "modules": [
+                {"key": "dnf", "status": "ok", "message": "updated"},
+                {"key": "distrobox", "status": "interrupted", "message": "Cancelled by user"},
+            ],
+        }
+        self.assertEqual(classify_run_status(run, []), "interrupted")
+
+    def test_print_history_formats_interrupted_status(self):
+        runs = [
+            {
+                "id": "20261012T122807Z-b4a1c890",
+                "started_at": "2026-10-12T12:28:07+00:00",
+                "status": "interrupted",
+                "duration": 9.2,
+                "update_count": 0,
+                "modules": [],
+            }
+        ]
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            print_history(runs)
+        rendered = output.getvalue()
+        self.assertIn("20261012T122807Z-b4a1c890", rendered)
+        self.assertIn("interrupted", rendered)
+
+    def test_print_run_log_formats_interrupted_module(self):
+        run = {
+            "id": "20261012T122807Z-b4a1c890",
+            "started_at": "2026-10-12T12:28:07+00:00",
+            "duration": 9.2,
+            "status": "interrupted",
+            "modules": [
+                {
+                    "name": "Distrobox",
+                    "status": "interrupted",
+                    "message": "Cancelled by user",
+                    "duration": 5.1,
+                    "commands": [
+                        {
+                            "command": ["distrobox", "upgrade", "--all"],
+                            "returncode": 130,
+                            "stdout": "Upgrading arch...",
+                            "stderr": "Command interrupted by user",
+                        }
+                    ],
+                }
+            ],
+        }
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            print_run_log(run)
+        rendered = output.getvalue()
+        self.assertIn("Distrobox", rendered)
+        self.assertIn("interrupted", rendered)
+        self.assertIn("[~]", rendered)
+        self.assertNotIn("Cancelled by user", rendered)
+
+    def test_print_run_log_groups_by_categories_and_indents_commands(self):
+        run = {
+            "id": "20261012T143702Z-8f5b40e4",
+            "started_at": "2026-10-12T14:37:02+00:00",
+            "duration": 5.0,
+            "status": "ok",
+            "modules": [
+                {
+                    "name": "Snapshot",
+                    "key": "snapshot",
+                    "status": "unchanged",
+                    "duration": 0.1,
+                },
+                {
+                    "name": "Repositories",
+                    "key": "reposync",
+                    "status": "unchanged",
+                    "duration": 1.2,
+                    "commands": [
+                        {
+                            "command": ["sudo", "dnf", "update"],
+                            "returncode": 0,
+                            "stdout": "Nothing to do.\n",
+                        }
+                    ],
+                },
+                {
+                    "name": "Flatpak",
+                    "key": "flatpak",
+                    "status": "unchanged",
+                    "duration": 0.8,
+                },
+            ],
+        }
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            print_run_log(run)
+        rendered = output.getvalue()
+        self.assertIn("── Modules ", rendered)
+        self.assertIn("── Command Output ", rendered)
+        self.assertIn("── System Protection", rendered)
+        self.assertIn("── System Core", rendered)
+        self.assertIn("── Applications & Gaming", rendered)
+        self.assertIn("  [—] Repositories · up-to-date", rendered)
+        self.assertIn("      $ sudo dnf update", rendered)
+        self.assertIn("        stdout:", rendered)
+        self.assertIn("          Nothing to do.", rendered)
+
+
+    def test_no_history_flag_is_parsed_without_short_alias(self):
+        from unittest.mock import patch
+
+        from main import parse_args
+
+        with patch("sys.argv", ["main.py", "--no-history"]):
+            args = parse_args()
+            self.assertTrue(args.no_history)
+
+        with patch("sys.argv", ["main.py"]):
+            args = parse_args()
+            self.assertFalse(args.no_history)
+
 
 if __name__ == "__main__":
     unittest.main()
+

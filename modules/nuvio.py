@@ -13,7 +13,8 @@ import tempfile
 import urllib.error
 import urllib.request
 import zipfile
-from typing import Optional, Tuple
+from typing import Any
+
 from modules.base import BaseModule, UpdateContext, check_github_api
 from ui import StepResult
 
@@ -35,7 +36,7 @@ class NuvioModule(BaseModule):
     def is_available(self, ctx: UpdateContext) -> bool:
         return os.path.exists("/opt/nuvio") or ctx.which("nuvio") is not None
 
-    def _get_github_token(self, ctx: UpdateContext) -> Optional[str]:
+    def _get_github_token(self, ctx: UpdateContext) -> str | None:
         token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
         if not token:
             code, out, _ = ctx.run_cmd(
@@ -74,11 +75,8 @@ class NuvioModule(BaseModule):
             if "timed out" in err_msg or "timeout" in err_msg:
                 return StepResult("warning", "GitHub API timed out")
             return StepResult("warning", f"Unable to check GitHub: {e}")
-        except Exception as e:
-            err_msg = str(e).lower()
-            if "rate limit" in err_msg:
-                return StepResult("warning", "GitHub API rate limit reached")
-            return StepResult("warning", f"Unable to check GitHub: {e}")
+        except (json.JSONDecodeError, ValueError) as e:
+            return StepResult("warning", f"Unable to parse GitHub release data: {e}")
 
         latest_tag = release.get("tag_name", "")
         latest_key = self._parse_version_key(latest_tag)
@@ -195,7 +193,7 @@ class NuvioModule(BaseModule):
                 return tag
         return ""
 
-    def _parse_version_key(self, v_str: str) -> tuple:
+    def _parse_version_key(self, v_str: str) -> tuple[int, ...]:
         if not v_str:
             return ()
         clean = v_str.strip().lstrip("vV")
@@ -221,7 +219,7 @@ class NuvioModule(BaseModule):
         else:
             return tuple(core_nums[:3]) + (999, 0)
 
-    def _find_rpm_asset(self, assets: list) -> Tuple[Optional[str], str]:
+    def _find_rpm_asset(self, assets: list[dict[str, Any]]) -> tuple[str | None, str]:
         rpm_assets = [a for a in assets if a.get("name", "").endswith(".rpm")]
         if not rpm_assets:
             return None, ""
@@ -271,8 +269,8 @@ class NuvioModule(BaseModule):
         return None, ""
 
     def _fetch_latest_release(
-        self, ctx: UpdateContext, token: Optional[str] = None
-    ) -> dict:
+        self, ctx: UpdateContext, token: str | None = None
+    ) -> dict[str, Any]:
         url = f"https://api.github.com/repos/{REPO}/releases/latest"
         headers = {
             "User-Agent": "SystemUpdater-Nuvio",
@@ -286,7 +284,7 @@ class NuvioModule(BaseModule):
         with urllib.request.urlopen(req, timeout=5) as resp:
             return json.loads(resp.read().decode())
 
-    def _find_target_jar(self) -> Optional[str]:
+    def _find_target_jar(self) -> str | None:
         matches = glob.glob(os.path.join(TARGET_DIR, "composeApp-desktop-*.jar"))
         matches = [m for m in matches if not m.endswith(".bak")]
         return max(matches, key=os.path.getmtime) if matches else None

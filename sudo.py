@@ -6,16 +6,14 @@ Replaces Topgrade's pre_sudo and --sudoloop with a zero-leak daemon thread.
 import os
 import subprocess
 import threading
-import time
-from typing import Optional
 
 _stop_event = threading.Event()
-_keeper_thread: Optional[threading.Thread] = None
+_keeper_thread: threading.Thread | None = None
 
 
 def is_sudo_active() -> bool:
     try:
-        res = subprocess.run(["sudo", "-n", "true"], capture_output=True)
+        res = subprocess.run(["sudo", "-n", "true"], check=False, capture_output=True)
         return res.returncode == 0
     except OSError:
         return False
@@ -34,7 +32,7 @@ def init_sudo(interactive: bool = True) -> bool:
         if not interactive:
             return False
         try:
-            res = subprocess.run(["sudo", "-v"])
+            res = subprocess.run(["sudo", "-v"], check=False)
             if res.returncode != 0:
                 return False
         except OSError:
@@ -51,6 +49,7 @@ def _keeper_worker():
         try:
             subprocess.run(
                 ["sudo", "-n", "-v"],
+                check=False,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
@@ -70,6 +69,5 @@ def start_sudo_keeper():
 
 def stop_sudo_keeper():
     _stop_event.set()
-    global _keeper_thread
     if _keeper_thread is not None:
         _keeper_thread.join(timeout=1.0)

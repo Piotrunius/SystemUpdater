@@ -5,31 +5,24 @@ Provides parity with Topgrade configuration (custom commands, git repos, disable
 """
 
 import os
-import sys
-from typing import Dict, List, Set, Optional
-
-if sys.version_info >= (3, 11):
-    import tomllib
-else:
-    tomllib = None
-
+import tomllib
 
 DEFAULT_CONFIG_PATH = os.path.expanduser("~/.config/sysupdate/config.toml")
 
 
 class Config:
-    def __init__(self, config_path: Optional[str] = None):
-        self.disabled_keys: Set[str] = set()
-        self.pre_commands: Dict[str, str] = {}
-        self.commands: Dict[str, str] = {}
-        self.post_commands: Dict[str, str] = {}
-        self.git_repos: List[str] = []
+    def __init__(self, config_path: str | None = None):
+        self.disabled_keys: set[str] = set()
+        self.pre_commands: dict[str, str] = {}
+        self.commands: dict[str, str] = {}
+        self.post_commands: dict[str, str] = {}
+        self.git_repos: list[str] = []
         self.snapshot_cooldown_hours: int = 12
         self._explicit_config_path = config_path is not None
         self.config_path: str = (
             os.path.expanduser(config_path) if config_path else DEFAULT_CONFIG_PATH
         )
-        self.load_error: Optional[str] = None
+        self.load_error: str | None = None
 
         self._load_config()
 
@@ -51,7 +44,7 @@ class Config:
 
             misc = data.get("misc", {})
             if not isinstance(misc, dict):
-                raise ValueError("[misc] must be a TOML table")
+                raise TypeError("[misc] must be a TOML table")
 
             if "disable" in misc:
                 disabled = misc["disable"]
@@ -86,7 +79,7 @@ class Config:
             # Git repositories to pull
             git_sec = data.get("git", {})
             if not isinstance(git_sec, dict):
-                raise ValueError("[git] must be a TOML table")
+                raise TypeError("[git] must be a TOML table")
             if "repos" in git_sec:
                 repos = git_sec["repos"]
                 if not isinstance(repos, list) or not all(
@@ -98,7 +91,7 @@ class Config:
                     for path in repos
                     if os.path.isdir(os.path.expanduser(path))
                 ]
-        except (OSError, ValueError) as error:
+        except (OSError, ValueError, TypeError) as error:
             self.disabled_keys.clear()
             self.pre_commands.clear()
             self.commands.clear()
@@ -111,7 +104,7 @@ class Config:
 _global_config = None
 
 
-def get_config(config_path: Optional[str] = None) -> Config:
+def get_config(config_path: str | None = None) -> Config:
     global _global_config
     if _global_config is None or (
         config_path and _global_config.config_path != os.path.expanduser(config_path)

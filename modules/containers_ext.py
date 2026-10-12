@@ -3,6 +3,7 @@ Extended container update modules (Podman auto-update, Vagrant).
 """
 
 import os
+
 from modules.base import BaseModule, UpdateContext
 from ui import StepResult
 

@@ -4,6 +4,7 @@ from pathlib import Path
 
 from config import Config
 from modules import get_all_modules
+from modules.custom import CustomCommandModule
 from modules.git_repos import GitReposModule
 from modules.snapshot import SnapshotModule
 
@@ -34,7 +35,11 @@ class ModuleRegistryTests(unittest.TestCase):
         git_repos = next(
             module for module in modules if isinstance(module, GitReposModule)
         )
-        custom_task = next(module for module in modules if module.name == "Custom task")
+        custom_task = next(
+            module
+            for module in modules
+            if isinstance(module, CustomCommandModule) and module.name == "Custom task"
+        )
 
         self.assertEqual(snapshot.cooldown_hours, 3)
         self.assertEqual(git_repos.config, config)

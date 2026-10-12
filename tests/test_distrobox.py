@@ -1,4 +1,5 @@
 import unittest
+from typing import Any, cast
 
 from modules.distrobox import DistroboxModule
 
@@ -26,7 +27,7 @@ Repositories loaded.
 Nothing to do.
 """
 
-        result = DistroboxModule().run(FakeContext(output))
+        result = DistroboxModule().run(cast(Any, FakeContext(output)))
 
         self.assertEqual(result.status, "unchanged")
 
@@ -37,7 +38,7 @@ Upgrading arch...
 upgrading example-package...
 """
 
-        result = DistroboxModule().run(FakeContext(output))
+        result = DistroboxModule().run(cast(Any, FakeContext(output)))
 
         self.assertEqual(result.status, "ok")
         self.assertEqual(result.details, ["arch"])

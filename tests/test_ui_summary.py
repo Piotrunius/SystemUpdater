@@ -4,7 +4,7 @@ import re
 import unittest
 
 from modules.base import UpdateContext
-from ui import StepResult, UI
+from ui import UI, StepResult, suppress_terminal_echo
 
 
 def render_summary(result, verbose=True):
@@ -64,7 +64,7 @@ class SummaryFormattingTests(unittest.TestCase):
 
         rendered = raw_output.getvalue()
         self.assertIn("\033[1;36m── Warnings ", rendered)
-        self.assertIn("\033[1;33m[!]\033[0m Example Module: warning", rendered)
+        self.assertIn("\033[2m[\033[0m\033[1;33m!\033[0m\033[2m]\033[0m Example Module: warning", rendered)
         warning_section = rendered.split("\033[0m", 1)[1].split("\033[36m", 1)[0]
         self.assertNotIn("\033[1;31m", warning_section)
 
@@ -78,7 +78,7 @@ class SummaryFormattingTests(unittest.TestCase):
 
         rendered = raw_output.getvalue()
         self.assertIn("\033[1;36m── Errors ", rendered)
-        self.assertIn("\033[1;31m[✗]\033[0m Example Module: failed", rendered)
+        self.assertIn("\033[2m[\033[0m\033[1;31m✗\033[0m\033[2m]\033[0m Example Module: failed", rendered)
 
     def test_warnings_remain_hidden_without_verbose_mode(self):
         output = render_summary(
@@ -344,6 +344,28 @@ class SummaryFormattingTests(unittest.TestCase):
             "System reboot required to complete pending updates", res.warnings
         )
 
+    def test_complete_step_ignores_lvfs_triaged_issue_in_command_log(self):
+        ui = UI(is_interactive=False, verbose=True)
+        ctx = UpdateContext(verbose=True)
+        ctx.command_log.append(
+            {
+                "command": ["fwupdmgr", "refresh", "--force"],
+                "returncode": 0,
+                "stdout": (
+                    "Successfully downloaded new metadata:\n"
+                    "Update failure is a known issue, visit this URL for more information: "
+                    "https://github.com/fwupd/fwupd/wiki/LVFS-Triaged-Issue:-dbx-does-not-apply-on-reboot"
+                ),
+                "stderr": "",
+                "output_withheld": False,
+            }
+        )
+        res = StepResult("unchanged")
+        ui._complete_step(res, ctx, command_start=0)
+
+        self.assertEqual(res.status, "unchanged")
+        self.assertEqual(res.warnings, [])
+
     def test_personalized_unit_nouns_in_summary_and_resolve(self):
         ui = UI(is_interactive=False, verbose=False)
         gearlever_res = StepResult(
@@ -382,6 +404,132 @@ class SummaryFormattingTests(unittest.TestCase):
         msg_pipx = ui._resolve_ok_msg("Pipx", pipx_res)
         self.assertEqual(msg_pipx, "2 apps updated")
 
+    def test_print_interrupted_renders_clean_banner_and_message(self):
+        ui = UI(is_interactive=False, verbose=False)
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            ui.print_interrupted()
+        raw = output.getvalue()
+        self.assertIn("\033[1;36m── Interrupted ", raw)
+        self.assertIn("\033[2m[\033[0m\033[1;35m~\033[0m\033[2m]\033[0m Update cancelled by user.", raw)
+        self.assertTrue(raw.startswith("\n"))
+        self.assertNotIn("State preserved", raw)
+        self.assertNotIn("during", raw)
+
+    def test_print_summary_renders_interrupted_section_inside_single_frame(self):
+        ui = UI(is_interactive=False, verbose=False)
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            ui.print_summary([], 5.0, interrupted=True)
+        raw = output.getvalue()
+        self.assertIn("── Summary ─ 5s ", raw)
+        self.assertIn("\033[2m[-]\033[0m No package updates were applied.", raw)
+        self.assertIn("── Interrupted ", raw)
+        self.assertIn("\033[2m[\033[0m\033[1;35m~\033[0m\033[2m]\033[0m Update cancelled by user.", raw)
+        self.assertEqual(raw.count("── Summary ─"), 1)
+        self.assertEqual(raw.count("── Interrupted "), 1)
+
+    def test_suppress_terminal_echo_executes_safely(self):
+        with suppress_terminal_echo():
+            x = 42
+        self.assertEqual(x, 42)
+
+    def test_run_step_handles_keyboard_interrupt(self):
+        ui = UI(is_interactive=False, verbose=False)
+        ctx = UpdateContext(verbose=False)
+
+        def interrupt_step():
+            raise KeyboardInterrupt
+
+        with self.assertRaises(KeyboardInterrupt):
+            ui.run_step("Test Module", interrupt_step, ctx=ctx)
+
+    def test_running_frames_contains_three_rotations_without_hyphen(self):
+        from ui import RUNNING_FRAMES
+        self.assertEqual(len(RUNNING_FRAMES), 3)
+        for frame in RUNNING_FRAMES:
+            self.assertNotIn("-", frame)
+        self.assertIn("|", RUNNING_FRAMES[0])
+        self.assertIn("/", RUNNING_FRAMES[1])
+        self.assertIn("\\", RUNNING_FRAMES[2])
+
+    def test_verbose_step_uses_colon_marker(self):
+        ui = UI(is_interactive=False, verbose=True)
+        ctx = UpdateContext(verbose=True)
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            def run_dummy():
+                ctx.notify_command_started()
+                return StepResult("ok", "done")
+            ui.run_step("Test Verbose", run_dummy, ctx=ctx)
+        plain = re.sub(r"\x1b\[[0-9;]*m", "", output.getvalue())
+        self.assertIn("  [:] Test Verbose...", plain)
+
+    def test_summary_ends_with_border_without_redundant_trailing_newline(self):
+        ui = UI(is_interactive=False, verbose=False)
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            ui.print_summary([], 5.0)
+        raw = output.getvalue()
+        self.assertTrue(raw.endswith("\033[0m\n"))
+        self.assertFalse(raw.endswith("\033[0m\n\n"))
+
+    def test_summary_sections_have_single_empty_line_between_them(self):
+        ui = UI(is_interactive=False, verbose=True)
+        results = [
+            {"name": "WarnMod", "key": "warn", "result": StepResult("warning", "warning")},
+            {"name": "ErrMod", "key": "err", "result": StepResult("error", "failed")},
+        ]
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            ui.print_summary(results, 5.0, interrupted=True)
+        raw = output.getvalue()
+        self.assertIn("applied.\n\n", raw)
+        self.assertIn("failed\n\n", raw)
+        self.assertIn("warning\n\n", raw)
+
+    def test_summary_updates_applied_has_checkmark_marker(self):
+        ui = UI(is_interactive=False, verbose=False)
+        results = [
+            {
+                "name": "Flatpak",
+                "key": "flatpak",
+                "result": StepResult("ok", "1 app updated", details=["app1"]),
+            }
+        ]
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            ui.print_summary(results, 5.0)
+        raw = output.getvalue()
+        self.assertIn(
+            "\033[2m[\033[0m\033[1;32m✓\033[0m\033[2m]\033[0m Updates applied:",
+            raw,
+        )
+        plain = re.sub(r"\x1b\[[0-9;]*m", "", raw)
+        self.assertIn("  [✓] Updates applied:", plain)
+
+    def test_verbose_steps_have_blank_line_separation(self):
+        ui = UI(is_interactive=False, verbose=True)
+        ctx = UpdateContext(verbose=True)
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            ui.print_category("System Core")
+
+            def step1():
+                ctx.notify_command_started()
+                return StepResult("ok", "up to date")
+
+            def step2():
+                ctx.notify_command_started()
+                return StepResult("ok", "up to date")
+
+            ui.run_step("Step 1", step1, ctx=ctx)
+            ui.run_step("Step 2", step2, ctx=ctx)
+
+        plain = re.sub(r"\x1b\[[0-9;]*m", "", output.getvalue())
+        self.assertIn("(0.1s)\n\n  [:] Step 2...", plain)
+
 
 if __name__ == "__main__":
     unittest.main()
+

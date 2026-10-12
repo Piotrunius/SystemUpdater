@@ -2,19 +2,18 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch, mock_open
+from typing import Any
+from unittest.mock import mock_open, patch
 
 from modules.containers_ext import PodmanModule, VagrantModule
 from modules.devtools import (
     AntigravityModule,
     AsdfModule,
     BunModule,
-    CargoUpdateModule,
     GemModule,
     GhExtensionsModule,
     MicroModule,
     NpmModule,
-    PipxModule,
     PnpmModule,
     RustupModule,
     SkillsModule,
@@ -25,17 +24,28 @@ from modules.docker import DockerModule
 
 
 class FakeContext:
+    def __new__(cls, *args: Any, **kwargs: Any) -> Any:
+        return super().__new__(cls)
+
     def __init__(self, output="", error="", return_code=0, installed=True):
         self.output = output
         self.error = error
         self.return_code = return_code
         self.installed = installed
+        self.dry_run = False
+        self.force = False
+        self.verbose = False
+        self.command_log = []
+        self.deferred_notes = []
 
     def which(self, _binary):
         return "/usr/bin/tool" if self.installed else None
 
     def run_cmd(self, *_args, **_kwargs):
         return self.return_code, self.output, self.error
+
+    def __getattr__(self, name):
+        return None
 
 
 class ModuleAvailabilityTests(unittest.TestCase):
@@ -129,16 +139,12 @@ class ModuleAvailabilityTests(unittest.TestCase):
     def test_yarn_and_asdf_require_targets(self):
         yarn = YarnModule()
         with patch("modules.devtools.os.path.isfile", return_value=False):
-            self.assertFalse(
-                yarn.is_available(FakeContext(output="info 0 packages\n"))
-            )
+            self.assertFalse(yarn.is_available(FakeContext(output="info 0 packages\n")))
             self.assertEqual(
                 yarn.availability_status(FakeContext(output="info 0 packages\n")),
                 "[No Targets]",
             )
-            self.assertTrue(
-                yarn.is_available(FakeContext(output="foo@1.0.0\n"))
-            )
+            self.assertTrue(yarn.is_available(FakeContext(output="foo@1.0.0\n")))
             self.assertEqual(
                 yarn.availability_status(FakeContext(output="foo@1.0.0\n")),
                 "[Active]",
@@ -221,9 +227,7 @@ class ModuleAvailabilityTests(unittest.TestCase):
         skills = SkillsModule()
         with patch("modules.devtools.os.path.isfile", return_value=False):
             self.assertFalse(skills.is_available(FakeContext()))
-            self.assertEqual(
-                skills.availability_status(FakeContext()), "[No Targets]"
-            )
+            self.assertEqual(skills.availability_status(FakeContext()), "[No Targets]")
 
         empty_data = json.dumps({"version": 3, "skills": {}})
         with (
@@ -231,9 +235,7 @@ class ModuleAvailabilityTests(unittest.TestCase):
             patch("modules.devtools.os.path.isfile", return_value=True),
         ):
             self.assertFalse(skills.is_available(FakeContext()))
-            self.assertEqual(
-                skills.availability_status(FakeContext()), "[No Targets]"
-            )
+            self.assertEqual(skills.availability_status(FakeContext()), "[No Targets]")
 
         local_only_data = json.dumps(
             {"version": 3, "skills": {"custom": {"sourceType": "local"}}}
@@ -243,9 +245,7 @@ class ModuleAvailabilityTests(unittest.TestCase):
             patch("modules.devtools.os.path.isfile", return_value=True),
         ):
             self.assertFalse(skills.is_available(FakeContext()))
-            self.assertEqual(
-                skills.availability_status(FakeContext()), "[No Targets]"
-            )
+            self.assertEqual(skills.availability_status(FakeContext()), "[No Targets]")
 
         active_data = json.dumps(
             {"version": 3, "skills": {"cloudflare": {"source": "foo"}}}
@@ -264,6 +264,7 @@ class ModuleAvailabilityTests(unittest.TestCase):
 
     def test_skills_finds_xdg_lock_file(self):
         with patch.dict("os.environ", {"XDG_STATE_HOME": "/custom/state"}):
+
             def fake_isfile(path):
                 return path == "/custom/state/skills/.skill-lock.json"
 

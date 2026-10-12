@@ -4,8 +4,9 @@ Pulls fast-forward updates for git repositories configured in config.toml [git].
 """
 
 import os
-from modules.base import BaseModule, UpdateContext
+
 from config import Config
+from modules.base import BaseModule, UpdateContext
 from ui import StepResult
 
 

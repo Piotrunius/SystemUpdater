@@ -3,7 +3,6 @@ User-defined custom commands module.
 Executes custom commands defined in ~/.config/sysupdate/config.toml ([pre_commands], [commands], [post_commands]).
 """
 
-import shlex
 from modules.base import BaseModule, UpdateContext
 from ui import StepResult
 

@@ -3,6 +3,7 @@ Editor extensions and toolchains update modules (VS Code, Cursor, VSCodium, Heli
 """
 
 import os
+
 from modules.base import BaseModule, UpdateContext
 from ui import StepResult
 

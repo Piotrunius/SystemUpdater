@@ -44,6 +44,7 @@ echo "Successfully installed SystemUpdater to ${TARGET_DIR}/sysupdate"
 if [[ ":$PATH:" != *":${TARGET_DIR}:"* ]]; then
 	echo "Notice: ${TARGET_DIR} is not currently in your PATH."
 	echo "Add this line to your ~/.bashrc or ~/.zshrc:"
+	# shellcheck disable=SC2016
 	echo '  export PATH="${HOME}/.local/bin:${PATH}"'
 fi
 

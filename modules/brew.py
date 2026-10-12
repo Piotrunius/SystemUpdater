@@ -4,6 +4,7 @@ Homebrew package manager module (Formulae and Casks).
 
 import os
 import re
+
 from modules.base import BaseModule, UpdateContext
 from ui import StepResult
 

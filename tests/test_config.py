@@ -30,6 +30,8 @@ class ConfigTests(unittest.TestCase):
     def test_rejects_invalid_values_and_restores_defaults(self):
         config = self.load_config('[misc]\ndisable = ["docker"]\ncooldown_hours = -1\n')
 
+        self.assertIsNotNone(config.load_error)
+        assert config.load_error is not None
         self.assertIn("non-negative integer", config.load_error)
         self.assertEqual(config.disabled_keys, set())
         self.assertEqual(config.snapshot_cooldown_hours, 12)
@@ -52,6 +54,7 @@ class ConfigTests(unittest.TestCase):
     def test_parse_args_supports_reboot_flag(self):
         import sys
         from unittest.mock import patch
+
         from main import parse_args
 
         with patch.object(sys, "argv", ["sysupdate", "--reboot"]):

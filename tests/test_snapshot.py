@@ -3,8 +3,8 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
-from modules.snapshot import SnapshotModule
 from modules.base import UpdateContext
+from modules.snapshot import SnapshotModule
 
 
 class SnapshotTests(unittest.TestCase):

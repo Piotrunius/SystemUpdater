@@ -1,9 +1,10 @@
 import io
 import unittest
 from contextlib import redirect_stdout
+from typing import Any, cast
 
 from modules.flatpak import FlatpakModule
-from ui import StepResult, UI
+from ui import UI, StepResult
 
 
 class FakeContext:
@@ -29,7 +30,7 @@ class FlatpakTests(unittest.TestCase):
             ]
         )
 
-        result = FlatpakModule().run(context)
+        result = FlatpakModule().run(cast(Any, context))
 
         self.assertEqual(result.status, "unchanged")
         self.assertEqual(result.warnings, [warning])
