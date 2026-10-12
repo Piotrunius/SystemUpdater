@@ -58,7 +58,7 @@ def suppress_terminal_echo():
         _restore_terminal()
 
 
-from colors import Colors
+from colors import Colors, get_status_marker
 
 RUNNING_FRAMES = [
     f"{Colors.DIM}[{Colors.RESET}{Colors.CYAN}|{Colors.RESET}{Colors.DIM}]{Colors.RESET}",
@@ -269,7 +269,7 @@ class UI:
                     commands_printed = True
                     if self._category_has_output:
                         print()
-                    frame = f"{Colors.DIM}[{Colors.RESET}{Colors.BOLD_CYAN}:{Colors.RESET}{Colors.DIM}]{Colors.RESET}"
+                    frame = get_status_marker(":")
                     print(f"  {frame} {Colors.BOLD}{label}{Colors.RESET}...")
                     self._last_step_multiline = True
                     self._category_has_output = True
@@ -299,9 +299,8 @@ class UI:
                 if commands_printed:
                     self._last_step_multiline = True
                     self._category_has_output = True
-                    print(
-                        f"      {Colors.DIM}[{Colors.RESET}{Colors.BOLD_MAGENTA}~{Colors.RESET}{Colors.DIM}]{Colors.RESET} interrupted {time_tag}"
-                    )
+                    marker = get_status_marker("~")
+                    print(f"      {marker} interrupted {time_tag}")
                 else:
                     self._print_static_result(label, res, module=module)
                 raise
@@ -336,42 +335,11 @@ class UI:
                 self._category_has_output = True
                 dur_val = max(0.1, res.duration)
                 time_tag = f"{Colors.GRAY}({dur_val:.1f}s){Colors.RESET}"
-                if res.status == "ok":
-                    msg_text = self._resolve_ok_msg(label, res, module=module)
-                    print(
-                        f"      {Colors.DIM}[{Colors.RESET}{Colors.BOLD_GREEN}✓{Colors.RESET}{Colors.DIM}]{Colors.RESET} {msg_text or 'updated'} {time_tag}"
-                    )
-                elif res.status == "warning" or (
-                    is_verbose and res.status == "unchanged" and res.warnings
-                ):
-                    if self.verbose:
-                        print(
-                            f"      {Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET} warning {time_tag}"
-                        )
-                    else:
-                        print(
-                            f"      {Colors.DIM}[—]{Colors.RESET} up to date {time_tag}"
-                        )
-                elif res.status == "unchanged":
-                    msg = res.message if res.message else "up to date"
-                    print(f"      {Colors.DIM}[—]{Colors.RESET} {msg} {time_tag}")
-                elif res.status == "skipped":
-                    if self.verbose:
-                        print(
-                            f"      {Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET} skipped {time_tag}"
-                        )
-                    else:
-                        print(
-                            f"      {Colors.DIM}[—]{Colors.RESET} up to date {time_tag}"
-                        )
-                elif res.status in ("interrupted", "cancelled"):
-                    print(
-                        f"      {Colors.DIM}[{Colors.RESET}{Colors.BOLD_MAGENTA}~{Colors.RESET}{Colors.DIM}]{Colors.RESET} interrupted {time_tag}"
-                    )
-                else:  # error
-                    print(
-                        f"      {Colors.DIM}[{Colors.RESET}{Colors.BOLD_RED}✗{Colors.RESET}{Colors.DIM}]{Colors.RESET} failed {time_tag}"
-                    )
+                sym, msg = self._resolve_step_display(
+                    label, res, module=module, verbose=self.verbose
+                )
+                marker = get_status_marker(sym)
+                print(f"      {marker} {msg} {time_tag}")
             else:
                 self._print_static_result(label, res, module=module)
 
@@ -615,6 +583,39 @@ class UI:
                 msg_text = f"{len(valid)} {unit} updated"
         return msg_text
 
+    def _resolve_step_display(
+        self,
+        label: str,
+        res: StepResult,
+        module: Any | None = None,
+        verbose: bool = False,
+    ) -> tuple[str, str]:
+        if res.status == "ok":
+            if verbose and res.warnings:
+                return ("!", "warning")
+            msg_text = self._resolve_ok_msg(label, res, module=module)
+            return ("✓", msg_text or "updated")
+
+        if res.status == "warning" or (
+            verbose and res.status == "unchanged" and res.warnings
+        ):
+            if verbose:
+                return ("!", "warning")
+            return ("—", "up to date")
+
+        if res.status == "skipped":
+            if verbose:
+                return ("!", "skipped")
+            return ("—", "up to date")
+
+        if res.status == "unchanged":
+            return ("—", res.message if res.message else "up to date")
+
+        if res.status in ("interrupted", "cancelled"):
+            return ("~", "interrupted")
+
+        return ("✗", "failed")
+
     def _print_static_result(
         self, label: str, res: StepResult, module: Any | None = None
     ):
@@ -627,44 +628,15 @@ class UI:
         dur_val = max(0.1, res.duration)
         time_tag = f"{Colors.GRAY}({dur_val:.1f}s){Colors.RESET}"
 
-        if res.status == "ok":
-            if self.verbose and res.warnings:
-                print(
-                    f"  {Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET} {label}: warning {time_tag}"
-                )
-            else:
-                msg_text = self._resolve_ok_msg(label, res, module=module)
-                msg = f": {msg_text}" if msg_text else ""
-                print(
-                    f"  {Colors.DIM}[{Colors.RESET}{Colors.BOLD_GREEN}✓{Colors.RESET}{Colors.DIM}]{Colors.RESET} {label}{msg} {time_tag}"
-                )
-        elif res.status == "warning" or (
-            self.verbose and res.status == "unchanged" and res.warnings
-        ):
-            if self.verbose:
-                print(
-                    f"  {Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET} {label}: warning {time_tag}"
-                )
-            else:
-                print(f"  {Colors.DIM}[—]{Colors.RESET} {label}: up to date {time_tag}")
-        elif res.status == "unchanged":
-            msg = res.message if res.message else "up to date"
-            print(f"  {Colors.DIM}[—]{Colors.RESET} {label}: {msg} {time_tag}")
-        elif res.status == "skipped":
-            if self.verbose:
-                print(
-                    f"  {Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET} {label}: skipped {time_tag}"
-                )
-            else:
-                print(f"  {Colors.DIM}[—]{Colors.RESET} {label}: up to date {time_tag}")
-        elif res.status in ("interrupted", "cancelled"):
-            print(
-                f"  {Colors.DIM}[{Colors.RESET}{Colors.BOLD_MAGENTA}~{Colors.RESET}{Colors.DIM}]{Colors.RESET} {label}: interrupted {time_tag}"
-            )
-        else:  # error
-            print(
-                f"  {Colors.DIM}[{Colors.RESET}{Colors.BOLD_RED}✗{Colors.RESET}{Colors.DIM}]{Colors.RESET} {label}: failed {time_tag}"
-            )
+        sym, msg = self._resolve_step_display(
+            label, res, module=module, verbose=self.verbose
+        )
+        marker = get_status_marker(sym)
+        if sym == "✓" and (not msg or msg.lower() == label.lower()):
+            msg_part = ""
+        else:
+            msg_part = f": {msg}" if msg else ""
+        print(f"  {marker} {label}{msg_part} {time_tag}")
 
     def print_result(self, label: str, result: StepResult, module: Any | None = None):
         """Render an already completed result using the standard step style."""
@@ -677,7 +649,7 @@ class UI:
         width = min(self.terminal_width, 80)
         prefix = "── Interrupted "
         fill = "─" * max(0, width - len(prefix))
-        marker = f"{Colors.DIM}[{Colors.RESET}{Colors.BOLD_MAGENTA}~{Colors.RESET}{Colors.DIM}]{Colors.RESET}"
+        marker = get_status_marker("~")
         print()
         print(f"{Colors.BOLD_CYAN}{prefix}{fill}{Colors.RESET}")
         print(f"  {marker} Update cancelled by user.")
@@ -744,8 +716,8 @@ class UI:
             f"{Colors.BOLD}{Colors.CYAN}{summary_prefix}{summary_dashes}{Colors.RESET}"
         )
         if package_updates:
-            marker = f"{Colors.DIM}[{Colors.RESET}{Colors.BOLD_GREEN}✓{Colors.RESET}{Colors.DIM}]{Colors.RESET}"
-            print(f"  {marker} Updates applied:")
+            marker = get_status_marker("✓")
+            print(f"  {marker} Updated components:")
             for item in package_updates:
                 res = item["result"]
                 msg_text = self._clean_ok_message(item["name"], res.message)
@@ -771,10 +743,9 @@ class UI:
                     )
                     for detail in formatted_details:
                         print(f"      - {detail}")
-        elif not all_warning_items and not error_items and not is_interrupted:
-            print("  All components are fully up to date.")
         else:
-            print(f"  {Colors.DIM}[-]{Colors.RESET} No package updates were applied.")
+            marker = get_status_marker("—")
+            print(f"  {marker} All components are up to date.")
 
         # Warning details stay hidden in normal mode; keep this existing contract.
         if warning_items:
@@ -799,7 +770,7 @@ class UI:
                     and res.message.lower() != "warning"
                 ):
                     details.insert(0, res.message)
-                marker = f"{Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET}"
+                marker = get_status_marker("!")
                 print(f"  {marker} {item['name']}: {message}")
                 print_details(details, indent="    ")
 
@@ -815,14 +786,14 @@ class UI:
                 )
                 if not details and res.message and res.message.lower() != "failed":
                     details.append(res.message)
-                marker = f"{Colors.DIM}[{Colors.RESET}{Colors.BOLD_RED}✗{Colors.RESET}{Colors.DIM}]{Colors.RESET}"
+                marker = get_status_marker("✗")
                 print(f"  {marker} {item['name']}: failed")
                 print_details(details, indent="    ")
 
         if is_interrupted:
             print()
             print_diagnostic_heading("Interrupted")
-            interrupted_marker = f"{Colors.DIM}[{Colors.RESET}{Colors.BOLD_MAGENTA}~{Colors.RESET}{Colors.DIM}]{Colors.RESET}"
+            interrupted_marker = get_status_marker("~")
             print(f"  {interrupted_marker} Update cancelled by user.")
 
         print()

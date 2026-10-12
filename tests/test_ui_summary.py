@@ -52,7 +52,25 @@ class SummaryFormattingTests(unittest.TestCase):
     def test_no_updates_message_has_a_neutral_status_marker(self):
         output = render_summary(StepResult("warning", "warning"))
 
-        self.assertIn("  [-] No package updates were applied.", output)
+        self.assertIn("  [—] All components are up to date.", output)
+
+    def test_no_updates_message_has_dim_em_dash_marker(self):
+        raw_output = io.StringIO()
+        with contextlib.redirect_stdout(raw_output):
+            UI(is_interactive=False, verbose=False).print_summary(
+                [
+                    {
+                        "name": "Example Module",
+                        "key": "example",
+                        "result": StepResult("unchanged"),
+                    }
+                ],
+                1.0,
+            )
+        raw = raw_output.getvalue()
+        self.assertIn("\033[2m[—]\033[0m All components are up to date.", raw)
+        plain = re.sub(r"\x1b\[[0-9;]*m", "", raw)
+        self.assertIn("  [—] All components are up to date.", plain)
 
     def test_warning_category_uses_summary_color_with_colored_marker(self):
         result = StepResult("warning", "warning", warnings=["notice"])
@@ -432,7 +450,7 @@ class SummaryFormattingTests(unittest.TestCase):
             ui.print_summary([], 5.0, interrupted=True)
         raw = output.getvalue()
         self.assertIn("── Summary ─ 5s ", raw)
-        self.assertIn("\033[2m[-]\033[0m No package updates were applied.", raw)
+        self.assertIn("\033[2m[—]\033[0m All components are up to date.", raw)
         self.assertIn("── Interrupted ", raw)
         self.assertIn(
             "\033[2m[\033[0m\033[1;35m~\033[0m\033[2m]\033[0m Update cancelled by user.",
@@ -503,7 +521,7 @@ class SummaryFormattingTests(unittest.TestCase):
         with contextlib.redirect_stdout(output):
             ui.print_summary(results, 5.0, interrupted=True)
         raw = output.getvalue()
-        self.assertIn("applied.\n\n", raw)
+        self.assertIn("date.\n\n", raw)
         self.assertIn("failed\n\n", raw)
         self.assertIn("warning\n\n", raw)
 
@@ -521,11 +539,11 @@ class SummaryFormattingTests(unittest.TestCase):
             ui.print_summary(results, 5.0)
         raw = output.getvalue()
         self.assertIn(
-            "\033[2m[\033[0m\033[1;32m✓\033[0m\033[2m]\033[0m Updates applied:",
+            "\033[2m[\033[0m\033[1;32m✓\033[0m\033[2m]\033[0m Updated components:",
             raw,
         )
         plain = re.sub(r"\x1b\[[0-9;]*m", "", raw)
-        self.assertIn("  [✓] Updates applied:", plain)
+        self.assertIn("  [✓] Updated components:", plain)
 
     def test_verbose_steps_have_blank_line_separation(self):
         ui = UI(is_interactive=False, verbose=True)

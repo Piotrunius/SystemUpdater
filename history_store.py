@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from colors import Colors
+from colors import Colors, get_status_marker
 
 RUN_ID_PATTERN = re.compile(r"^\d{8}T\d{6}Z-[0-9a-f]{8}$")
 TOKEN_PATTERN = re.compile(
@@ -217,7 +217,7 @@ def _status_label(status: str) -> tuple[str, str]:
         "unchanged": ("—", "up-to-date"),
         "warning": ("!", "warning"),
         "error": ("✗", "failed"),
-        "skipped": ("-", "skipped"),
+        "skipped": ("—", "skipped"),
         "updated": ("✓", "updated"),
         "up-to-date": ("—", "up-to-date"),
         "interrupted": ("~", "interrupted"),
@@ -227,20 +227,8 @@ def _status_label(status: str) -> tuple[str, str]:
 
 
 def _status_marker(status: str) -> str:
-    symbol, _ = _status_label(status)
-    if not sys.stdout.isatty() or os.environ.get("NO_COLOR") is not None:
-        return f"[{symbol}]"
-    if status in ("ok", "updated"):
-        return f"{Colors.DIM}[{Colors.RESET}{Colors.BOLD_GREEN}✓{Colors.RESET}{Colors.DIM}]{Colors.RESET}"
-    if status == "warning":
-        return f"{Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET}"
-    if status == "error":
-        return f"{Colors.DIM}[{Colors.RESET}{Colors.BOLD_RED}✗{Colors.RESET}{Colors.DIM}]{Colors.RESET}"
-    if status in ("interrupted", "cancelled"):
-        return f"{Colors.DIM}[{Colors.RESET}{Colors.BOLD_MAGENTA}~{Colors.RESET}{Colors.DIM}]{Colors.RESET}"
-    if status == "skipped":
-        return f"{Colors.DIM}[-]{Colors.RESET}"
-    return f"{Colors.DIM}[—]{Colors.RESET}"
+    plain = not sys.stdout.isatty() or os.environ.get("NO_COLOR") is not None
+    return get_status_marker(status, plain=plain)
 
 
 def print_history(runs: list[dict[str, Any]], limit: int = 10) -> None:
