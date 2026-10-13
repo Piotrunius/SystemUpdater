@@ -152,6 +152,55 @@ Transaction Summary:
         self.assertEqual(result.status, "ok")
         self.assertEqual(result.details, ["App: 1.0 -> 2.0"])
 
+    @patch("modules.base.urllib.request.urlopen")
+    def test_gearlever_formats_commit_ids_from_json(self, mock_urlopen):
+        mock_resp = Mock()
+        mock_resp.headers = {"x-ratelimit-remaining": "50"}
+        mock_urlopen.return_value.__enter__.return_value = mock_resp
+
+        context = UpdateContext()
+        context.run_cmd = Mock(
+            side_effect=[
+                (
+                    0,
+                    '{"schema_version": 1, "updates": [{"name": "Waywallen", "current_commit": "1a76dad", "available_commit": "8206f3f"}]}',
+                    "",
+                ),
+                (0, "Updated", ""),
+            ]
+        )
+
+        result = GearLeverModule().run(context)
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.details, ["Waywallen: 1a76dad -> 8206f3f"])
+
+    @patch("modules.base.urllib.request.urlopen")
+    def test_gearlever_formats_file_hash_changes_before_and_after_update(
+        self, mock_urlopen
+    ):
+        mock_resp = Mock()
+        mock_resp.headers = {"x-ratelimit-remaining": "50"}
+        mock_urlopen.return_value.__enter__.return_value = mock_resp
+
+        context = UpdateContext()
+        context.run_cmd = Mock(
+            side_effect=[
+                (
+                    0,
+                    '{"schema_version": 1, "updates": [{"name": "TestApp", "path": "/fake/test.appimage"}]}',
+                    "",
+                ),
+                (0, "Updated", ""),
+            ]
+        )
+
+        mod = GearLeverModule()
+        with patch.object(mod, "_read_file_hash", side_effect=["d162473", "8206f3f"]):
+            result = mod.run(context)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.details, ["TestApp: d162473 -> 8206f3f"])
+
     def test_skills_ignores_summary_count_line(self):
         from modules.devtools import SkillsModule
 
