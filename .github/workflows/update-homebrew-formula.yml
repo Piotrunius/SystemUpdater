@@ -140,6 +140,10 @@ jobs:
           url = os.environ["ARCHIVE_URL"]
           sha = os.environ["ARCHIVE_SHA"]
           version = os.environ["VERSION"]
+          v_ver = '#{version}'
+          v_py = '#{python}'
+          v_lib = '#{libexec}'
+          v_bin = '#{bin}'
 
           content = f"""class Systemupdater < Formula
   desc "Unified update runner for Linux package managers and dev tools"
@@ -156,18 +160,18 @@ jobs:
     libexec.install Dir["*.py"]
     libexec.install "modules"
     (libexec/".homebrew-install").write("homebrew\\n")
-    (libexec/"VERSION").write("#{{version}}\\n")
+    (libexec/"VERSION").write("{v_ver}\\n")
 
     python = Formula["python@3"].opt_bin/"python3"
     (bin/"sysupdate").write <<~EOS
       #!/bin/bash
-      exec "#{{python}}" "#{{libexec}}/main.py" "$@"
+      exec "{v_py}" "{v_lib}/main.py" "$@"
     EOS
   end
 
   test do
-    output = shell_output("#{{bin}}/sysupdate --version")
-    assert_match "Installed version: #{{version}}", output
+    output = shell_output("{v_bin}/sysupdate --version")
+    assert_match "Installed version: {v_ver}", output
   end
 end
 """
