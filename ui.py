@@ -135,7 +135,7 @@ NON_FATAL_PATTERNS = [
             r"(bad credentials|authentication failed|invalid token|token expired|permission denied \(publickey\))",
             re.IGNORECASE,
         ),
-        "Authentication/token issue",
+        "Authentication issue",
     ),
 ]
 
