@@ -4,6 +4,11 @@ SystemUpdater (`sysupdate`) runs updates for supported Linux and macOS package m
 
 Before system package updates, it can create a Btrfs snapshot through Snapper. It also supports selective runs, custom commands, run history, and optional reboot handling.
 
+<p align="center">
+  <img src="assets/gifs/demo_full_update.gif" alt="SystemUpdater execution demo" width="800" style="border-radius: 10px; border: 1px solid #30363d;" />
+</p>
+
+
 ## Features
 
 - Detects the distribution from `/etc/os-release` on Linux or system version on macOS and selects applicable package managers.
@@ -112,6 +117,15 @@ alias update="sysupdate"
 | `--show-log RUN_ID`           | Show the saved details for a run                                                   |
 
 Use `sysupdate --help` for the options supported by the installed version.
+
+### Verbose streaming
+
+Pass `-v` or `--verbose` to inspect real-time command output, repository syncs, and warnings across all modules:
+
+<p align="center">
+  <img src="assets/gifs/demo_verbose.gif" alt="SystemUpdater verbose mode demo" width="800" style="border-radius: 10px; border: 1px solid #30363d;" />
+</p>
+
 
 ## Configuration
 
