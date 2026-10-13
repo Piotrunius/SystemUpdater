@@ -8,7 +8,6 @@ Before system package updates, it can create a Btrfs snapshot through Snapper. I
   <img src="assets/gifs/demo_full_update.gif" alt="SystemUpdater execution demo" width="800" style="border-radius: 10px; border: 1px solid #30363d;" />
 </p>
 
-
 ## Features
 
 - Detects the distribution from `/etc/os-release` on Linux or system version on macOS and selects applicable package managers.
@@ -125,7 +124,6 @@ Pass `-v` or `--verbose` to inspect real-time command output, repository syncs, 
 <p align="center">
   <img src="assets/gifs/demo_verbose.gif" alt="SystemUpdater verbose mode demo" width="800" style="border-radius: 10px; border: 1px solid #30363d;" />
 </p>
-
 
 ## Configuration
 
