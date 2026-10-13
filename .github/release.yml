@@ -3,14 +3,39 @@ changelog:
     - title: Breaking Changes
       labels:
         - "breaking-change"
+        - "breaking"
     - title: Features
       labels:
-        - "enhancement"
+        - "feat"
         - "feature"
+        - "enhancement"
     - title: Bug Fixes
       labels:
-        - "bug"
         - "fix"
+        - "bug"
+    - title: Performance Improvements
+      labels:
+        - "perf"
+        - "performance"
+    - title: Refactoring
+      labels:
+        - "refactor"
+    - title: Documentation
+      labels:
+        - "docs"
+        - "documentation"
+    - title: Code Style
+      labels:
+        - "style"
+    - title: Testing
+      labels:
+        - "test"
+        - "testing"
+    - title: Build & CI / CD
+      labels:
+        - "build"
+        - "ci"
     - title: Maintenance
       labels:
+        - "chore"
         - "*"
