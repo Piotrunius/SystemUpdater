@@ -9,6 +9,23 @@ from modules.base import BaseModule, UpdateContext
 from ui import StepResult
 
 
+BREW_CANDIDATE_PATHS = [
+    "/opt/homebrew/bin/brew",
+    "/usr/local/bin/brew",
+    "/home/linuxbrew/.linuxbrew/bin/brew",
+]
+
+
+def find_brew_bin(ctx: UpdateContext) -> str | None:
+    found = ctx.which("brew")
+    if found:
+        return found
+    for p in BREW_CANDIDATE_PATHS:
+        if os.path.isfile(p) and os.access(p, os.X_OK):
+            return p
+    return None
+
+
 class BrewModule(BaseModule):
     name = "Homebrew"
     key = "brew"
@@ -16,12 +33,10 @@ class BrewModule(BaseModule):
     description = "Updates Homebrew taps, formulae, and desktop casks"
 
     def is_available(self, ctx: UpdateContext) -> bool:
-        return ctx.which("brew") is not None or os.path.exists(
-            "/home/linuxbrew/.linuxbrew/bin/brew"
-        )
+        return find_brew_bin(ctx) is not None
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        brew_bin = ctx.which("brew") or "/home/linuxbrew/.linuxbrew/bin/brew"
+        brew_bin = find_brew_bin(ctx) or "brew"
 
         # 1. brew update
         u_code, u_out, u_err = ctx.run_cmd([brew_bin, "update"])

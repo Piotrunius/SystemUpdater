@@ -11,6 +11,9 @@ echo "Installing SystemUpdater..."
 # 1. Verify Python 3.11+
 if ! command -v python3 >/dev/null 2>&1; then
 	echo "Error: python3 is required but not installed." >&2
+	if [ "$(uname -s)" = "Darwin" ]; then
+		echo "Tip: Install Python via Homebrew with 'brew install python'." >&2
+	fi
 	exit 1
 fi
 
@@ -20,6 +23,9 @@ PY_MINOR="$(echo "${PY_VER}" | cut -d. -f2)"
 
 if [ "${PY_MAJOR}" -lt 3 ] || { [ "${PY_MAJOR}" -eq 3 ] && [ "${PY_MINOR}" -lt 11 ]; }; then
 	echo "Error: Python 3.11 or newer is required (detected Python ${PY_VER})." >&2
+	if [ "$(uname -s)" = "Darwin" ]; then
+		echo "Tip: Install a modern Python via Homebrew with 'brew install python'." >&2
+	fi
 	exit 1
 fi
 
@@ -42,10 +48,21 @@ echo "Successfully installed SystemUpdater to ${TARGET_DIR}/sysupdate"
 
 # Check if ~/.local/bin is in PATH
 if [[ ":$PATH:" != *":${TARGET_DIR}:"* ]]; then
+	SHELL_NAME="$(basename "${SHELL:-bash}")"
+	RC_FILE="~/.bashrc"
+	if [ "${SHELL_NAME}" = "zsh" ] || [ "$(uname -s)" = "Darwin" ]; then
+		RC_FILE="~/.zshrc"
+	elif [ "${SHELL_NAME}" = "fish" ]; then
+		RC_FILE="~/.config/fish/config.fish"
+	fi
 	echo "Notice: ${TARGET_DIR} is not currently in your PATH."
-	echo "Add this line to your ~/.bashrc or ~/.zshrc:"
-	# shellcheck disable=SC2016
-	echo '  export PATH="${HOME}/.local/bin:${PATH}"'
+	echo "Add this line to your ${RC_FILE}:"
+	if [ "${SHELL_NAME}" = "fish" ]; then
+		echo '  fish_add_path ~/.local/bin'
+	else
+		# shellcheck disable=SC2016
+		echo '  export PATH="${HOME}/.local/bin:${PATH}"'
+	fi
 fi
 
 echo "You can now run: sysupdate"

@@ -7,6 +7,7 @@ Crafted for Nobara Linux with modular architecture and flicker-free TUI.
 import argparse
 import contextlib
 import os
+import platform
 import re
 
 # Ensure script directory is in sys.path
@@ -96,7 +97,6 @@ def latest_homebrew_version():
         return match.group(1) if match else None
     except (OSError, TimeoutError, urllib.error.URLError, UnicodeDecodeError):
         return None
-
 
 
 def latest_remote_commit():
@@ -708,7 +708,10 @@ def main():
         print("Rebooting system as requested by --reboot...")
         sys.stdout.flush()
         try:
-            subprocess.run(["systemctl", "reboot"], check=False)
+            if platform.system() == "Darwin":
+                subprocess.run(["sudo", "shutdown", "-r", "now"], check=False)
+            else:
+                subprocess.run(["systemctl", "reboot"], check=False)
         except OSError:
             try:
                 subprocess.run(["sudo", "reboot"], check=False)

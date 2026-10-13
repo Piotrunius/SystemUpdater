@@ -1,16 +1,16 @@
 # SystemUpdater
 
-SystemUpdater (`sysupdate`) runs updates for supported Linux package managers, desktop apps, containers, and development tools from one command. It detects installed tools, runs only applicable modules, and reports results in a consistent terminal summary.
+SystemUpdater (`sysupdate`) runs updates for supported Linux and macOS package managers, desktop apps, containers, and development tools from one command. It detects installed tools, runs only applicable modules, and reports results in a consistent terminal summary.
 
 Before system package updates, it can create a Btrfs snapshot through Snapper. It also supports selective runs, custom commands, run history, and optional reboot handling.
 
 ## Features
 
-- Detects the distribution from `/etc/os-release` and selects its system package manager.
+- Detects the distribution from `/etc/os-release` on Linux or system version on macOS and selects applicable package managers.
 - Checks installed tools and update targets before running their modules.
 - Supports module, category, quiet, and verbose selection.
 - Creates cooldown-limited Snapper snapshots before updates when available.
-- Detects reboot requirements from updated packages, firmware, and system reboot markers.
+- Detects reboot requirements from updated packages, firmware, macOS system updates, and system reboot markers.
 - Stores up to 30 private run records, with redacted and size-limited command output.
 - Keeps a clean Git checkout updated automatically; Homebrew installations are updated by Homebrew.
 - Uses the Python standard library; no Python packages need to be installed.
@@ -21,9 +21,9 @@ Availability depends on the operating system and tools installed on the machine.
 
 | Area                         | Sources                                                                                                                        |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| System                       | DNF/DNF5, APT, Pacman and AUR helpers (yay/paru), Zypper, APK, XBPS, Nobara repository sync                                    |
+| System                       | DNF/DNF5, APT, Pacman and AUR helpers (yay/paru), Zypper, APK, XBPS, Nobara repository sync, macOS Software Update             |
 | Protection and firmware      | Snapper Btrfs snapshots, Firmware (fwupdmgr)                                                                                   |
-| Apps and gaming              | Flatpak, Nuvio Desktop, Gear Lever AppImages, ProtonPlus, Distrobox                                                            |
+| Apps and gaming              | Flatpak, Nuvio Desktop, Gear Lever AppImages, ProtonPlus, Distrobox, Mac App Store (mas)                                       |
 | Containers and package tools | Homebrew, Docker images and Compose services, Podman auto-update, Vagrant boxes, Snap, Nix                                     |
 | Development tools            | Shell plugins, Tealdeer, Rust, Python tools, Node.js package managers, Composer, Ruby gems, Mise, asdf, SDKMAN, GHCup, Flutter |
 | Editors and extensions       | Neovim, Micro, Helix, VS Code, Cursor, VSCodium, Tmux plugins, GitHub CLI extensions, Agent Skills, Antigravity                |
@@ -31,7 +31,7 @@ Availability depends on the operating system and tools installed on the machine.
 
 ## Requirements
 
-- Linux
+- Linux or macOS
 - Python 3.11 or newer
 - Git for a Git checkout installation
 - The package managers and tools you want SystemUpdater to manage

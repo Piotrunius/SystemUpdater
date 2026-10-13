@@ -59,8 +59,10 @@ from modules.languages_ext import (
     PyenvModule,
     SdkmanModule,
 )
+from modules.mas import MasModule
 
 # System Core
+from modules.macos_update import SoftwareUpdateModule
 from modules.nobara import RepoSyncModule, SystemPackagesModule
 from modules.nuvio import NuvioModule
 from modules.proton import ProtonPlusModule
@@ -106,6 +108,7 @@ def get_all_modules(cfg: Config | None = None) -> list[BaseModule]:
             ZypperModule(),  # Zypper (openSUSE Tumbleweed / Leap)
             ApkModule(),  # APK (Alpine Linux)
             XbpsModule(),  # XBPS (Void Linux)
+            SoftwareUpdateModule(),  # macOS (Apple softwareupdate)
             FirmwareModule(),
         ]
     )
@@ -118,6 +121,7 @@ def get_all_modules(cfg: Config | None = None) -> list[BaseModule]:
             GearLeverModule(),
             ProtonPlusModule(),
             DistroboxModule(),
+            MasModule(),  # Mac App Store
         ]
     )
 

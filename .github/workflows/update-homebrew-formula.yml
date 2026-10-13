@@ -5,7 +5,6 @@ on:
     branches:
       - main
     paths-ignore:
-      - Formula/systemupdater.rb
       - README.md
       - .gitignore
 
@@ -33,14 +32,16 @@ jobs:
         run: |
           set -euo pipefail
 
-          latest_tag="$(git describe --tags --abbrev=0 2>/dev/null || echo "v1.2.2")"
+          latest_tag="$(git describe --tags --abbrev=0 2>/dev/null || echo "v1.2.4")"
           export CUR_VER="${latest_tag#v}"
+          export PREV_TAG="${latest_tag}"
 
           python3 - <<'PY'
           import os
           import re
 
-          cur_ver = os.environ.get("CUR_VER", "1.2.2")
+          cur_ver = os.environ.get("CUR_VER", "1.2.4")
+          prev_tag = os.environ.get("PREV_TAG", "v1.2.4")
           subject = os.environ.get("COMMIT_SUBJECT", "")
 
           m = re.match(r"^(\d+)\.(\d+)\.(\d+)$", cur_ver)
@@ -66,20 +67,143 @@ jobs:
           print(f"Calculated next version: {next_ver} (from {cur_ver})")
 
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"prev_tag={prev_tag}\n")
               f.write(f"version={next_ver}\n")
               f.write(f"tag=v{next_ver}\n")
           PY
 
-      - name: Create GitHub Release
+      - name: Create GitHub Release with Detailed Changelog
         id: create_release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.version.outputs.tag }}
+          PREV_TAG: ${{ steps.version.outputs.prev_tag }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
+
+          python3 - <<'PY'
+          import os
+          import re
+          import subprocess
+          from pathlib import Path
+
+          prev_tag = os.environ.get("PREV_TAG", "")
+          tag = os.environ.get("TAG", "")
+          repo = os.environ.get("REPOSITORY", "")
+
+          rev_range = f"{prev_tag}..HEAD" if prev_tag else "HEAD"
+          try:
+              commits_raw = subprocess.check_output(
+                  ["git", "log", rev_range, "--pretty=format:COMMIT_START%n%H%n%s%n%b%nCOMMIT_END"],
+                  text=True
+              )
+          except subprocess.CalledProcessError:
+              commits_raw = subprocess.check_output(
+                  ["git", "log", "-n", "1", "--pretty=format:COMMIT_START%n%H%n%s%n%b%nCOMMIT_END"],
+                  text=True
+              )
+
+          category_map = {
+              "feat": "Features",
+              "fix": "Bug Fixes",
+              "refactor": "Refactoring",
+              "perf": "Performance Improvements",
+              "docs": "Documentation",
+              "chore": "Maintenance",
+              "ci": "CI / CD",
+              "style": "Code Style",
+              "test": "Testing",
+          }
+
+          categorized = {}
+          breaking = []
+
+          for block in commits_raw.split("COMMIT_START\n"):
+              if not block.strip():
+                  continue
+              parts = block.split("\nCOMMIT_END")[0].strip().split("\n")
+              if len(parts) < 2:
+                  continue
+              sha = parts[0][:12]
+              subject = parts[1].strip()
+              body = "\n".join(parts[2:]).strip() if len(parts) > 2 else ""
+
+              m = re.match(r"^([a-zA-Z]+)(?:\(([^\)]+)\))?(!)?:\s*(.+)$", subject)
+              is_breaking = "BREAKING CHANGE:" in body or "BREAKING-CHANGE:" in body or (m and m.group(3) == "!")
+
+              if m:
+                  ctype = m.group(1).lower()
+                  scope = m.group(2)
+                  desc = m.group(4)
+                  type_title = category_map.get(ctype, ctype.capitalize())
+              else:
+                  type_title = "Other Changes"
+                  scope = None
+                  desc = subject
+
+              entry = {
+                  "sha": sha,
+                  "subject": subject,
+                  "desc": desc,
+                  "scope": scope,
+                  "body": body,
+              }
+
+              if is_breaking:
+                  breaking.append(entry)
+              categorized.setdefault(type_title, []).append(entry)
+
+          lines = []
+          if breaking:
+              lines.append("### Breaking Changes\n")
+              for b in breaking:
+                  scope_str = f"**{b['scope']}:** " if b['scope'] else ""
+                  lines.append(f"- {scope_str}{b['desc']} (`{b['sha']}`)")
+                  if b['body']:
+                      for l in b['body'].splitlines():
+                          l_str = l.strip()
+                          if l_str.startswith("- "):
+                              lines.append(f"  {l_str}")
+              lines.append("")
+
+          order = [
+              "Features",
+              "Bug Fixes",
+              "Performance Improvements",
+              "Refactoring",
+              "Documentation",
+              "CI / CD",
+              "Maintenance",
+              "Code Style",
+              "Testing",
+              "Other Changes",
+          ]
+          for cat in order:
+              if cat in categorized:
+                  lines.append(f"### {cat}\n")
+                  for item in categorized[cat]:
+                      scope_str = f"**{item['scope']}:** " if item['scope'] else ""
+                      lines.append(f"- {scope_str}{item['desc']} (`{item['sha']}`)")
+                      if item['body']:
+                          for l in item['body'].splitlines():
+                              l_str = l.strip()
+                              if l_str.startswith("- "):
+                                  lines.append(f"  {l_str}")
+                              elif l_str and not l_str.startswith("BREAKING"):
+                                  lines.append(f"  > {l_str}")
+                  lines.append("")
+
+          if prev_tag and repo:
+              lines.append(f"**Full Changelog**: https://github.com/{repo}/compare/{prev_tag}...{tag}")
+
+          notes_content = "\n".join(lines).strip()
+          Path("/tmp/release_notes.md").write_text(notes_content + "\n")
+          PY
+
           gh release create "${TAG}" \
             --title "${TAG}" \
-            --generate-notes \
+            --notes-file /tmp/release_notes.md \
             --target "${{ github.sha }}"
 
       - name: Calculate release archive checksum
@@ -148,14 +272,13 @@ jobs:
 
           content = textwrap.dedent(f"""\
             class Systemupdater < Formula
-              desc "Unified update runner for Linux package managers and dev tools"
+              desc "Unified update runner for Linux and macOS package managers and dev tools"
               homepage "https://github.com/Piotrunius/SystemUpdater"
               url "{url}"
               sha256 "{sha}"
               version "{version}"
               license "MIT"
 
-              depends_on :linux
               depends_on "python@3"
 
               def install

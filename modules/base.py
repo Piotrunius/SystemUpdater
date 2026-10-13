@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import platform
 import shlex
 import shutil
 import subprocess
@@ -82,8 +83,25 @@ def get_os_release() -> dict[str, str]:
             except (OSError, UnicodeError):
                 continue
 
+    if not info and platform.system() == "Darwin":
+        mac_ver, _, _ = platform.mac_ver()
+        info = {
+            "ID": "macos",
+            "NAME": "macOS",
+            "PRETTY_NAME": f"macOS {mac_ver}" if mac_ver else "macOS",
+            "VERSION_ID": mac_ver or "",
+        }
+
     _os_release_cache = info
     return info
+
+
+def is_macos() -> bool:
+    return platform.system() == "Darwin"
+
+
+def is_linux() -> bool:
+    return platform.system() == "Linux"
 
 
 class UpdateContext:
