@@ -6,6 +6,7 @@ Crafted for Nobara Linux with modular architecture and flicker-free TUI.
 
 import argparse
 import contextlib
+import json
 import os
 import platform
 import re
@@ -113,36 +114,76 @@ def latest_remote_commit():
     return None
 
 
+def latest_upstream_version():
+    """Read the latest release version from GitHub releases or the Homebrew formula."""
+    url = "https://api.github.com/repos/Piotrunius/SystemUpdater/releases/latest"
+    request = urllib.request.Request(url, headers={"User-Agent": "SystemUpdater"})
+    try:
+        with urllib.request.urlopen(request, timeout=5) as response:
+            data = json.loads(response.read().decode("utf-8"))
+            tag = data.get("tag_name")
+            if tag:
+                return tag.lstrip("v").strip()
+    except (
+        OSError,
+        TimeoutError,
+        urllib.error.URLError,
+        json.JSONDecodeError,
+        UnicodeDecodeError,
+    ):
+        pass
+    return latest_homebrew_version()
+
+
+def parse_semver(v: str | None) -> tuple[int, int, int]:
+    if not v:
+        return (0, 0, 0)
+    clean = str(v).lstrip("v").strip()
+    match = re.match(r"^(\d+)\.(\d+)\.(\d+)", clean)
+    if match:
+        return tuple(map(int, match.groups()))
+    return (0, 0, 0)
+
+
 class VersionAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
-        current = get_version()
+        if is_homebrew_install():
+            current = get_version()
+        else:
+            tag = git_output("describe", "--tags", "--abbrev=0")
+            current = tag.lstrip("v").strip() if tag else get_version()
+
         latest = (
             latest_homebrew_version()
             if is_homebrew_install()
-            else latest_remote_commit()
+            else latest_upstream_version()
         )
         ui = UI()
         ui.print_header("System Updater")
         ui.print_category("Version")
-        ui.print_result("Installed version", StepResult("unchanged", current))
+        ui.print_result(
+            "Installed version",
+            StepResult("unchanged", current),
+            show_duration=False,
+        )
         if latest:
-            installed = (
-                current
-                if is_homebrew_install()
-                else git_output("rev-parse", "--short=12", "HEAD")
+            ui.print_result(
+                "Latest version",
+                StepResult("unchanged", latest),
+                show_duration=False,
             )
-            if latest == installed:
-                ui.print_result(
-                    "Latest version", StepResult("unchanged", f"{latest} (up to date)")
-                )
-            else:
-                ui.print_result(
-                    "Latest version",
-                    StepResult("unchanged", f"{latest} (update available)"),
-                )
+            is_up_to_date = parse_semver(current) >= parse_semver(latest)
+            status_text = "up to date" if is_up_to_date else "update available"
+            ui.print_result(
+                "Status",
+                StepResult("unchanged", status_text),
+                show_duration=False,
+            )
         else:
             ui.print_result(
-                "Latest version", StepResult("unchanged", "check unavailable")
+                "Latest version",
+                StepResult("unchanged", "check unavailable"),
+                show_duration=False,
             )
         parser.exit()
 

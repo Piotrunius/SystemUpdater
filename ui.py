@@ -618,7 +618,11 @@ class UI:
         return ("✗", "failed")
 
     def _print_static_result(
-        self, label: str, res: StepResult, module: Any | None = None
+        self,
+        label: str,
+        res: StepResult,
+        module: Any | None = None,
+        show_duration: bool = True,
     ):
         if getattr(self, "_category_has_output", False) and getattr(
             self, "_last_step_multiline", False
@@ -627,7 +631,9 @@ class UI:
         self._last_step_multiline = False
         self._category_has_output = True
         dur_val = max(0.1, res.duration)
-        time_tag = f"{Colors.GRAY}({dur_val:.1f}s){Colors.RESET}"
+        time_tag = (
+            f" {Colors.GRAY}({dur_val:.1f}s){Colors.RESET}" if show_duration else ""
+        )
 
         sym, msg = self._resolve_step_display(
             label, res, module=module, verbose=self.verbose
@@ -637,12 +643,20 @@ class UI:
             msg_part = ""
         else:
             msg_part = f": {msg}" if msg else ""
-        print(f"  {marker} {label}{msg_part} {time_tag}")
+        print(f"  {marker} {label}{msg_part}{time_tag}")
 
-    def print_result(self, label: str, result: StepResult, module: Any | None = None):
+    def print_result(
+        self,
+        label: str,
+        result: StepResult,
+        module: Any | None = None,
+        show_duration: bool = True,
+    ):
         """Render an already completed result using the standard step style."""
         if not self.quiet:
-            self._print_static_result(label, result, module=module)
+            self._print_static_result(
+                label, result, module=module, show_duration=show_duration
+            )
 
     def print_interrupted(self):
         if self.quiet:

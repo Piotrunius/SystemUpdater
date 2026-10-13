@@ -29,6 +29,72 @@ class VersionTests(unittest.TestCase):
 
         self.assertIsNone(latest_homebrew_version())
 
+    @patch("main.latest_upstream_version", return_value="1.4.0")
+    @patch("main.git_output", return_value="v1.4.0")
+    @patch("main.is_homebrew_install", return_value=False)
+    def test_version_action_renders_status_line_and_omits_durations(
+        self, _is_brew, _git_out, _latest_ver
+    ):
+        import argparse
+
+        from main import VersionAction
+
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--version", action=VersionAction, nargs=0)
+
+        out = io.StringIO()
+        with patch("sys.stdout", out), self.assertRaises(SystemExit):
+            parser.parse_args(["--version"])
+
+        rendered = out.getvalue()
+        self.assertIn("Installed version: 1.4.0", rendered)
+        self.assertIn("Latest version: 1.4.0", rendered)
+        self.assertIn("Status: up to date", rendered)
+        self.assertNotIn("(0.1s)", rendered)
+        self.assertNotIn("s)", rendered)
+
+    @patch("main.latest_upstream_version", return_value="1.4.0")
+    @patch("main.git_output", return_value="v1.4.0")
+    @patch("main.is_homebrew_install", return_value=False)
+    def test_version_action_recognizes_same_version_as_up_to_date(
+        self, _is_brew, _git_out, _latest_ver
+    ):
+        import argparse
+
+        from main import VersionAction
+
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--version", action=VersionAction, nargs=0)
+
+        out = io.StringIO()
+        with patch("sys.stdout", out), self.assertRaises(SystemExit):
+            parser.parse_args(["--version"])
+
+        rendered = out.getvalue()
+        self.assertIn("Status: up to date", rendered)
+
+    @patch("main.latest_upstream_version", return_value="1.5.0")
+    @patch("main.git_output", return_value="v1.4.0")
+    @patch("main.is_homebrew_install", return_value=False)
+    def test_version_action_recognizes_update_available_when_behind(
+        self, _is_brew, _git_out, _latest_ver
+    ):
+        import argparse
+
+        from main import VersionAction
+
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--version", action=VersionAction, nargs=0)
+
+        out = io.StringIO()
+        with patch("sys.stdout", out), self.assertRaises(SystemExit):
+            parser.parse_args(["--version"])
+
+        rendered = out.getvalue()
+        self.assertIn("Installed version: 1.4.0", rendered)
+        self.assertIn("Latest version: 1.5.0", rendered)
+        self.assertIn("Status: update available", rendered)
+
 
 if __name__ == "__main__":
     unittest.main()
