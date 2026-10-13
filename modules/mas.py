@@ -7,7 +7,7 @@ from __future__ import annotations
 import re
 from typing import ClassVar
 
-from modules.base import BaseModule, UpdateContext
+from modules.base import BaseModule, UpdateContext, is_macos
 from ui import StepResult
 
 
@@ -17,9 +17,28 @@ class MasModule(BaseModule):
     aliases: ClassVar[list[str]] = ["macappstore", "appstore"]
     category = "Applications & Gaming"
     description = "Updates Mac App Store applications via mas"
+    unit_name = "app"
+    unit_name_plural = "apps"
+
+    def _availability(self, ctx: UpdateContext) -> str:
+        if not is_macos() or ctx.which("mas") is None:
+            return "not-installed"
+        code, out, _ = ctx.run_cmd(["mas", "list"], timeout=5, read_only=True)
+        if code != 0:
+            return "unavailable"
+        has_apps = any(line.strip() for line in (out or "").splitlines())
+        return "active" if has_apps else "no-targets"
 
     def is_available(self, ctx: UpdateContext) -> bool:
-        return ctx.which("mas") is not None
+        return self._availability(ctx) in ("active", "unavailable")
+
+    def availability_status(self, ctx: UpdateContext) -> str:
+        return {
+            "not-installed": "[Not Installed]",
+            "no-targets": "[No Targets]",
+            "unavailable": "[Unavailable]",
+            "active": "[Active]",
+        }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
         # Check for outdated applications first
