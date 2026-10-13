@@ -1,9 +1,8 @@
 import unittest
-from unittest.mock import patch
 from typing import Any, cast
+from unittest.mock import patch
 
 from modules.macos_update import SoftwareUpdateModule
-from ui import StepResult
 
 
 class FakeContext:
@@ -25,11 +24,17 @@ class SoftwareUpdateModuleTests(unittest.TestCase):
     def test_unavailable_on_linux(self, _mock_sys):
         ctx = FakeContext([], which_map={"softwareupdate": "/usr/sbin/softwareupdate"})
         self.assertFalse(SoftwareUpdateModule().is_available(cast(Any, ctx)))
+        self.assertEqual(
+            SoftwareUpdateModule().availability_status(cast(Any, ctx)), "[Unavailable]"
+        )
 
     @patch("platform.system", return_value="Darwin")
     def test_available_on_darwin(self, _mock_sys):
         ctx = FakeContext([], which_map={"softwareupdate": "/usr/sbin/softwareupdate"})
         self.assertTrue(SoftwareUpdateModule().is_available(cast(Any, ctx)))
+        self.assertEqual(
+            SoftwareUpdateModule().availability_status(cast(Any, ctx)), "[Active]"
+        )
 
     def test_up_to_date_when_no_updates(self):
         ctx = FakeContext(

@@ -367,6 +367,37 @@ class ModuleAvailabilityTests(unittest.TestCase):
             gem.availability_status(FakeContext(installed=False)), "[Not Installed]"
         )
 
+    def test_distro_package_managers_report_unavailable_on_other_distros(self):
+        from modules.nobara import RepoSyncModule, SystemPackagesModule
+        from modules.system_pm import (
+            ApkModule,
+            AptModule,
+            PacmanModule,
+            XbpsModule,
+            ZypperModule,
+        )
+
+        ctx = FakeContext(installed=False)
+
+        with patch("modules.system_pm.get_os_release", return_value={"ID": "fedora"}):
+            self.assertEqual(AptModule().availability_status(ctx), "[Unavailable]")
+            self.assertEqual(PacmanModule().availability_status(ctx), "[Unavailable]")
+            self.assertEqual(ZypperModule().availability_status(ctx), "[Unavailable]")
+            self.assertEqual(ApkModule().availability_status(ctx), "[Unavailable]")
+            self.assertEqual(XbpsModule().availability_status(ctx), "[Unavailable]")
+
+        with (
+            patch("modules.nobara.get_os_release", return_value={"ID": "ubuntu"}),
+            patch("modules.nobara.os.path.exists", return_value=False),
+        ):
+            self.assertEqual(RepoSyncModule().availability_status(ctx), "[Unavailable]")
+            self.assertEqual(
+                SystemPackagesModule().availability_status(ctx), "[Unavailable]"
+            )
+
+        with patch("modules.system_pm.get_os_release", return_value={"ID": "ubuntu"}):
+            self.assertEqual(AptModule().availability_status(ctx), "[Not Installed]")
+
 
 if __name__ == "__main__":
     unittest.main()

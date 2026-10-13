@@ -59,10 +59,10 @@ from modules.languages_ext import (
     PyenvModule,
     SdkmanModule,
 )
-from modules.mas import MasModule
 
 # System Core
 from modules.macos_update import SoftwareUpdateModule
+from modules.mas import MasModule
 from modules.nobara import RepoSyncModule, SystemPackagesModule
 from modules.nuvio import NuvioModule
 from modules.proton import ProtonPlusModule

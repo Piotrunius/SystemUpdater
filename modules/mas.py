@@ -21,7 +21,9 @@ class MasModule(BaseModule):
     unit_name_plural = "apps"
 
     def _availability(self, ctx: UpdateContext) -> str:
-        if not is_macos() or ctx.which("mas") is None:
+        if not is_macos():
+            return "unavailable"
+        if ctx.which("mas") is None:
             return "not-installed"
         code, out, _ = ctx.run_cmd(["mas", "list"], timeout=5, read_only=True)
         if code != 0:
@@ -30,6 +32,8 @@ class MasModule(BaseModule):
         return "active" if has_apps else "no-targets"
 
     def is_available(self, ctx: UpdateContext) -> bool:
+        if not is_macos():
+            return False
         return self._availability(ctx) in ("active", "unavailable")
 
     def availability_status(self, ctx: UpdateContext) -> str:

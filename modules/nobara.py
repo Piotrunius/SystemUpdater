@@ -100,6 +100,15 @@ class RepoSyncModule(BaseModule):
         os_info = get_os_release()
         return os_info.get("ID") == "nobara" or os.path.exists("/etc/nobara-release")
 
+    def availability_status(self, ctx: UpdateContext) -> str:
+        os_info = get_os_release()
+        is_nobara = os_info.get("ID") == "nobara" or os.path.exists(
+            "/etc/nobara-release"
+        )
+        if not is_nobara:
+            return "[Unavailable]"
+        return "[Active]" if self.is_available(ctx) else "[Not Installed]"
+
     def run(self, ctx: UpdateContext) -> StepResult:
         sync_cmd = [
             "sudo",
@@ -146,6 +155,30 @@ class SystemPackagesModule(BaseModule):
 
     def is_available(self, ctx: UpdateContext) -> bool:
         return ctx.which("dnf") is not None
+
+    def availability_status(self, ctx: UpdateContext) -> str:
+        if self.is_available(ctx):
+            return "[Active]"
+        os_info = get_os_release()
+        distro_id = os_info.get("ID", "").lower()
+        distro_like = os_info.get("ID_LIKE", "").lower()
+        is_rpm_distro = (
+            any(
+                x in distro_id or x in distro_like
+                for x in (
+                    "fedora",
+                    "nobara",
+                    "rhel",
+                    "centos",
+                    "rocky",
+                    "almalinux",
+                    "ol",
+                )
+            )
+            or os.path.exists("/etc/fedora-release")
+            or os.path.exists("/etc/redhat-release")
+        )
+        return "[Not Installed]" if is_rpm_distro else "[Unavailable]"
 
     def run(self, ctx: UpdateContext) -> StepResult:
         code, out, err = ctx.run_cmd(

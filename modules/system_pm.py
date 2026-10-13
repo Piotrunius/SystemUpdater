@@ -7,11 +7,19 @@ Universal system package managers for all major Linux distributions:
 - XBPS (Void Linux)
 """
 
+import os
 import re
 from typing import ClassVar
 
 from modules.base import BaseModule, UpdateContext, get_os_release
 from ui import StepResult
+
+
+def _is_distro_family(*names: str) -> bool:
+    os_info = get_os_release()
+    distro_id = os_info.get("ID", "").lower()
+    distro_like = os_info.get("ID_LIKE", "").lower()
+    return any(name in distro_id or name in distro_like for name in names)
 
 
 class AptModule(BaseModule):
@@ -24,6 +32,22 @@ class AptModule(BaseModule):
 
     def is_available(self, ctx: UpdateContext) -> bool:
         return ctx.which("apt-get") is not None and ctx.which("dpkg") is not None
+
+    def availability_status(self, ctx: UpdateContext) -> str:
+        if self.is_available(ctx):
+            return "[Active]"
+        is_debian = _is_distro_family(
+            "debian",
+            "ubuntu",
+            "linuxmint",
+            "pop",
+            "kali",
+            "elementary",
+            "neon",
+            "zorin",
+            "raspbian",
+        ) or os.path.exists("/etc/debian_version")
+        return "[Not Installed]" if is_debian else "[Unavailable]"
 
     def run(self, ctx: UpdateContext) -> StepResult:
         env = {"DEBIAN_FRONTEND": "noninteractive"}
@@ -116,6 +140,14 @@ class PacmanModule(BaseModule):
     def is_available(self, ctx: UpdateContext) -> bool:
         return ctx.which("pacman") is not None
 
+    def availability_status(self, ctx: UpdateContext) -> str:
+        if self.is_available(ctx):
+            return "[Active]"
+        is_arch = _is_distro_family(
+            "arch", "manjaro", "endeavouros", "cachyos", "artix", "garuda"
+        ) or os.path.exists("/etc/arch-release")
+        return "[Not Installed]" if is_arch else "[Unavailable]"
+
     def run(self, ctx: UpdateContext) -> StepResult:
         aur_helper = None
         for candidate in ["yay", "paru"]:
@@ -177,6 +209,14 @@ class ZypperModule(BaseModule):
 
     def is_available(self, ctx: UpdateContext) -> bool:
         return ctx.which("zypper") is not None
+
+    def availability_status(self, ctx: UpdateContext) -> str:
+        if self.is_available(ctx):
+            return "[Active]"
+        is_suse = _is_distro_family(
+            "opensuse", "suse", "tumbleweed", "leap"
+        ) or os.path.exists("/etc/SuSE-release")
+        return "[Not Installed]" if is_suse else "[Unavailable]"
 
     def run(self, ctx: UpdateContext) -> StepResult:
         os_info = get_os_release()
@@ -248,6 +288,14 @@ class ApkModule(BaseModule):
     def is_available(self, ctx: UpdateContext) -> bool:
         return ctx.which("apk") is not None
 
+    def availability_status(self, ctx: UpdateContext) -> str:
+        if self.is_available(ctx):
+            return "[Active]"
+        is_alpine = _is_distro_family("alpine", "postmarketos") or os.path.exists(
+            "/etc/alpine-release"
+        )
+        return "[Not Installed]" if is_alpine else "[Unavailable]"
+
     def run(self, ctx: UpdateContext) -> StepResult:
         code, out, err = ctx.run_cmd(
             ["sudo", "apk", "upgrade", "--update"], timeout=300
@@ -287,6 +335,12 @@ class XbpsModule(BaseModule):
 
     def is_available(self, ctx: UpdateContext) -> bool:
         return ctx.which("xbps-install") is not None
+
+    def availability_status(self, ctx: UpdateContext) -> str:
+        if self.is_available(ctx):
+            return "[Active]"
+        is_void = _is_distro_family("void")
+        return "[Not Installed]" if is_void else "[Unavailable]"
 
     def run(self, ctx: UpdateContext) -> StepResult:
         code, out, err = ctx.run_cmd(

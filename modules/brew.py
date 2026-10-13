@@ -8,7 +8,6 @@ import re
 from modules.base import BaseModule, UpdateContext
 from ui import StepResult
 
-
 BREW_CANDIDATE_PATHS = [
     "/opt/homebrew/bin/brew",
     "/usr/local/bin/brew",

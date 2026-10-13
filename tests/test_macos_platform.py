@@ -1,8 +1,8 @@
 import unittest
-from unittest.mock import patch
 from typing import Any, cast
+from unittest.mock import patch
 
-import modules.base as base
+from modules import base
 from modules.brew import BrewModule, find_brew_bin
 
 

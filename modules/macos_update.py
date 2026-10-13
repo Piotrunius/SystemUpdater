@@ -7,7 +7,6 @@ from __future__ import annotations
 import os
 import platform
 import re
-
 from typing import ClassVar
 
 from modules.base import BaseModule, UpdateContext
@@ -28,6 +27,11 @@ class SoftwareUpdateModule(BaseModule):
         return ctx.which("softwareupdate") is not None or os.path.isfile(
             "/usr/sbin/softwareupdate"
         )
+
+    def availability_status(self, ctx: UpdateContext) -> str:
+        if platform.system() != "Darwin":
+            return "[Unavailable]"
+        return "[Active]" if self.is_available(ctx) else "[Not Installed]"
 
     def run(self, ctx: UpdateContext) -> StepResult:
         sw_bin = ctx.which("softwareupdate") or "/usr/sbin/softwareupdate"

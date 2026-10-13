@@ -54,10 +54,11 @@ class MasModuleTests(unittest.TestCase):
         ctx = FakeContext([], which_map={"mas": "/usr/local/bin/mas"})
         self.assertFalse(MasModule().is_available(cast(Any, ctx)))
         self.assertEqual(
-            MasModule().availability_status(cast(Any, ctx)), "[Not Installed]"
+            MasModule().availability_status(cast(Any, ctx)), "[Unavailable]"
         )
 
-    def test_unavailable_when_mas_missing(self):
+    @patch("modules.mas.is_macos", return_value=True)
+    def test_unavailable_when_mas_missing(self, _mock_macos):
         ctx = FakeContext([], which_map={})
         self.assertFalse(MasModule().is_available(cast(Any, ctx)))
         self.assertEqual(
