@@ -135,6 +135,7 @@ jobs:
           mkdir -p Formula
           python3 - <<'PY'
           import os
+          import textwrap
           from pathlib import Path
 
           url = os.environ["ARCHIVE_URL"]
@@ -145,36 +146,37 @@ jobs:
           v_lib = '#{libexec}'
           v_bin = '#{bin}'
 
-          content = f"""class Systemupdater < Formula
-  desc "Unified update runner for Linux package managers and dev tools"
-  homepage "https://github.com/Piotrunius/SystemUpdater"
-  url "{url}"
-  sha256 "{sha}"
-  version "{version}"
-  license "MIT"
+          content = textwrap.dedent(f"""\
+            class Systemupdater < Formula
+              desc "Unified update runner for Linux package managers and dev tools"
+              homepage "https://github.com/Piotrunius/SystemUpdater"
+              url "{url}"
+              sha256 "{sha}"
+              version "{version}"
+              license "MIT"
 
-  depends_on :linux
-  depends_on "python@3"
+              depends_on :linux
+              depends_on "python@3"
 
-  def install
-    libexec.install Dir["*.py"]
-    libexec.install "modules"
-    (libexec/".homebrew-install").write("homebrew\\n")
-    (libexec/"VERSION").write("{v_ver}\\n")
+              def install
+                libexec.install Dir["*.py"]
+                libexec.install "modules"
+                (libexec/".homebrew-install").write("homebrew\\n")
+                (libexec/"VERSION").write("{v_ver}\\n")
 
-    python = Formula["python@3"].opt_bin/"python3"
-    (bin/"sysupdate").write <<~EOS
-      #!/bin/bash
-      exec "{v_py}" "{v_lib}/main.py" "$@"
-    EOS
-  end
+                python = Formula["python@3"].opt_bin/"python3"
+                (bin/"sysupdate").write <<~EOS
+                  #!/bin/bash
+                  exec "{v_py}" "{v_lib}/main.py" "$@"
+                EOS
+              end
 
-  test do
-    output = shell_output("{v_bin}/sysupdate --version")
-    assert_match "Installed version: {v_ver}", output
-  end
-end
-"""
+              test do
+                output = shell_output("{v_bin}/sysupdate --version")
+                assert_match "Installed version: {v_ver}", output
+              end
+            end
+          """)
           Path("Formula/systemupdater.rb").write_text(content)
           PY
 
