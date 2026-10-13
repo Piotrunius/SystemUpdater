@@ -125,7 +125,8 @@ jobs:
               parts = block.split("\nCOMMIT_END")[0].strip().split("\n")
               if len(parts) < 2:
                   continue
-              sha = parts[0][:12]
+              full_sha = parts[0]
+              sha = parts[0][:7]
               subject = parts[1].strip()
               body = "\n".join(parts[2:]).strip() if len(parts) > 2 else ""
 
@@ -134,19 +135,14 @@ jobs:
 
               if m:
                   ctype = m.group(1).lower()
-                  scope = m.group(2)
-                  desc = m.group(4)
                   type_title = category_map.get(ctype, ctype.capitalize())
               else:
                   type_title = "Other Changes"
-                  scope = None
-                  desc = subject
 
               entry = {
+                  "full_sha": full_sha,
                   "sha": sha,
                   "subject": subject,
-                  "desc": desc,
-                  "scope": scope,
                   "body": body,
               }
 
@@ -158,13 +154,10 @@ jobs:
           if breaking:
               lines.append("### Breaking Changes\n")
               for b in breaking:
-                  scope_str = f"**{b['scope']}:** " if b['scope'] else ""
-                  lines.append(f"- {scope_str}{b['desc']} (`{b['sha']}`)")
-                  if b['body']:
-                      for l in b['body'].splitlines():
-                          l_str = l.strip()
-                          if l_str.startswith("- "):
-                              lines.append(f"  {l_str}")
+                  link_str = f" ([`{b['sha']}`](https://github.com/{repo}/commit/{b['full_sha']}))" if repo else f" (`{b['sha']}`)"
+                  lines.append(f"#### {b['subject']}{link_str}\n")
+                  if b["body"]:
+                      lines.append(f"{b['body']}\n")
               lines.append("")
 
           order = [
@@ -183,19 +176,16 @@ jobs:
               if cat in categorized:
                   lines.append(f"### {cat}\n")
                   for item in categorized[cat]:
-                      scope_str = f"**{item['scope']}:** " if item['scope'] else ""
-                      lines.append(f"- {scope_str}{item['desc']} (`{item['sha']}`)")
-                      if item['body']:
-                          for l in item['body'].splitlines():
-                              l_str = l.strip()
-                              if l_str.startswith("- "):
-                                  lines.append(f"  {l_str}")
-                              elif l_str and not l_str.startswith("BREAKING"):
-                                  lines.append(f"  > {l_str}")
+                      link_str = f" ([`{item['sha']}`](https://github.com/{repo}/commit/{item['full_sha']}))" if repo else f" (`{item['sha']}`)"
+                      if item["body"]:
+                          lines.append(f"#### {item['subject']}{link_str}\n")
+                          lines.append(f"{item['body']}\n")
+                      else:
+                          lines.append(f"- **{item['subject']}**{link_str}\n")
                   lines.append("")
 
           if prev_tag and repo:
-              lines.append(f"**Full Changelog**: https://github.com/{repo}/compare/{prev_tag}...{tag}")
+              lines.append(f"---\n\n**Full Changelog**: https://github.com/{repo}/compare/{prev_tag}...{tag}")
 
           notes_content = "\n".join(lines).strip()
           Path("/tmp/release_notes.md").write_text(notes_content + "\n")
