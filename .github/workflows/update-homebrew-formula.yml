@@ -133,40 +133,46 @@ jobs:
           cd /tmp/homebrew-tap
 
           mkdir -p Formula
-          cat <<EOF > Formula/systemupdater.rb
-          class Systemupdater < Formula
-            desc "Unified update runner for Linux package managers and dev tools"
-            homepage "https://github.com/Piotrunius/SystemUpdater"
-            url "${ARCHIVE_URL}"
-            sha256 "${ARCHIVE_SHA}"
-            version "${VERSION}"
-            license "MIT"
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
 
-            depends_on :linux
-            depends_on "python@3"
+          url = os.environ["ARCHIVE_URL"]
+          sha = os.environ["ARCHIVE_SHA"]
+          version = os.environ["VERSION"]
 
-            def install
-              libexec.install Dir["*.py"]
-              libexec.install "modules"
-              (libexec/".homebrew-install").write("homebrew\n")
-              (libexec/"VERSION").write("#{version}\n")
+          content = f"""class Systemupdater < Formula
+  desc "Unified update runner for Linux package managers and dev tools"
+  homepage "https://github.com/Piotrunius/SystemUpdater"
+  url "{url}"
+  sha256 "{sha}"
+  version "{version}"
+  license "MIT"
 
-              python = Formula["python@3"].opt_bin/"python3"
-              (bin/"sysupdate").write <<~EOS
-                #!/bin/bash
-                exec "#{python}" "#{libexec}/main.py" "$@"
-              EOS
-            end
+  depends_on :linux
+  depends_on "python@3"
 
-            test do
-              output = shell_output("#{bin}/sysupdate --version")
-              assert_match "Installed version: #{version}", output
-            end
-          end
-          EOF
+  def install
+    libexec.install Dir["*.py"]
+    libexec.install "modules"
+    (libexec/".homebrew-install").write("homebrew\\n")
+    (libexec/"VERSION").write("#{{version}}\\n")
 
-          # Remove leading indentation added by here-doc
-          sed -i 's/^          //' Formula/systemupdater.rb
+    python = Formula["python@3"].opt_bin/"python3"
+    (bin/"sysupdate").write <<~EOS
+      #!/bin/bash
+      exec "#{{python}}" "#{{libexec}}/main.py" "$@"
+    EOS
+  end
+
+  test do
+    output = shell_output("#{{bin}}/sysupdate --version")
+    assert_match "Installed version: #{{version}}", output
+  end
+end
+"""
+          Path("Formula/systemupdater.rb").write_text(content)
+          PY
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
