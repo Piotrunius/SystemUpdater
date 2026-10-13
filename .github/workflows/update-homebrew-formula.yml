@@ -1,4 +1,4 @@
-name: Update Homebrew formula
+name: Release & Homebrew Tap
 
 on:
   push:
@@ -6,69 +6,50 @@ on:
       - main
     paths-ignore:
       - Formula/systemupdater.rb
+      - README.md
+      - .gitignore
 
 permissions:
   contents: write
 
 concurrency:
-  group: update-homebrew-formula
-  cancel-in-progress: true
+  group: release-and-tap
+  cancel-in-progress: false
 
 jobs:
-  update-formula:
+  release:
     runs-on: ubuntu-latest
+    if: "!startsWith(github.event.head_commit.message, 'chore(release):')"
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Calculate source archive checksum and next SemVer version
-        id: source
+      - name: Determine next SemVer version
+        id: version
         env:
-          SOURCE_SHA: ${{ github.sha }}
-          REPOSITORY: ${{ github.repository }}
+          COMMIT_SUBJECT: ${{ github.event.head_commit.message }}
         run: |
           set -euo pipefail
-          archive_url="https://github.com/${REPOSITORY}/archive/${SOURCE_SHA}.tar.gz"
-          archive_sha="$(curl --fail --silent --show-error --location "${archive_url}" | sha256sum | cut -d ' ' -f 1)"
 
-          # Read current version strictly from Formula/systemupdater.rb
-          current_ver="$(grep -m1 -oE 'version "[0-9]+\.[0-9]+\.[0-9]+"' Formula/systemupdater.rb | cut -d'"' -f2)"
-          if [ -z "${current_ver}" ]; then
-            echo "Error: Could not read current version from Formula/systemupdater.rb" >&2
-            exit 1
-          fi
-
-          # Inspect commit message for SemVer bump type
-          commit_subject="$(git log -1 --pretty=%s)"
-          commit_body="$(git log -1 --pretty=%b)"
-
-          export ARCHIVE_URL="${archive_url}"
-          export ARCHIVE_SHA="${archive_sha}"
-          export CURRENT_VER="${current_ver}"
-          export COMMIT_SUBJECT="${commit_subject}"
-          export COMMIT_BODY="${commit_body}"
+          latest_tag="$(git describe --tags --abbrev=0 2>/dev/null || echo "v1.2.2")"
+          export CUR_VER="${latest_tag#v}"
 
           python3 - <<'PY'
-          import re, sys, os
+          import os
+          import re
 
-          cur_ver = os.environ["CURRENT_VER"]
+          cur_ver = os.environ.get("CUR_VER", "1.2.2")
           subject = os.environ.get("COMMIT_SUBJECT", "")
-          body = os.environ.get("COMMIT_BODY", "")
-          full_commit = f"{subject}\n{body}"
 
           m = re.match(r"^(\d+)\.(\d+)\.(\d+)$", cur_ver)
           if not m:
-              raise SystemExit(f"Invalid SemVer format in Formula: {cur_ver}")
+              raise SystemExit(f"Invalid SemVer format: {cur_ver}")
 
           major, minor, patch = map(int, m.groups())
 
-          # Check for Breaking Change (MAJOR)
-          is_major = (
-              bool(re.search(r"^[a-zA-Z]+(\([^\)]+\))?!:", subject))
-              or "BREAKING CHANGE:" in full_commit
-              or "BREAKING-CHANGE:" in full_commit
-          )
-          # Check for Feature (MINOR)
+          is_major = bool(re.search(r"^[a-zA-Z]+(\([^\)]+\))?!:", subject)) or "BREAKING CHANGE:" in subject or "BREAKING-CHANGE:" in subject
           is_minor = bool(re.search(r"^feat(\([^\)]+\))?:", subject))
 
           if is_major:
@@ -79,53 +60,121 @@ jobs:
               minor += 1
               patch = 0
           else:
-              # Any other commit (fix, chore, style, refactor, perf, docs, etc.) is a PATCH
               patch += 1
 
           next_ver = f"{major}.{minor}.{patch}"
           print(f"Calculated next version: {next_ver} (from {cur_ver})")
+
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
-              f.write(f"archive_url={os.environ['ARCHIVE_URL']}\n")
-              f.write(f"archive_sha={os.environ['ARCHIVE_SHA']}\n")
-              f.write(f"formula_version={next_ver}\n")
+              f.write(f"version={next_ver}\n")
+              f.write(f"tag=v{next_ver}\n")
           PY
 
-      - name: Update formula metadata
+      - name: Create GitHub Release
+        id: create_release
         env:
-          ARCHIVE_URL: ${{ steps.source.outputs.archive_url }}
-          ARCHIVE_SHA: ${{ steps.source.outputs.archive_sha }}
-          FORMULA_VERSION: ${{ steps.source.outputs.formula_version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          import os
-          import re
-          from pathlib import Path
+          gh release create "${TAG}" \
+            --title "${TAG}" \
+            --generate-notes \
+            --target "${{ github.sha }}"
 
-          formula = Path("Formula/systemupdater.rb")
-          content = formula.read_text()
-          replacements = (
-              (r'(?m)^  url ".*"$', f'  url "{os.environ["ARCHIVE_URL"]}"'),
-              (r'(?m)^  sha256 ".*"$', f'  sha256 "{os.environ["ARCHIVE_SHA"]}"'),
-              (r'(?m)^  version ".*"$', f'  version "{os.environ["FORMULA_VERSION"]}"'),
-          )
-          for pattern, replacement in replacements:
-              content, count = re.subn(pattern, replacement, content, count=1)
-              if count != 1:
-                  raise SystemExit(f"Could not update formula field: {pattern}")
-          formula.write_text(content)
-          PY
-
-      - name: Commit formula update
+      - name: Calculate release archive checksum
+        id: checksum
         env:
-          FORMULA_VERSION: ${{ steps.source.outputs.formula_version }}
+          REPOSITORY: ${{ github.repository }}
+          TAG: ${{ steps.version.outputs.tag }}
         run: |
           set -euo pipefail
+          archive_url="https://github.com/${REPOSITORY}/archive/refs/tags/${TAG}.tar.gz"
+
+          sha=""
+          for i in {1..12}; do
+            if sha=$(curl -fsSL "${archive_url}" | sha256sum | cut -d' ' -f1); then
+              if [ -n "$sha" ] && [ "${#sha}" -eq 64 ]; then
+                break
+              fi
+            fi
+            sleep 2
+          done
+
+          if [ -z "$sha" ] || [ "${#sha}" -ne 64 ]; then
+            echo "Failed to fetch archive or compute sha256: ${archive_url}" >&2
+            exit 1
+          fi
+
+          echo "Archive URL: ${archive_url}"
+          echo "SHA256: ${sha}"
+          echo "archive_url=${archive_url}" >> "$GITHUB_OUTPUT"
+          echo "archive_sha=${sha}" >> "$GITHUB_OUTPUT"
+
+      - name: Update Homebrew formula in tap
+        env:
+          TAP_DEPLOY_KEY: ${{ secrets.TAP_DEPLOY_KEY }}
+          VERSION: ${{ steps.version.outputs.version }}
+          ARCHIVE_URL: ${{ steps.checksum.outputs.archive_url }}
+          ARCHIVE_SHA: ${{ steps.checksum.outputs.archive_sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TAP_DEPLOY_KEY:-}" ]; then
+            echo "TAP_DEPLOY_KEY is not set; skipping tap formula update."
+            exit 0
+          fi
+
+          mkdir -p ~/.ssh
+          echo "${TAP_DEPLOY_KEY}" > ~/.ssh/tap_deploy_key
+          chmod 600 ~/.ssh/tap_deploy_key
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/tap_deploy_key -o StrictHostKeyChecking=accept-new"
+
+          git clone git@github.com:Piotrunius/homebrew-tap.git /tmp/homebrew-tap
+          cd /tmp/homebrew-tap
+
+          mkdir -p Formula
+          cat <<EOF > Formula/systemupdater.rb
+          class Systemupdater < Formula
+            desc "Unified update runner for Linux package managers and dev tools"
+            homepage "https://github.com/Piotrunius/SystemUpdater"
+            url "${ARCHIVE_URL}"
+            sha256 "${ARCHIVE_SHA}"
+            version "${VERSION}"
+            license "MIT"
+
+            depends_on :linux
+            depends_on "python@3"
+
+            def install
+              libexec.install Dir["*.py"]
+              libexec.install "modules"
+              (libexec/".homebrew-install").write("homebrew\n")
+              (libexec/"VERSION").write("#{version}\n")
+
+              python = Formula["python@3"].opt_bin/"python3"
+              (bin/"sysupdate").write <<~EOS
+                #!/bin/bash
+                exec "#{python}" "#{libexec}/main.py" "$@"
+              EOS
+            end
+
+            test do
+              output = shell_output("#{bin}/sysupdate --version")
+              assert_match "Installed version: #{version}", output
+            end
+          end
+          EOF
+
+          # Remove leading indentation added by here-doc
+          sed -i 's/^          //' Formula/systemupdater.rb
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add Formula/systemupdater.rb
+
           if git diff --cached --quiet; then
-            exit 0
+            echo "Formula is already up to date."
+          else
+            git commit -m "chore(formula): bump systemupdater to ${VERSION}"
+            git push origin main
           fi
-          git commit -m "chore(homebrew): bump formula to ${FORMULA_VERSION}"
-          git push origin HEAD:main

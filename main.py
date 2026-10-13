@@ -86,8 +86,8 @@ def is_homebrew_install():
 
 
 def latest_homebrew_version():
-    """Read the current formula version directly from the upstream repository."""
-    url = "https://raw.githubusercontent.com/Piotrunius/SystemUpdater/main/Formula/systemupdater.rb"
+    """Read the current formula version directly from the Homebrew tap repository."""
+    url = "https://raw.githubusercontent.com/Piotrunius/homebrew-tap/main/Formula/systemupdater.rb"
     request = urllib.request.Request(url, headers={"User-Agent": "SystemUpdater"})
     try:
         with urllib.request.urlopen(request, timeout=8) as response:
@@ -96,6 +96,7 @@ def latest_homebrew_version():
         return match.group(1) if match else None
     except (OSError, TimeoutError, urllib.error.URLError, UnicodeDecodeError):
         return None
+
 
 
 def latest_remote_commit():

@@ -60,9 +60,16 @@ On normal runs, a clean checkout can fast-forward from its configured upstream. 
 
 ### Homebrew
 
+Install with one command via the official tap:
+
 ```bash
-brew tap piotrunius/systemupdater https://github.com/Piotrunius/SystemUpdater.git
-brew trust --formula piotrunius/systemupdater/systemupdater
+brew install Piotrunius/tap/systemupdater
+```
+
+Or add the tap first and then install:
+
+```bash
+brew tap Piotrunius/tap
 brew install systemupdater
 ```
 
