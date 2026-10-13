@@ -30,4 +30,4 @@ htmlcov/
 # Local runtime stamps / caches
 *.stamp
 *.log
-tapes/
+.tapes/
