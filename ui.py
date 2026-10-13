@@ -79,6 +79,7 @@ IGNORED_DIAGNOSTIC_SUBSTRINGS = (
     "LVFS-Triaged-Issue",
     "dbx-does-not-apply-on-reboot",
     "Update failure is a known issue",
+    "Error writing credentials to socket",
 )
 
 REBOOT_TRIGGER_PATTERNS = re.compile(

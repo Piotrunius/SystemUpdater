@@ -390,6 +390,33 @@ class SummaryFormattingTests(unittest.TestCase):
         self.assertEqual(res.status, "unchanged")
         self.assertEqual(res.warnings, [])
 
+    def test_complete_step_ignores_glib_credentials_socket_warning_in_command_log(self):
+        ui = UI(is_interactive=False, verbose=True)
+        ctx = UpdateContext(verbose=True)
+        ctx.command_log.append(
+            {
+                "command": [
+                    "flatpak",
+                    "run",
+                    "it.mijorus.gearlever",
+                    "--list-updates",
+                    "--json",
+                ],
+                "returncode": 0,
+                "stdout": '{"schema_version": 1, "updates": []}',
+                "stderr": (
+                    "** (process:523340): WARNING **: 06:23:41.134: "
+                    "Error writing credentials to socket: Error sending message: Broken pipe"
+                ),
+                "output_withheld": False,
+            }
+        )
+        res = StepResult("unchanged")
+        ui._complete_step(res, ctx, command_start=0)
+
+        self.assertEqual(res.status, "unchanged")
+        self.assertEqual(res.warnings, [])
+
     def test_personalized_unit_nouns_in_summary_and_resolve(self):
         ui = UI(is_interactive=False, verbose=False)
         gearlever_res = StepResult(
