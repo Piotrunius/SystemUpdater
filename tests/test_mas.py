@@ -84,8 +84,8 @@ class MasModuleTests(unittest.TestCase):
         res = MasModule().run(cast(Any, ctx))
         self.assertEqual(res.status, "ok")
         self.assertEqual(res.message, "2 apps updated")
-        self.assertIn("Xcode 15.2 -> 15.3", res.details)
-        self.assertIn("Keynote 13.2 -> 14.0", res.details)
+        self.assertIn("Xcode", res.details)
+        self.assertIn("Keynote", res.details)
 
     def test_upgrade_failure_reports_error(self):
         outdated_out = "497799835 Xcode (15.2 -> 15.3)\n"

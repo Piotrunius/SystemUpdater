@@ -121,10 +121,8 @@ class FirmwareTests(unittest.TestCase):
         self.assertEqual(result.status, "ok")
         self.assertTrue(result.reboot_required)
         self.assertEqual(result.message, "1 device updated")
-        self.assertEqual(result.details, ["UEFI System Firmware -> 1.2.0"])
-        self.assertEqual(
-            result.warnings, ["System reboot required to complete pending updates"]
-        )
+        self.assertEqual(result.details, ["UEFI System Firmware"])
+        self.assertEqual(result.warnings, [])
         self.assertIn(
             ["fwupdmgr", "update", "-y", "--no-reboot-check"], context.commands
         )
@@ -149,7 +147,7 @@ class FirmwareTests(unittest.TestCase):
         self.assertEqual(result.status, "ok")
         self.assertFalse(result.reboot_required)
         self.assertEqual(result.message, "1 device updated")
-        self.assertEqual(result.details, ["Wireless Dongle -> 3.1.0"])
+        self.assertEqual(result.details, ["Wireless Dongle"])
 
 
 if __name__ == "__main__":

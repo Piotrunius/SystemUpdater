@@ -159,7 +159,7 @@ The `[commands]`, `[pre_commands]`, and `[post_commands]` tables accept a displa
 
 ## Reboot handling
 
-SystemUpdater looks for reboot requirements reported by updated core packages, firmware updates, and standard reboot marker files. `--reboot` requests a non-interactive `systemctl reboot` only when a reboot is required. The summary and run history are written before the reboot is requested. Without `--reboot`, the requirement is reported and the machine is left running.
+SystemUpdater looks for reboot requirements reported by updated core packages (kernels, systemd, glibc, nvidia, microcode), firmware updates, and standard reboot marker files. When a component requires a reboot, it receives a distinct blue `[^]` marker in the live step output, run history, and `--show-log` views. A dedicated `── Reboot ──` section is displayed directly below the update summary detailing the exact components or packages that triggered the restart. `--reboot` requests a non-interactive `systemctl reboot` only when a reboot is required. The summary and run history are written before the reboot is requested. Without `--reboot`, the requirement is clearly reported and the machine is left running.
 
 ## Run history
 

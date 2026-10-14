@@ -80,10 +80,12 @@ IGNORED_DIAGNOSTIC_SUBSTRINGS = (
     "dbx-does-not-apply-on-reboot",
     "Update failure is a known issue",
     "Error writing credentials to socket",
+    "[RPM] file",
+    "remove failed: No such file or directory",
 )
 
 REBOOT_TRIGGER_PATTERNS = re.compile(
-    r"(^|[\-_])(kernel|linux|systemd|glibc|libc6|musl|grub|shim)([\-_]|$)",
+    r"(^|[\-_])(kernel|linux|systemd|glibc|libc6|musl|grub|shim|nvidia|microcode|ucode)([\-_]|$)",
     re.IGNORECASE,
 )
 
@@ -166,6 +168,40 @@ def check_packages_require_reboot(
         ):
             return True, name
     return False, None
+
+
+def extract_package_name(item: str) -> str:
+    clean = str(item).strip()
+    if ":" in clean:
+        clean = clean.split(":", 1)[0].strip()
+    if "->" in clean:
+        clean = clean.split("->", 1)[0].strip()
+    if "(" in clean:
+        clean = clean.split("(", 1)[0].strip()
+    parts = clean.split()
+    if len(parts) > 1 and any(c.isdigit() for c in parts[-1]):
+        clean = " ".join(parts[:-1]).strip()
+    return clean
+
+
+def get_reboot_trigger_packages(package_lines: list[str]) -> list[str]:
+    """Return all package lines that triggered a reboot requirement."""
+    matched = []
+    seen = set()
+    for line in package_lines:
+        clean = str(line).strip()
+        if not clean or clean.startswith(("... and ", "... ", "and ", "(+")):
+            continue
+        pkg_name = extract_package_name(clean)
+        name = pkg_name.lower()
+        short_name = name.split("/")[-1].split("@")[0]
+        if (
+            REBOOT_TRIGGER_PATTERNS.search(name)
+            or REBOOT_TRIGGER_PATTERNS.search(short_name)
+        ) and pkg_name not in seen:
+            seen.add(pkg_name)
+            matched.append(pkg_name)
+    return matched
 
 
 class StepResult:
@@ -469,7 +505,7 @@ class UI:
         )
 
         # Universal reboot detection across all modules
-        if result.status == "ok":
+        if result.status in ("ok", "unchanged"):
             reboot_needed, _ = check_packages_require_reboot(result.details)
             if (
                 result.reboot_required
@@ -478,9 +514,6 @@ class UI:
                 or os.path.exists("/var/run/reboot-required")
             ):
                 result.reboot_required = True
-                reboot_warning = "System reboot required to complete pending updates"
-                if reboot_warning not in result.warnings:
-                    result.warnings.append(reboot_warning)
 
         if show_command_output and not self.quiet:
             for record in records:
@@ -595,6 +628,8 @@ class UI:
             if verbose and res.warnings:
                 return ("!", "warning")
             msg_text = self._resolve_ok_msg(label, res, module=module)
+            if res.reboot_required:
+                return ("^", msg_text or "updated")
             return ("✓", msg_text or "updated")
 
         if res.status == "warning" or (
@@ -602,6 +637,8 @@ class UI:
         ):
             if verbose:
                 return ("!", "warning")
+            if res.reboot_required:
+                return ("^", "up to date")
             return ("—", "up to date")
 
         if res.status == "skipped":
@@ -610,6 +647,8 @@ class UI:
             return ("—", "up to date")
 
         if res.status == "unchanged":
+            if res.reboot_required:
+                return ("^", res.message if res.message else "up to date")
             return ("—", res.message if res.message else "up to date")
 
         if res.status in ("interrupted", "cancelled"):
@@ -639,7 +678,7 @@ class UI:
             label, res, module=module, verbose=self.verbose
         )
         marker = get_status_marker(sym)
-        if sym == "✓" and (not msg or msg.lower() == label.lower()):
+        if sym in ("✓", "^") and (not msg or msg.lower() == label.lower()):
             msg_part = ""
         else:
             msg_part = f": {msg}" if msg else ""
@@ -737,8 +776,7 @@ class UI:
                 res = item["result"]
                 msg_text = self._clean_ok_message(item["name"], res.message)
                 if is_single_entity_module(item):
-                    ver_info = extract_single_entity_version(res.details, res.message)
-                    print(f"    • {item['name']}: {ver_info}")
+                    print(f"    • {item['name']}: {msg_text}")
                 else:
                     if res.details and not any(c.isdigit() for c in msg_text):
                         valid = [
@@ -761,6 +799,27 @@ class UI:
         else:
             marker = get_status_marker("—")
             print(f"  {marker} All components are up to date.")
+
+        reboot_items = [
+            r for r in results if getattr(r.get("result"), "reboot_required", False)
+        ]
+        if reboot_items:
+            print()
+            print_diagnostic_heading("Reboot")
+            marker = get_status_marker("^")
+            print(f"  {marker} Reboot required:")
+            for item in reboot_items:
+                triggers = get_reboot_trigger_details(item)
+                if triggers:
+                    print(f"    • {item['name']}:")
+                    for trig in triggers:
+                        print(f"      - {trig}")
+                else:
+                    msg = item["result"].message
+                    if msg and msg.lower() not in ("updated", "up to date"):
+                        print(f"    • {item['name']}: {msg}")
+                    else:
+                        print(f"    • {item['name']}")
 
         # Warning details stay hidden in normal mode; keep this existing contract.
         if warning_items:
@@ -964,24 +1023,7 @@ def is_single_entity_module(item: dict[str, Any]) -> bool:
 
 
 def extract_single_entity_version(details: list[str], message: str) -> str:
-    """Extract 'old -> new' or version string for single-purpose modules."""
-    for detail in details:
-        text = str(detail).strip()
-        if "->" in text:
-            if ":" in text:
-                parts = text.split(":", 1)
-                return parts[1].strip()
-            left, right = [p.strip() for p in text.split("->", 1)]
-            if re.match(r"^[a-zA-Z_\-]+$", left):
-                return right
-            return f"{left} -> {right}"
-        if text and text.lower() != "updated":
-            return text
-    if message and message.lower() != "updated":
-        m = re.search(r"(?:to|version)\s+([^\s]+)", message, re.IGNORECASE)
-        if m:
-            return m.group(1)
-        return message
+    """Return standard status label for single-purpose modules."""
     return "updated"
 
 
@@ -1061,7 +1103,7 @@ def package_importance_score(pkg_line: str) -> int:
 
 
 def format_package_list(
-    details: list[str], msg_text: str, limit: int = 10
+    details: list[str], msg_text: str = "", limit: int = 10
 ) -> list[str]:
     cleaned = []
     seen = set()
@@ -1069,12 +1111,10 @@ def format_package_list(
         line = str(item).strip()
         if not line or line.startswith(("... and ", "... ", "and ", "(+")):
             continue
-        m_space_arrow = re.match(r"^([\w\.\-\@\/]+)\s+([^\s:]+)\s+->\s+([^\s]+)$", line)
-        if m_space_arrow:
-            line = f"{m_space_arrow.group(1)}: {m_space_arrow.group(2)} -> {m_space_arrow.group(3)}"
-        if line not in seen:
-            seen.add(line)
-            cleaned.append(line)
+        pkg_name = extract_package_name(line)
+        if pkg_name and pkg_name not in seen:
+            seen.add(pkg_name)
+            cleaned.append(pkg_name)
 
     total = len(cleaned)
     if total == 0:
@@ -1089,3 +1129,28 @@ def format_package_list(
     remaining = total - limit
     remainder_line = f"(+{remaining} more packages)"
     return displayed + [remainder_line]
+
+
+def get_reboot_trigger_details(item: dict[str, Any]) -> list[str]:
+    """Return the list of packages or reasons triggering a reboot for a module."""
+    res = item.get("result")
+    if not res or not getattr(res, "reboot_required", False):
+        return []
+
+    # First check if specific packages matched the reboot trigger
+    triggers = get_reboot_trigger_packages(res.details)
+    if triggers:
+        return format_package_list(triggers, "", limit=10)
+
+    # For modules with details where items are relevant (e.g. firmware or macos update)
+    mod_key = str(item.get("key") or getattr(item.get("module"), "key", "")).lower()
+    if mod_key in ("firmware", "device_firmware", "macos_update", "system"):
+        valid = [
+            str(d).strip()
+            for d in res.details
+            if d and not str(d).strip().startswith(("... and ", "... ", "and ", "(+"))
+        ]
+        if valid:
+            return format_package_list(valid, "", limit=10)
+
+    return []

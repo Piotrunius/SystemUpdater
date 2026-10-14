@@ -1,5 +1,4 @@
 import os
-import re
 
 from modules.base import BaseModule, UpdateContext
 from ui import StepResult
@@ -41,23 +40,19 @@ class DockerModule(BaseModule):
 
     def run(self, ctx: UpdateContext) -> StepResult:
         code, out, err = ctx.run_cmd(
-            ["docker", "images", "--format", "{{.Repository}}:{{.Tag}}\t{{.ID}}"]
+            ["docker", "images", "--format", "{{.Repository}}:{{.Tag}}"]
         )
         if code != 0:
             return StepResult("error", "Failed to list Docker images", error_output=err)
 
         images = []
-        old_ids = {}
         for line in out.splitlines():
             line_str = line.strip()
             if not line_str or line_str.startswith("<none>"):
                 continue
-            parts = line_str.split("\t", 1)
-            img = parts[0].strip()
+            img = line_str.split("\t", 1)[0].strip()
             if img:
                 images.append(img)
-                if len(parts) > 1 and parts[1].strip():
-                    old_ids[img] = parts[1].strip()[:12]
 
         if not images:
             return StepResult("unchanged")
@@ -72,15 +67,7 @@ class DockerModule(BaseModule):
                 errors.append(f"{img}: {p_err or p_out}")
             elif "Downloaded newer image" in p_out or "Pull complete" in p_out:
                 updated_images.add(img)
-                old_id = old_ids.get(img, "")
-                new_id = ""
-                m = re.search(r"Digest:\s+sha256:([0-9a-fA-F]{12})", p_out)
-                if m:
-                    new_id = m.group(1)
-                if old_id and new_id and old_id != new_id:
-                    updated.append(f"{img}: {old_id} -> {new_id}")
-                else:
-                    updated.append(img)
+                updated.append(img)
 
         if errors:
             return StepResult(

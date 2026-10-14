@@ -144,24 +144,14 @@ class NuvioModule(BaseModule):
                     f"Could not save installed Nuvio release tag: {error}"
                 ) from error
 
-            old_ver = installed_tag.strip() if installed_tag else ""
-            new_ver = latest_tag.strip() if latest_tag else ""
-            if old_ver and new_ver and old_ver != new_ver:
-                ver_change = f"{old_ver} -> {new_ver}"
-            elif new_ver:
-                ver_change = f"-> {new_ver}"
-            else:
-                ver_change = "updated"
-
             # Apply the image patch after recording the package upgrade.
             if not self._ensure_patched(ctx, force=True):
                 return StepResult(
                     "warning",
-                    f"Updated Nuvio to {latest_tag}, but its application JAR was not found; image patch was skipped",
-                    details=[ver_change],
+                    "Updated Nuvio, but its application JAR was not found; image patch was skipped",
                 )
 
-            return StepResult("ok", "updated", details=[ver_change])
+            return StepResult("ok", "updated")
 
         finally:
             with contextlib.suppress(FileNotFoundError):

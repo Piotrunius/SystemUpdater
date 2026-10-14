@@ -148,6 +148,7 @@ class UpdateContext:
         retry_delay: float = 2.0,
         sensitive_output: bool = False,
         display_output: bool | None = None,
+        output_filter: Any = None,
     ) -> tuple[int, str, str]:
         """
         Runs a command safely and captures output with stdin=DEVNULL to prevent hangs.
@@ -211,10 +212,13 @@ class UpdateContext:
                         pending_blank = False
                         try:
                             for line in iter(pipe.readline, ""):
-                                accumulator.append(line)
+                                stored_line = (
+                                    output_filter(line) if output_filter else line
+                                )
+                                accumulator.append(stored_line)
                                 self.last_activity_time = time.monotonic()
                                 if is_verbose:
-                                    clean_line = redact_text(line.rstrip("\r\n"))
+                                    clean_line = redact_text(stored_line.rstrip("\r\n"))
                                     with lock:
                                         if not clean_line.strip():
                                             if stream_name in headers:
@@ -336,8 +340,16 @@ class UpdateContext:
                             timeout=timeout,
                         )
                         last_code = proc.returncode
-                        last_out = proc.stdout
-                        last_err = proc.stderr
+                        last_out = (
+                            output_filter(proc.stdout)
+                            if output_filter and proc.stdout
+                            else proc.stdout
+                        )
+                        last_err = (
+                            output_filter(proc.stderr)
+                            if output_filter and proc.stderr
+                            else proc.stderr
+                        )
                     except subprocess.TimeoutExpired:
                         last_code = 124
                         last_out = ""
@@ -377,7 +389,10 @@ class UpdateContext:
                         def pipe_reader(pipe, accumulator):
                             try:
                                 for line in iter(pipe.readline, ""):
-                                    accumulator.append(line)
+                                    stored_line = (
+                                        output_filter(line) if output_filter else line
+                                    )
+                                    accumulator.append(stored_line)
                                     self.last_activity_time = time.monotonic()
                             except OSError:
                                 pass

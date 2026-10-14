@@ -3,7 +3,6 @@ Extended language and SDK update modules (Pipenv, Pyenv, Sdkman, Ghcup, Flutter)
 """
 
 import os
-import re
 
 from modules.base import BaseModule, UpdateContext
 from ui import StepResult
@@ -99,9 +98,7 @@ class GhcupModule(BaseModule):
         ):
             return StepResult("unchanged")
 
-        m = re.search(r"from\s+([^\s]+)\s+to\s+([^\s]+)", out, re.IGNORECASE)
-        details = [f"{m.group(1)} -> {m.group(2)}"] if m else []
-        return StepResult("ok", "updated", details=details)
+        return StepResult("ok", "updated")
 
 
 class FlutterModule(BaseModule):
@@ -124,6 +121,4 @@ class FlutterModule(BaseModule):
         if "Flutter is already up to date" in out:
             return StepResult("unchanged")
 
-        m = re.search(r"from\s+([^\s]+)\s+to\s+([^\s]+)", out, re.IGNORECASE)
-        details = [f"{m.group(1)} -> {m.group(2)}"] if m else []
-        return StepResult("ok", "updated", details=details)
+        return StepResult("ok", "updated")

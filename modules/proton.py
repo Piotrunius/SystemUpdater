@@ -46,10 +46,7 @@ class ProtonPlusModule(BaseModule):
                 parts = line_s.split(":", 1)
                 val = parts[1].strip() if len(parts) > 1 else line_s
                 sub = val.split(None, 1)
-                if len(sub) == 2:
-                    installed.append(f"{sub[0]} -> {sub[1]}")
-                else:
-                    installed.append(val)
+                installed.append(sub[0] if sub else val)
 
         if installed:
             return StepResult(

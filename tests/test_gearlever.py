@@ -21,7 +21,7 @@ Transaction Summary:
  Replacing:          1 package
 """
         packages = parse_dnf_packages(output)
-        self.assertEqual(packages, ["nobara-updater: 2.0.1-72.fc44 -> 2.0.1-75.fc44"])
+        self.assertEqual(packages, ["nobara-updater"])
 
     @patch("modules.base.urllib.request.urlopen")
     def test_gearlever_skips_when_github_api_rate_limited(self, mock_urlopen):
@@ -150,10 +150,10 @@ Transaction Summary:
 
         result = GearLeverModule().run(context)
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.details, ["App: 1.0 -> 2.0"])
+        self.assertEqual(result.details, ["App"])
 
     @patch("modules.base.urllib.request.urlopen")
-    def test_gearlever_formats_commit_ids_from_json(self, mock_urlopen):
+    def test_gearlever_reports_appimage_names(self, mock_urlopen):
         mock_resp = Mock()
         mock_resp.headers = {"x-ratelimit-remaining": "50"}
         mock_urlopen.return_value.__enter__.return_value = mock_resp
@@ -172,12 +172,10 @@ Transaction Summary:
 
         result = GearLeverModule().run(context)
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.details, ["Waywallen: 1a76dad -> 8206f3f"])
+        self.assertEqual(result.details, ["Waywallen"])
 
     @patch("modules.base.urllib.request.urlopen")
-    def test_gearlever_formats_file_hash_changes_before_and_after_update(
-        self, mock_urlopen
-    ):
+    def test_gearlever_reports_appimage_from_path(self, mock_urlopen):
         mock_resp = Mock()
         mock_resp.headers = {"x-ratelimit-remaining": "50"}
         mock_urlopen.return_value.__enter__.return_value = mock_resp
@@ -195,11 +193,10 @@ Transaction Summary:
         )
 
         mod = GearLeverModule()
-        with patch.object(mod, "_read_file_hash", side_effect=["d162473", "8206f3f"]):
-            result = mod.run(context)
+        result = mod.run(context)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.details, ["TestApp: d162473 -> 8206f3f"])
+        self.assertEqual(result.details, ["TestApp"])
 
     def test_skills_ignores_summary_count_line(self):
         from modules.devtools import SkillsModule
@@ -217,7 +214,7 @@ Updating cloudflare…
         self.assertEqual(result.message, "1 skill updated")
         self.assertEqual(result.details, ["cloudflare"])
 
-    def test_skills_formats_old_and_new_hash(self):
+    def test_skills_reports_skill_name_without_hash(self):
         from modules.devtools import SkillsModule
 
         context = UpdateContext()
@@ -228,25 +225,19 @@ Updating cloudflare…
 """
         context.run_cmd = Mock(return_value=(0, raw_output, ""))
         mod = SkillsModule()
-        mod._read_skill_hashes = Mock(
-            side_effect=[
-                {"cloudflare": "1a76dad"},
-                {"cloudflare": "8206f3f"},
-            ]
-        )
         result = mod.run(context)
 
         self.assertEqual(result.status, "ok")
         self.assertEqual(result.message, "1 skill updated")
-        self.assertEqual(result.details, ["cloudflare: 1a76dad -> 8206f3f"])
+        self.assertEqual(result.details, ["cloudflare"])
 
-    def test_docker_formats_old_and_new_image_id(self):
+    def test_docker_reports_image_name_without_hash(self):
         from modules.docker import DockerModule
 
         context = UpdateContext()
         context.run_cmd = Mock(
             side_effect=[
-                (0, "ghcr.io/pelican/panel:latest\t44136fa355b3", ""),
+                (0, "ghcr.io/pelican/panel:latest", ""),
                 (
                     0,
                     "Digest: sha256:6d895cfb3a7cc8b939eda4f7f3cba5c45b569cd9532dad6e8da32cba76285654\nStatus: Downloaded newer image",
@@ -259,7 +250,7 @@ Updating cloudflare…
         self.assertEqual(result.status, "ok")
         self.assertEqual(
             result.details,
-            ["ghcr.io/pelican/panel:latest: 44136fa355b3 -> 6d895cfb3a7c"],
+            ["ghcr.io/pelican/panel:latest"],
         )
 
     def test_docker_recreates_compose_service_on_image_update(self):
@@ -271,7 +262,7 @@ Updating cloudflare…
         def mock_run(cmd, **kwargs):
             commands_run.append(cmd)
             if "images" in cmd:
-                return (0, "ghcr.io/pelican/panel:latest\t44136fa355b3", "")
+                return (0, "ghcr.io/pelican/panel:latest", "")
             if "pull" in cmd:
                 return (
                     0,
@@ -294,7 +285,7 @@ Updating cloudflare…
         self.assertEqual(result.status, "ok")
         self.assertEqual(
             result.details,
-            ["ghcr.io/pelican/panel:latest: 44136fa355b3 -> 6d895cfb3a7c"],
+            ["ghcr.io/pelican/panel:latest"],
         )
         self.assertTrue(
             any("compose" in cmd and "up" in cmd for cmd in commands_run),

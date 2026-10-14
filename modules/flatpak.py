@@ -57,26 +57,10 @@ class FlatpakModule(BaseModule):
             return StepResult("unchanged", warnings=support_warnings)
 
         count = len(unique_updated)
-        # Post-update version query
-        post_map = {}
-        v_code, v_out, _ = ctx.run_cmd(
-            ["flatpak", "list", "--columns=application,version"], read_only=True
-        )
-        if v_code == 0:
-            for line in v_out.splitlines():
-                parts = line.strip().split("\t")
-                if len(parts) >= 2 and parts[1].strip():
-                    post_map[parts[0].strip()] = parts[1].strip()
-
-        formatted_details = [
-            f"{app} -> {post_map[app]}" if app in post_map else app
-            for app in unique_updated
-        ]
-
         return StepResult(
             "ok",
             f"{count} package{'s' if count != 1 else ''} updated",
-            details=formatted_details,
+            details=unique_updated,
             warnings=support_warnings,
         )
 

@@ -98,13 +98,11 @@ class SoftwareUpdateModule(BaseModule):
 
             # Extract Title or Label
             m_title = re.search(r"Title:\s*([^,]+)", line_str)
-            m_ver = re.search(r"Version:\s*([^,]+)", line_str)
             m_label = re.search(r"\*\s*(?:Label:\s*)?([^,]+)", line_str)
 
             if m_title:
                 name = m_title.group(1).strip()
-                ver = m_ver.group(1).strip() if m_ver else None
-                items.append(f"{name} ({ver})" if ver else name)
+                items.append(name)
             elif m_label:
                 name = m_label.group(1).strip()
                 if name.lower() not in ["title", "label"]:

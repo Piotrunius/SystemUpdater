@@ -460,6 +460,7 @@ def _format_history_modules(results: list[dict[str, Any]]) -> list[dict[str, Any
                 redact_text(str(warning)) for warning in item["result"].warnings
             ],
             "error_output": redact_text(item["result"].error_output),
+            "reboot_required": bool(getattr(item["result"], "reboot_required", False)),
             "commands": item.get("commands", []),
         }
         for item in results
@@ -684,6 +685,9 @@ def main():
             and getattr(r.get("module"), "category", "") != "System Protection"
             for r in results
         )
+        reboot_needed = any(
+            getattr(r.get("result"), "reboot_required", False) for r in results
+        )
         if not args.no_history:
             history_data = {
                 "id": run_id,
@@ -692,6 +696,7 @@ def main():
                 "duration": round(total_elapsed, 2),
                 "status": "interrupted",
                 "update_count": update_count,
+                "reboot_required": reboot_needed,
                 "modules": _format_history_modules(results),
             }
             with contextlib.suppress(OSError):
@@ -711,6 +716,9 @@ def main():
         and getattr(r.get("module"), "category", "") != "System Protection"
         for r in results
     )
+    reboot_needed = any(
+        getattr(r.get("result"), "reboot_required", False) for r in results
+    )
     if not args.no_history:
         history_data = {
             "id": run_id,
@@ -719,6 +727,7 @@ def main():
             "duration": round(total_elapsed, 2),
             "status": "unknown",
             "update_count": update_count,
+            "reboot_required": reboot_needed,
             "modules": _format_history_modules(results),
         }
         history_data["status"] = classify_run_status(
@@ -740,10 +749,6 @@ def main():
             )
 
     ui.print_summary(results, total_elapsed)
-
-    reboot_needed = any(
-        getattr(r.get("result"), "reboot_required", False) for r in results
-    )
 
     if args.reboot and reboot_needed:
         print("Rebooting system as requested by --reboot...")

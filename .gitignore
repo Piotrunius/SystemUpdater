@@ -31,3 +31,6 @@ htmlcov/
 *.stamp
 *.log
 .tapes/
+
+# Ai agents interaction data
+.agents/

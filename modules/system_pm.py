@@ -95,14 +95,14 @@ class AptModule(BaseModule):
         for line in (up_out or "").splitlines():
             m = re.search(r"Setting up\s+([\w\.\-]+)\s+\(([^)]+)\)", line)
             if m:
-                upgraded.append(f"{m.group(1)} -> {m.group(2)}")
+                upgraded.append(m.group(1))
             else:
                 m2 = re.search(
                     r"Preparing to unpack \S+/([a-zA-Z0-9\.\-]+)_([a-zA-Z0-9\.\-\:\+~]+)_[^._]+\.deb",
                     line,
                 )
                 if m2:
-                    upgraded.append(f"{m2.group(1)} -> {m2.group(2)}")
+                    upgraded.append(m2.group(1))
 
         upgraded = list(dict.fromkeys(upgraded))
 
@@ -185,7 +185,7 @@ class PacmanModule(BaseModule):
                 r"(?:upgrading|installing)\s+([\w\.\-_]+)\s+\([^)]*->\s*([^)]+)\)", line
             )
             if m:
-                upgraded.append(f"{m.group(1)} -> {m.group(2)}")
+                upgraded.append(m.group(1))
 
         upgraded = list(dict.fromkeys(upgraded))
         if upgraded:
@@ -263,7 +263,7 @@ class ZypperModule(BaseModule):
                 r"(?:Installing|Upgrading):\s+([\w\.\-_]+)-([0-9][\w\.\-_]*)", line
             )
             if m:
-                upgraded.append(f"{m.group(1)} -> {m.group(2)}")
+                upgraded.append(m.group(1))
 
         upgraded = list(dict.fromkeys(upgraded))
         if upgraded:
@@ -311,7 +311,7 @@ class ApkModule(BaseModule):
             # Matches: "(1/5) Upgrading foo (1.0 -> 2.0)"
             m = re.search(r"Upgrading\s+([\w\.\-_]+)\s+\([^)]*->\s*([^)]+)\)", line)
             if m:
-                upgraded.append(f"{m.group(1)} -> {m.group(2)}")
+                upgraded.append(m.group(1))
 
         upgraded = list(dict.fromkeys(upgraded))
         if upgraded:
@@ -357,7 +357,7 @@ class XbpsModule(BaseModule):
             # Matches: "foo-1.0_1: updating to 2.0_1 ..."
             m = re.search(r"([\w\.\-_]+)-[0-9].*:\s+updating to\s+([\w\.\-_]+)", line)
             if m:
-                upgraded.append(f"{m.group(1)} -> {m.group(2)}")
+                upgraded.append(m.group(1))
 
         upgraded = list(dict.fromkeys(upgraded))
         if upgraded:

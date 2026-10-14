@@ -23,13 +23,8 @@ class OhMyZshModule(BaseModule):
 
     def run(self, ctx: UpdateContext) -> StepResult:
         omz_dir = os.path.expanduser("~/.oh-my-zsh")
-        _, old_head, _ = ctx.run_cmd(
-            ["git", "-C", omz_dir, "rev-parse", "--short", "HEAD"], read_only=True
-        )
-        old_commit = old_head.strip()
-
         code, out, err = ctx.run_cmd(
-            ["git", "-C", omz_dir, "pull", "--rebase", "--stat", "origin", "master"]
+            ["git", "-C", omz_dir, "pull", "--rebase", "origin", "master"]
         )
         if code != 0:
             return StepResult(
@@ -39,20 +34,7 @@ class OhMyZshModule(BaseModule):
         if "Already up to date" in out or "Already up-to-date" in out:
             return StepResult("unchanged")
 
-        m = re.search(r"Updating\s+([0-9a-fA-F]+)\.\.([0-9a-fA-F]+)", out)
-        if m:
-            ver_change = f"{m.group(1)} -> {m.group(2)}"
-        else:
-            _, new_head, _ = ctx.run_cmd(
-                ["git", "-C", omz_dir, "rev-parse", "--short", "HEAD"], read_only=True
-            )
-            new_commit = new_head.strip()
-            if old_commit and new_commit and old_commit != new_commit:
-                ver_change = f"{old_commit} -> {new_commit}"
-            else:
-                ver_change = "updated"
-
-        return StepResult("ok", "updated", details=[ver_change])
+        return StepResult("ok", "updated")
 
 
 class RustupModule(BaseModule):
@@ -98,7 +80,12 @@ class RustupModule(BaseModule):
         }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        code, out, err = ctx.run_cmd(["rustup", "update"])
+        def filter_rust_output(text: str) -> str:
+            return re.sub(r"\s*\([0-9a-f]{7,12}(?:\s+\d{4}-\d{2}-\d{2})?\)", "", text)
+
+        code, out, err = ctx.run_cmd(
+            ["rustup", "update"], output_filter=filter_rust_output
+        )
         if code != 0:
             return StepResult("error", "rustup update failed", error_output=err or out)
 
@@ -109,7 +96,7 @@ class RustupModule(BaseModule):
             r"([\w\.\-]+)\s+updated\s+-\s+rustc\s+([^\s]+).*?->\s+rustc\s+([^\s]+)", out
         )
         if matches:
-            details = [f"{tc}: {old} -> {new}" for tc, old, new in matches]
+            details = [tc for tc, _, _ in matches]
             count = len(details)
             return StepResult(
                 "ok",
@@ -122,7 +109,7 @@ class RustupModule(BaseModule):
             return StepResult(
                 "ok",
                 "1 toolchain updated",
-                details=[f"rustup: {m_self.group(1)} -> {m_self.group(2)}"],
+                details=["rustup"],
             )
 
         return StepResult("ok", "toolchain updated")
@@ -135,36 +122,30 @@ class PipModule(BaseModule):
     description = "Upgrades pip user installation to the latest version"
     is_single_entity = True
 
-    def _get_target(self, ctx: UpdateContext) -> tuple[list[str], str] | None:
+    def _get_target(self, ctx: UpdateContext) -> list[str] | None:
         # 1. Standalone pip binary (user pip in ~/.local/bin or system pip)
         pip_bin = ctx.which("pip3") or ctx.which("pip")
         if pip_bin:
-            code_chk, ver_out, _ = ctx.run_cmd([pip_bin, "--version"], read_only=True)
-            if code_chk == 0:
-                return [pip_bin], ver_out
+            return [pip_bin]
 
         # 2. Python module pip (python3 -m pip)
         py_bin = ctx.which("python3") or ctx.which("python")
         if py_bin:
-            code_chk, ver_out, _ = ctx.run_cmd(
-                [py_bin, "-m", "pip", "--version"], read_only=True
+            # Only use if this Python environment is NOT PEP 668 externally managed
+            code_managed, _, _ = ctx.run_cmd(
+                [
+                    py_bin,
+                    "-c",
+                    (
+                        "import sysconfig, os, sys; "
+                        "stdlib = sysconfig.get_path('stdlib'); "
+                        "sys.exit(0 if os.path.exists(os.path.join(stdlib, 'EXTERNALLY-MANAGED')) else 1)"
+                    ),
+                ],
+                read_only=True,
             )
-            if code_chk == 0:
-                # Only use if this Python environment is NOT PEP 668 externally managed
-                code_managed, _, _ = ctx.run_cmd(
-                    [
-                        py_bin,
-                        "-c",
-                        (
-                            "import sysconfig, os, sys; "
-                            "stdlib = sysconfig.get_path('stdlib'); "
-                            "sys.exit(0 if os.path.exists(os.path.join(stdlib, 'EXTERNALLY-MANAGED')) else 1)"
-                        ),
-                    ],
-                    read_only=True,
-                )
-                if code_managed != 0:
-                    return [py_bin, "-m", "pip"], ver_out
+            if code_managed != 0:
+                return [py_bin, "-m", "pip"]
 
         return None
 
@@ -176,11 +157,7 @@ class PipModule(BaseModule):
         if not target:
             return StepResult("skipped", "pip not available or externally managed")
 
-        cmd_prefix, pre_v = target
-        m_old = re.search(r"pip\s+([^\s]+)", pre_v or "")
-        old_ver = m_old.group(1) if m_old else ""
-
-        code, out, err = ctx.run_cmd(cmd_prefix + ["install", "--upgrade", "pip"])
+        code, out, err = ctx.run_cmd(target + ["install", "--upgrade", "pip"])
         if code != 0:
             combined = f"{out}\n{err}".lower()
             if "externally-managed-environment" in combined:
@@ -190,22 +167,7 @@ class PipModule(BaseModule):
         if "Requirement already satisfied" in out:
             return StepResult("unchanged")
 
-        m_new = re.search(r"Successfully installed\s+pip-([\w\.\+]+)", out)
-        new_ver = m_new.group(1) if m_new else ""
-
-        if not new_ver:
-            _, post_v, _ = ctx.run_cmd(cmd_prefix + ["--version"], read_only=True)
-            m_post = re.search(r"pip\s+([^\s]+)", post_v or "")
-            new_ver = m_post.group(1) if m_post else ""
-
-        if old_ver and new_ver and old_ver != new_ver:
-            ver_change = f"{old_ver} -> {new_ver}"
-        elif new_ver:
-            ver_change = f"-> {new_ver}"
-        else:
-            ver_change = "updated"
-
-        return StepResult("ok", "updated", details=[ver_change])
+        return StepResult("ok", "updated")
 
 
 class NpmModule(BaseModule):
@@ -269,25 +231,14 @@ class NpmModule(BaseModule):
         if not outdated:
             return StepResult("unchanged")
 
-        pkg_names = list(outdated.keys())
         up_code, up_out, up_err = ctx.run_cmd(["npm", "update", "-g"])
         if up_code != 0:
             return StepResult(
                 "error", "npm update failed", error_output=up_err or up_out
             )
 
-        details = []
-        for pkg, info in outdated.items():
-            curr = info.get("current")
-            latest = info.get("latest") or info.get("wanted")
-            if curr and latest and curr != latest:
-                details.append(f"{pkg}: {curr} -> {latest}")
-            elif latest:
-                details.append(f"{pkg} -> {latest}")
-            else:
-                details.append(pkg)
-
-        count = len(pkg_names)
+        details = list(outdated.keys())
+        count = len(details)
         return StepResult(
             "ok", f"{count} package{'s' if count != 1 else ''} updated", details=details
         )
@@ -329,26 +280,6 @@ class PnpmModule(BaseModule):
                 "error", "pnpm package list failed", error_output=ls_err or ls_out
             )
 
-        # Query outdated packages to capture versions
-        outdated_code, outdated_out, _ = ctx.run_cmd(
-            ["pnpm", "outdated", "-g", "--format", "json"]
-        )
-        outdated = {}
-        metadata_warning = None
-        if outdated_code == 0 and outdated_out.strip():
-            try:
-                outdated = json.loads(outdated_out)
-                if not isinstance(outdated, dict):
-                    raise json.JSONDecodeError(
-                        "Expected a JSON object", outdated_out, 0
-                    )
-            except json.JSONDecodeError:
-                metadata_warning = "Could not parse pnpm outdated package metadata"
-        elif outdated_code != 0:
-            metadata_warning = "Could not check pnpm package versions before updating"
-        if metadata_warning:
-            ctx.print_verbose(metadata_warning)
-
         code, out, err = ctx.run_cmd(["pnpm", "update", "-g"])
         combined = ((out or "") + "\n" + (err or "")).lower()
 
@@ -361,17 +292,6 @@ class PnpmModule(BaseModule):
 
         if code != 0:
             return StepResult("error", "pnpm update failed", error_output=err or out)
-
-        if outdated:
-            details = [
-                f"{pkg} -> {info.get('latest', 'latest')}"
-                for pkg, info in outdated.items()
-            ]
-            return StepResult(
-                "ok",
-                f"{len(details)} package{'s' if len(details) != 1 else ''} updated",
-                details=details,
-            )
 
         return StepResult("ok", "updated")
 
@@ -410,23 +330,13 @@ class BunModule(BaseModule):
         }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        ls_code, ls_out, ls_err = ctx.run_cmd(["bun", "pm", "ls", "-g"])
-        ls_output = f"{ls_out}\n{ls_err}"
-        if (
-            "no package.json was found" in ls_output.lower()
-            or "no global packages" in ls_output.lower()
-            or not ls_output.strip()
-            or ls_output.strip() == "node_modules"
-        ):
-            return StepResult("unchanged")
-        if ls_code != 0:
-            return StepResult(
-                "error", "Bun global package list failed", error_output=ls_err or ls_out
-            )
-
         code, out, err = ctx.run_cmd(["bun", "update", "-g"])
         combined = (out or "") + "\n" + (err or "")
-        if "No package.json" in combined or "nothing to update" in combined:
+        if (
+            "No package.json" in combined
+            or "nothing to update" in combined
+            or "no global packages" in combined.lower()
+        ):
             return StepResult("unchanged")
 
         if code != 0:
@@ -434,7 +344,7 @@ class BunModule(BaseModule):
 
         matches = re.findall(r"(?:installed|\+)\s+([@\w\.\-\/]+)@([\w\.\-]+)", combined)
         if matches:
-            details = [f"{p} -> {v}" for p, v in matches]
+            details = [p for p, _ in matches]
             return StepResult(
                 "ok",
                 f"{len(details)} package{'s' if len(details) != 1 else ''} updated",
@@ -574,7 +484,7 @@ class GhExtensionsModule(BaseModule):
             out,
         )
         if matches:
-            details = [f"{ext} -> {ver.rstrip(')')}" for ext, ver in matches]
+            details = [ext for ext, _ in matches]
             count = len(details)
             return StepResult(
                 "ok",
@@ -650,22 +560,6 @@ class SkillsModule(BaseModule):
             "active": "[Active]",
         }[self._availability(ctx)]
 
-    def _read_skill_hashes(self) -> dict[str, str]:
-        lock_file = self._find_lock_file()
-        if not lock_file or not os.path.isfile(lock_file):
-            return {}
-        try:
-            with open(lock_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            skills = data.get("skills", {})
-            return {
-                name: info["skillFolderHash"][:7]
-                for name, info in skills.items()
-                if isinstance(info, dict) and "skillFolderHash" in info
-            }
-        except (OSError, json.JSONDecodeError, KeyError, TypeError):
-            return {}
-
     def run(self, ctx: UpdateContext) -> StepResult:
         lock_file = self._find_lock_file()
         env_extra = {}
@@ -679,7 +573,6 @@ class SkillsModule(BaseModule):
         ):
             env_extra["XDG_STATE_HOME"] = ""
 
-        before_hashes = self._read_skill_hashes()
         code, out, err = ctx.run_cmd(
             ["npx", "-y", "skills", "update", "--global"],
             env_extra=env_extra or None,
@@ -710,35 +603,7 @@ class SkillsModule(BaseModule):
                     skills.append(cand)
         skills = list(dict.fromkeys(skills))
 
-        after_hashes = self._read_skill_hashes()
-        lock_changed = {
-            k: (before_hashes[k], after_hashes[k])
-            for k in after_hashes
-            if k in before_hashes and before_hashes[k] != after_hashes[k]
-        }
-
-        details = []
-        seen = set()
-        for cand in skills:
-            seen.add(cand)
-            if cand in lock_changed:
-                old_h, new_h = lock_changed[cand]
-                details.append(f"{cand}: {old_h} -> {new_h}")
-            elif (
-                cand in before_hashes
-                and cand in after_hashes
-                and before_hashes[cand] != after_hashes[cand]
-            ):
-                details.append(f"{cand}: {before_hashes[cand]} -> {after_hashes[cand]}")
-            else:
-                details.append(cand)
-
-        for k, (old_h, new_h) in lock_changed.items():
-            if k not in seen:
-                details.append(f"{k}: {old_h} -> {new_h}")
-                seen.add(k)
-
-        count = len(details)
+        count = len(skills)
         if count == 0:
             m_cnt = re.search(r"[Uu]pdated\s+(\d+)\s+skill", out)
             if m_cnt:
@@ -748,7 +613,7 @@ class SkillsModule(BaseModule):
             return StepResult("ok", f"{count} skill{'s' if count != 1 else ''} updated")
 
         return StepResult(
-            "ok", f"{count} skill{'s' if count != 1 else ''} updated", details=details
+            "ok", f"{count} skill{'s' if count != 1 else ''} updated", details=skills
         )
 
 
@@ -1068,7 +933,7 @@ class CargoUpdateModule(BaseModule):
             out,
         )
         if matches:
-            details = [f"{crate} -> {ver}" for crate, ver in matches]
+            details = [crate for crate, _ in matches]
             return StepResult(
                 "ok",
                 f"{len(details)} crate{'s' if len(details) != 1 else ''} updated",
@@ -1142,12 +1007,6 @@ class GemModule(BaseModule):
         }[self._availability(ctx)]
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        # Capture old RubyGems version
-        old_ver_code, old_ver_out, _ = ctx.run_cmd(["gem", "--version"], read_only=True)
-        old_system_ver = (
-            old_ver_out.strip() if old_ver_code == 0 and old_ver_out.strip() else None
-        )
-
         code, out, err = ctx.run_cmd(["gem", "update", "--system"], timeout=180)
         if code != 0:
             return StepResult("error", "gem update failed", error_output=err or out)
@@ -1155,29 +1014,7 @@ class GemModule(BaseModule):
         if "Latest version already installed" in out:
             return StepResult("unchanged")
 
-        details = []
-        # Check if RubyGems version was updated
-        m_ver = re.search(
-            r"RubyGems\s+([0-9\.]+)\s+installed", out, re.IGNORECASE
-        ) or re.search(r"Installing RubyGems\s+([0-9\.]+)", out, re.IGNORECASE)
-        new_system_ver = m_ver.group(1) if m_ver else None
-        if not new_system_ver:
-            new_code, new_out, _ = ctx.run_cmd(["gem", "--version"], read_only=True)
-            if new_code == 0 and new_out.strip():
-                new_system_ver = new_out.strip()
-
-        if new_system_ver:
-            if old_system_ver and old_system_ver != new_system_ver:
-                details.append(f"rubygems-update: {old_system_ver} -> {new_system_ver}")
-            else:
-                details.append(f"rubygems-update -> {new_system_ver}")
-
-        count = len(details)
-        if count > 0:
-            msg = f"{count} gem{'s' if count != 1 else ''} updated"
-            return StepResult("ok", msg, details=details)
-
-        return StepResult("ok", "1 gem updated")
+        return StepResult("ok", "1 gem updated", details=["rubygems-update"])
 
 
 class MiseModule(BaseModule):

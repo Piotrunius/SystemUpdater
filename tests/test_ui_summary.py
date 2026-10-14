@@ -188,8 +188,8 @@ class SummaryFormattingTests(unittest.TestCase):
                 [{"name": "Nuvio Desktop", "key": "nuvio", "result": nuvio_res}], 1.0
             )
         plain_nuvio = re.sub(r"\x1b\[[0-9;]*m", "", out_nuvio.getvalue())
-        self.assertIn("• Nuvio Desktop: 0.1.28-alpha -> 0.1.29-alpha", plain_nuvio)
-        self.assertNotIn("- 0.1.28-alpha", plain_nuvio)
+        self.assertIn("• Nuvio Desktop: updated", plain_nuvio)
+        self.assertNotIn("-", plain_nuvio)
 
         # Oh My Zsh
         omz_res = StepResult("ok", "updated", details=["60c9a7a -> 9f9b28a"])
@@ -199,8 +199,8 @@ class SummaryFormattingTests(unittest.TestCase):
                 [{"name": "Oh My Zsh", "key": "omz", "result": omz_res}], 1.0
             )
         plain_omz = re.sub(r"\x1b\[[0-9;]*m", "", out_omz.getvalue())
-        self.assertIn("• Oh My Zsh: 60c9a7a -> 9f9b28a", plain_omz)
-        self.assertNotIn("- 60c9a7a", plain_omz)
+        self.assertIn("• Oh My Zsh: updated", plain_omz)
+        self.assertNotIn("-", plain_omz)
 
     def test_multi_package_module_displays_list_of_packages(self):
         brew_res = StepResult(
@@ -219,9 +219,9 @@ class SummaryFormattingTests(unittest.TestCase):
             )
         plain = re.sub(r"\x1b\[[0-9;]*m", "", output.getvalue())
         self.assertIn("• Homebrew: 3 packages upgraded", plain)
-        self.assertIn("- certifi: 2026.7.22 -> 2026.7.22_1", plain)
-        self.assertIn("- bun: 1.2.0 -> 1.2.4", plain)
-        self.assertIn("- antigravity-cli-linux -> 1.3.3", plain)
+        self.assertIn("- certifi", plain)
+        self.assertIn("- bun", plain)
+        self.assertIn("- antigravity-cli-linux", plain)
 
     def test_multi_package_large_updates_are_capped_at_10_and_sorted_by_importance(
         self,
@@ -252,17 +252,17 @@ class SummaryFormattingTests(unittest.TestCase):
         self.assertIn("• Homebrew: 14 packages upgraded", plain)
 
         # Core/major tools must be shown in the top 10
-        self.assertIn("- systemd: 262 -> 262_1", plain)
-        self.assertIn("- python@3.14: 3.14.8 -> 3.14.8_1", plain)
-        self.assertIn("- node: 26.11.0 -> 26.11.0_1", plain)
-        self.assertIn("- antigravity-cli-linux: 1.3.0 -> 1.3.1", plain)
-        self.assertIn("- pipewire: 1.6.9 -> 1.6.9_1", plain)
-        self.assertIn("- systemupdater: 0.1.6 -> 0.1.7", plain)
+        self.assertIn("- systemd", plain)
+        self.assertIn("- python@3.14", plain)
+        self.assertIn("- node", plain)
+        self.assertIn("- antigravity-cli-linux", plain)
+        self.assertIn("- pipewire", plain)
+        self.assertIn("- systemupdater", plain)
 
         # Truncated libraries must be in the remainder
         self.assertIn("- (+4 more packages)", plain)
-        self.assertNotIn("- libxml2: 2.12.0 -> 2.12.1", plain)
-        self.assertNotIn("- libjpeg: 9e -> 9f", plain)
+        self.assertNotIn("- libxml2", plain)
+        self.assertNotIn("- libjpeg", plain)
 
     def test_live_output_shows_exact_count_for_multi_package_modules(self):
         ui = UI(is_interactive=False)
@@ -280,7 +280,7 @@ class SummaryFormattingTests(unittest.TestCase):
             res = StepResult(
                 "ok",
                 "1 package updated",
-                warnings=["System reboot required to complete pending updates"],
+                warnings=["Reboot required"],
                 duration=2.5,
             )
             ui.print_result("Device Firmware", res)
@@ -303,11 +303,10 @@ class SummaryFormattingTests(unittest.TestCase):
             "ok",
             "1 package updated",
             details=["UEFI System Firmware -> 1.2.0"],
-            warnings=["System reboot required to complete pending updates"],
             reboot_required=True,
         )
 
-        # Normal mode: clean 1:1 output, no reboot banners or warnings
+        # Normal mode: Reboot Required section is displayed with [^]
         output_normal = io.StringIO()
         with contextlib.redirect_stdout(output_normal):
             UI(is_interactive=False, verbose=False).print_summary(
@@ -315,11 +314,12 @@ class SummaryFormattingTests(unittest.TestCase):
             )
         plain_normal = re.sub(r"\x1b\[[0-9;]*m", "", output_normal.getvalue())
         self.assertIn("• Device Firmware: 1 package updated", plain_normal)
-        self.assertIn("- UEFI System Firmware -> 1.2.0", plain_normal)
-        self.assertNotIn("reboot required", plain_normal.lower())
-        self.assertNotIn("Warnings", plain_normal)
+        self.assertIn("── Reboot", plain_normal)
+        self.assertIn("[^] Reboot required:", plain_normal)
+        self.assertIn("- UEFI System Firmware", plain_normal)
+        self.assertNotIn("── Warnings", plain_normal)
 
-        # Verbose mode: warning appears in Warnings section without (Device Firmware) appended
+        # Verbose mode: Reboot Required section is also displayed with [^]
         output_verbose = io.StringIO()
         with contextlib.redirect_stdout(output_verbose):
             UI(is_interactive=False, verbose=True).print_summary(
@@ -327,13 +327,25 @@ class SummaryFormattingTests(unittest.TestCase):
             )
         plain_verbose = re.sub(r"\x1b\[[0-9;]*m", "", output_verbose.getvalue())
         self.assertIn("• Device Firmware: 1 package updated", plain_verbose)
-        self.assertIn("- UEFI System Firmware -> 1.2.0", plain_verbose)
-        self.assertIn("── Warnings", plain_verbose)
-        self.assertIn("[!] Device Firmware: warning", plain_verbose)
-        self.assertIn(
-            "- System reboot required to complete pending updates", plain_verbose
-        )
-        self.assertNotIn("(Device Firmware)", plain_verbose)
+        self.assertIn("── Reboot", plain_verbose)
+        self.assertIn("[^] Reboot required:", plain_verbose)
+        self.assertIn("- UEFI System Firmware", plain_verbose)
+        self.assertNotIn("── Warnings", plain_verbose)
+
+    def test_live_output_shows_reboot_marker(self):
+        ui = UI(is_interactive=False)
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            res = StepResult(
+                "ok",
+                "6 packages upgraded",
+                details=["kernel-core: 7.2.9 -> 7.2.10"],
+                duration=1.5,
+                reboot_required=True,
+            )
+            ui.print_result("System", res)
+        plain = re.sub(r"\x1b\[[0-9;]*m", "", output.getvalue())
+        self.assertIn("[^] System: 6 packages upgraded (1.5s)", plain)
 
     def test_check_packages_require_reboot(self):
         from ui import check_packages_require_reboot
@@ -364,9 +376,7 @@ class SummaryFormattingTests(unittest.TestCase):
         ui._complete_step(res, None, command_start=0)
 
         self.assertTrue(res.reboot_required)
-        self.assertIn(
-            "System reboot required to complete pending updates", res.warnings
-        )
+        self.assertEqual(res.warnings, [])
 
     def test_complete_step_ignores_lvfs_triaged_issue_in_command_log(self):
         ui = UI(is_interactive=False, verbose=True)

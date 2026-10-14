@@ -85,11 +85,7 @@ class FirmwareModule(BaseModule):
             rb_code, rb_out, _ = ctx.run_cmd(["fwupdmgr", "check-reboot-needed"])
             reboot_needed = rb_code == 0 or "reboot is needed" in (rb_out or "").lower()
 
-            details = [
-                f"{d.get('Name')} -> {d.get('Version')}"
-                for d in devices
-                if d.get("Name") and d.get("Version")
-            ]
+            details = [d.get("Name") for d in devices if d.get("Name")]
             count = len(details) or len(devices)
             msg = (
                 f"{count} device{'s' if count != 1 else ''} updated"
@@ -97,15 +93,11 @@ class FirmwareModule(BaseModule):
                 else "updated"
             )
 
-            fw_warnings = list(warnings)
-            if reboot_needed:
-                fw_warnings.append("System reboot required to complete pending updates")
-
             return StepResult(
                 "ok",
                 msg,
                 details=details,
-                warnings=fw_warnings,
+                warnings=warnings,
                 reboot_required=reboot_needed,
             )
 

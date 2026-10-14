@@ -61,8 +61,8 @@ class SoftwareUpdateModuleTests(unittest.TestCase):
         self.assertEqual(res.status, "ok")
         self.assertEqual(res.message, "2 updates installed")
         self.assertTrue(res.reboot_required)
-        self.assertIn("macOS Sonoma 14.5-23F79 (14.5)", res.details)
-        self.assertIn("Command Line Tools for Xcode-15.3 (15.3)", res.details)
+        self.assertIn("macOS Sonoma 14.5-23F79", res.details)
+        self.assertIn("Command Line Tools for Xcode-15.3", res.details)
 
 
 if __name__ == "__main__":

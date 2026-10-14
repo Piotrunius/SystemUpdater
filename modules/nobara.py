@@ -1,5 +1,4 @@
 import os
-import re
 from typing import ClassVar
 
 from modules.base import BaseModule, UpdateContext, get_os_release
@@ -32,14 +31,10 @@ IGNORED_DNF_TOKENS = {
 }
 
 
-def _clean_epoch(ver: str) -> str:
-    return re.sub(r"^\d+:", "", ver)
-
-
 def parse_dnf_packages(output: str) -> list[str]:
     packages = []
     capture = False
-    pending_pkg = None  # (name, ver)
+    pending_pkg = None  # name
     for line in output.splitlines():
         line_clean = line.strip()
         if not line_clean or line_clean.startswith(("=", "-")):
@@ -57,16 +52,12 @@ def parse_dnf_packages(output: str) -> list[str]:
                 and pending_pkg
                 and len(parts) >= 4
             ):
-                # e.g.: replacing sudo x86_64 0:1.9.17-8.p2.fc44 ...
-                old_ver = _clean_epoch(parts[3])
-                name, new_ver = pending_pkg
-                packages.append(f"{name}: {old_ver} -> {_clean_epoch(new_ver)}")
+                packages.append(pending_pkg)
                 pending_pkg = None
                 continue
             if len(parts) >= 3:
                 name = parts[0]
                 arch = parts[1]
-                ver = parts[2]
                 if name.lower() not in IGNORED_DNF_TOKENS and arch in (
                     "x86_64",
                     "noarch",
@@ -75,12 +66,10 @@ def parse_dnf_packages(output: str) -> list[str]:
                     "armv7hl",
                 ):
                     if pending_pkg:
-                        packages.append(
-                            f"{pending_pkg[0]} -> {_clean_epoch(pending_pkg[1])}"
-                        )
-                    pending_pkg = (name, ver)
+                        packages.append(pending_pkg)
+                    pending_pkg = name
     if pending_pkg:
-        packages.append(f"{pending_pkg[0]} -> {_clean_epoch(pending_pkg[1])}")
+        packages.append(pending_pkg)
     return list(dict.fromkeys(packages))
 
 

@@ -18,10 +18,11 @@ class Colors:
     BOLD_YELLOW = "\033[1;33m"
     BOLD_MAGENTA = "\033[1;35m"
     BOLD_CYAN = "\033[1;36m"
+    BOLD_BLUE = "\033[1;34m"
 
 
-# Standard status markers: exactly 6 symbols with unique, consistent styling
-# Allowed symbols: "!", "✗", "✓", "—", ":", "~"
+# Standard status markers: exactly 7 symbols with unique, consistent styling
+# Allowed symbols: "!", "✗", "✓", "—", ":", "~", "^"
 STATUS_MARKERS: dict[str, str] = {
     "✓": f"{Colors.DIM}[{Colors.RESET}{Colors.BOLD_GREEN}✓{Colors.RESET}{Colors.DIM}]{Colors.RESET}",
     "!": f"{Colors.DIM}[{Colors.RESET}{Colors.BOLD_YELLOW}!{Colors.RESET}{Colors.DIM}]{Colors.RESET}",
@@ -29,6 +30,7 @@ STATUS_MARKERS: dict[str, str] = {
     "—": f"{Colors.DIM}[—]{Colors.RESET}",
     ":": f"{Colors.DIM}[{Colors.RESET}{Colors.CYAN}:{Colors.RESET}{Colors.DIM}]{Colors.RESET}",
     "~": f"{Colors.DIM}[{Colors.RESET}{Colors.BOLD_MAGENTA}~{Colors.RESET}{Colors.DIM}]{Colors.RESET}",
+    "^": f"{Colors.DIM}[{Colors.RESET}{Colors.BOLD_BLUE}^{Colors.RESET}{Colors.DIM}]{Colors.RESET}",
 }
 
 STATUS_SYMBOL_MAP: dict[str, str] = {
@@ -43,6 +45,9 @@ STATUS_SYMBOL_MAP: dict[str, str] = {
     "unchanged": "—",
     "up-to-date": "—",
     "skipped": "—",
+    "reboot": "^",
+    "reboot-required": "^",
+    "^": "^",
 }
 
 

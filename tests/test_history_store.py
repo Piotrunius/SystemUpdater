@@ -361,6 +361,74 @@ class HistoryStoreTests(unittest.TestCase):
             args = parse_args()
             self.assertFalse(args.no_history)
 
+    def test_classify_run_status_returns_reboot_when_reboot_required(self):
+        run = {
+            "id": "20261014T063116Z-e9ec6afa",
+            "status": "ok",
+            "update_count": 1,
+            "reboot_required": True,
+            "modules": [
+                {
+                    "name": "System",
+                    "key": "system",
+                    "status": "ok",
+                    "reboot_required": True,
+                    "details": ["kernel-core: 7.2.9 -> 7.2.10"],
+                }
+            ],
+        }
+        self.assertEqual(classify_run_status(run, []), "reboot")
+
+    def test_print_history_displays_reboot_status(self):
+        run = {
+            "id": "20261014T063116Z-e9ec6afa",
+            "started_at": "2026-10-14T06:31:16+00:00",
+            "duration": 193.6,
+            "status": "reboot",
+            "update_count": 4,
+            "reboot_required": True,
+            "modules": [],
+        }
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            print_history([run])
+        rendered = output.getvalue()
+        self.assertIn("reboot", rendered)
+        self.assertIn("20261014T063116Z-e9ec6afa", rendered)
+
+    def test_print_run_log_shows_reboot_marker_and_label(self):
+        run = {
+            "id": "20261014T063116Z-e9ec6afa",
+            "started_at": "2026-10-14T06:31:16+00:00",
+            "duration": 10.0,
+            "status": "reboot",
+            "modules": [
+                {
+                    "name": "System",
+                    "key": "system",
+                    "category": "System Core",
+                    "status": "ok",
+                    "reboot_required": True,
+                    "duration": 5.0,
+                    "details": ["kernel: 7.2.9 -> 7.2.10"],
+                    "commands": [
+                        {
+                            "command": ["sudo", "dnf", "upgrade"],
+                            "returncode": 0,
+                            "stdout": "Complete!\n",
+                        }
+                    ],
+                }
+            ],
+        }
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            print_run_log(run)
+        rendered = output.getvalue()
+        self.assertIn("[^]", rendered)
+        self.assertIn("reboot", rendered)
+        self.assertIn("[^] System · reboot", rendered)
+
 
 if __name__ == "__main__":
     unittest.main()

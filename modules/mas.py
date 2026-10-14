@@ -72,11 +72,8 @@ class MasModule(BaseModule):
         if not upgraded:
             if "everything is up to date" in (u_out or "").lower():
                 return StepResult("unchanged", "up to date")
-            # If mas upgrade succeeded and we had outdated items, format them
-            upgraded = [
-                f"{name} {old} -> {new}" if old and new else name
-                for name, (old, new) in outdated_map.items()
-            ]
+            # If mas upgrade succeeded and we had outdated items, use them
+            upgraded = list(outdated_map.keys())
 
         if not upgraded:
             return StepResult("unchanged", "up to date")
@@ -118,9 +115,5 @@ class MasModule(BaseModule):
             m = re.search(r"Upgrading\s+(.+)$", line_str, re.IGNORECASE)
             if m:
                 name = m.group(1).strip()
-                if name in outdated_map and outdated_map[name][0]:
-                    old_ver, new_ver = outdated_map[name]
-                    upgraded.append(f"{name} {old_ver} -> {new_ver}")
-                else:
-                    upgraded.append(name)
+                upgraded.append(name)
         return list(dict.fromkeys(upgraded))
