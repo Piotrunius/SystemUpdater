@@ -28,10 +28,11 @@ class SummaryFormattingTests(unittest.TestCase):
         )
 
         self.assertIn("── Warnings ", output)
-        self.assertIn("  [!] Example Module: warning", output)
-        self.assertIn("    - Update check unavailable", output)
-        self.assertIn("    - Mirror timed out", output)
-        self.assertIn("    - retry later", output)
+        self.assertIn("  [!] Component warnings:", output)
+        self.assertIn("    • Example Module: warning", output)
+        self.assertIn("      - Update check unavailable", output)
+        self.assertIn("      - Mirror timed out", output)
+        self.assertIn("      - retry later", output)
 
     def test_error_uses_failed_label_and_nested_details(self):
         output = render_summary(
@@ -44,10 +45,11 @@ class SummaryFormattingTests(unittest.TestCase):
         )
 
         self.assertIn("── Errors ", output)
-        self.assertIn("  [✗] Example Module: failed", output)
-        self.assertIn("    - one package updated", output)
-        self.assertIn("    - bad mirror", output)
-        self.assertNotIn("    - Update failed", output)
+        self.assertIn("  [✗] Failed components:", output)
+        self.assertIn("    • Example Module: failed", output)
+        self.assertIn("      - one package updated", output)
+        self.assertIn("      - bad mirror", output)
+        self.assertNotIn("      - Update failed", output)
 
     def test_no_updates_message_has_a_neutral_status_marker(self):
         output = render_summary(StepResult("warning", "warning"))
@@ -83,7 +85,7 @@ class SummaryFormattingTests(unittest.TestCase):
         rendered = raw_output.getvalue()
         self.assertIn("\033[1;36m── Warnings ", rendered)
         self.assertIn(
-            "\033[2m[\033[0m\033[1;33m!\033[0m\033[2m]\033[0m Example Module: warning",
+            "\033[2m[\033[0m\033[1;33m!\033[0m\033[2m]\033[0m Component warnings:",
             rendered,
         )
         warning_section = rendered.split("\033[0m", 1)[1].split("\033[36m", 1)[0]
@@ -100,7 +102,7 @@ class SummaryFormattingTests(unittest.TestCase):
         rendered = raw_output.getvalue()
         self.assertIn("\033[1;36m── Errors ", rendered)
         self.assertIn(
-            "\033[2m[\033[0m\033[1;31m✗\033[0m\033[2m]\033[0m Example Module: failed",
+            "\033[2m[\033[0m\033[1;31m✗\033[0m\033[2m]\033[0m Failed components:",
             rendered,
         )
 
@@ -316,7 +318,7 @@ class SummaryFormattingTests(unittest.TestCase):
         self.assertIn("• Device Firmware: 1 package updated", plain_normal)
         self.assertIn("── Reboot", plain_normal)
         self.assertIn("[^] Reboot required:", plain_normal)
-        self.assertIn("- UEFI System Firmware", plain_normal)
+        self.assertIn("• Device Firmware: UEFI System Firmware", plain_normal)
         self.assertNotIn("── Warnings", plain_normal)
 
         # Verbose mode: Reboot Required section is also displayed with [^]
@@ -329,8 +331,43 @@ class SummaryFormattingTests(unittest.TestCase):
         self.assertIn("• Device Firmware: 1 package updated", plain_verbose)
         self.assertIn("── Reboot", plain_verbose)
         self.assertIn("[^] Reboot required:", plain_verbose)
-        self.assertIn("- UEFI System Firmware", plain_verbose)
+        self.assertIn("• Device Firmware: UEFI System Firmware", plain_verbose)
         self.assertNotIn("── Warnings", plain_verbose)
+
+    def test_summary_reboot_compact_inline_formatting_for_many_packages(self):
+        system_packages = [
+            "kernel: 6.13.0 -> 6.13.2",
+            "kernel-core: 6.13.0 -> 6.13.2",
+            "kernel-modules: 6.13.0 -> 6.13.2",
+            "kernel-devel: 6.13.0 -> 6.13.2",
+            "kernel-headers: 6.13.0 -> 6.13.2",
+            "systemd: 256 -> 257",
+            "systemd-libs: 256 -> 257",
+            "systemd-udev: 256 -> 257",
+            "glibc: 2.40 -> 2.41",
+            "glibc-common: 2.40 -> 2.41",
+            "linux-firmware: 20260101 -> 20260201",
+            "mesa: 24.3 -> 24.4",
+            "nvidia-driver: 570 -> 575",
+        ]
+        res = StepResult(
+            "ok",
+            "13 packages upgraded",
+            details=system_packages,
+            reboot_required=True,
+        )
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            UI(is_interactive=False, verbose=False).print_summary(
+                [{"name": "System", "key": "system", "result": res}], 1.0
+            )
+        plain = re.sub(r"\x1b\[[0-9;]*m", "", output.getvalue())
+        self.assertIn("── Reboot", plain)
+        self.assertIn("[^] Reboot required:", plain)
+        self.assertIn(
+            "• System: kernel, kernel-core, kernel-modules, systemd, systemd-udev, (+7 more packages)",
+            plain,
+        )
 
     def test_live_output_shows_reboot_marker(self):
         ui = UI(is_interactive=False)

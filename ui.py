@@ -811,9 +811,8 @@ class UI:
             for item in reboot_items:
                 triggers = get_reboot_trigger_details(item)
                 if triggers:
-                    print(f"    • {item['name']}:")
-                    for trig in triggers:
-                        print(f"      - {trig}")
+                    inline_triggers = format_package_list_inline(triggers, limit=5)
+                    print(f"    • {item['name']}: {inline_triggers}")
                 else:
                     msg = item["result"].message
                     if msg and msg.lower() not in ("updated", "up to date"):
@@ -825,11 +824,18 @@ class UI:
         if warning_items:
             print()
             print_diagnostic_heading("Warnings")
+            marker = get_status_marker("!")
+            print(f"  {marker} Component warnings:")
             for item in warning_items:
                 res = item["result"]
                 if res.status == "skipped":
                     message = "skipped"
-                    details = ([res.message] if res.message else []) + list(res.details)
+                    msg_detail = (
+                        [res.message]
+                        if res.message and res.message.lower() != "skipped"
+                        else []
+                    )
+                    details = msg_detail + list(res.details)
                 elif res.status == "ok":
                     message = "warning"
                     details = []
@@ -844,13 +850,14 @@ class UI:
                     and res.message.lower() != "warning"
                 ):
                     details.insert(0, res.message)
-                marker = get_status_marker("!")
-                print(f"  {marker} {item['name']}: {message}")
-                print_details(details, indent="    ")
+                print(f"    • {item['name']}: {message}")
+                print_details(details, indent="      ")
 
         if error_items:
             print()
             print_diagnostic_heading("Errors")
+            marker = get_status_marker("✗")
+            print(f"  {marker} Failed components:")
             for item in error_items:
                 res = item["result"]
                 details = (
@@ -860,9 +867,8 @@ class UI:
                 )
                 if not details and res.message and res.message.lower() != "failed":
                     details.append(res.message)
-                marker = get_status_marker("✗")
-                print(f"  {marker} {item['name']}: failed")
-                print_details(details, indent="    ")
+                print(f"    • {item['name']}: failed")
+                print_details(details, indent="      ")
 
         if is_interrupted:
             print()
@@ -1086,20 +1092,34 @@ def package_importance_score(pkg_line: str) -> int:
     name = clean.split(":")[0].split("->")[0].split()[0].lower().strip()
     short_name = name.split("/")[-1].split("@")[0]
 
+    score = 50
     for kw in CORE_SYSTEM_KEYWORDS:
         if kw in name or kw in short_name:
-            return 100
-
-    for kw in DEV_TOOLS_KEYWORDS:
-        if kw in name or kw in short_name:
-            return 80
+            score = 100
+            break
+    else:
+        for kw in DEV_TOOLS_KEYWORDS:
+            if kw in name or kw in short_name:
+                score = 80
+                break
 
     if name.startswith(("lib", "@types/")) or name.endswith(
-        ("-devel", "-libs", "-common", "-static")
+        (
+            "-devel",
+            "-headers",
+            "-libs",
+            "-common",
+            "-static",
+            "-matched",
+            "-tools",
+            "-doc",
+            "-dbg",
+            "-debuginfo",
+        )
     ):
-        return 20
+        score = max(10, score - 20)
 
-    return 50
+    return score
 
 
 def format_package_list(
@@ -1127,8 +1147,37 @@ def format_package_list(
 
     displayed = sorted_items[:limit]
     remaining = total - limit
-    remainder_line = f"(+{remaining} more packages)"
+    pkg_word = "package" if remaining == 1 else "packages"
+    remainder_line = f"(+{remaining} more {pkg_word})"
     return displayed + [remainder_line]
+
+
+def format_package_list_inline(details: list[str], limit: int = 5) -> str:
+    cleaned = []
+    seen = set()
+    for item in details:
+        line = str(item).strip()
+        if not line or line.startswith(("... and ", "... ", "and ", "(+")):
+            continue
+        pkg_name = extract_package_name(line)
+        if pkg_name and pkg_name not in seen:
+            seen.add(pkg_name)
+            cleaned.append(pkg_name)
+
+    total = len(cleaned)
+    if total == 0:
+        return ""
+
+    sorted_items = sorted(cleaned, key=package_importance_score, reverse=True)
+
+    if total <= limit:
+        return ", ".join(sorted_items)
+
+    displayed = sorted_items[:limit]
+    remaining = total - limit
+    pkg_word = "package" if remaining == 1 else "packages"
+    remainder_line = f"(+{remaining} more {pkg_word})"
+    return ", ".join(displayed + [remainder_line])
 
 
 def get_reboot_trigger_details(item: dict[str, Any]) -> list[str]:
@@ -1140,17 +1189,22 @@ def get_reboot_trigger_details(item: dict[str, Any]) -> list[str]:
     # First check if specific packages matched the reboot trigger
     triggers = get_reboot_trigger_packages(res.details)
     if triggers:
-        return format_package_list(triggers, "", limit=10)
+        return triggers
 
     # For modules with details where items are relevant (e.g. firmware or macos update)
     mod_key = str(item.get("key") or getattr(item.get("module"), "key", "")).lower()
     if mod_key in ("firmware", "device_firmware", "macos_update", "system"):
-        valid = [
-            str(d).strip()
-            for d in res.details
-            if d and not str(d).strip().startswith(("... and ", "... ", "and ", "(+"))
-        ]
+        valid = []
+        seen = set()
+        for d in res.details:
+            s = str(d).strip()
+            if not s or s.startswith(("... and ", "... ", "and ", "(+")):
+                continue
+            name = extract_package_name(s)
+            if name and name not in seen:
+                seen.add(name)
+                valid.append(name)
         if valid:
-            return format_package_list(valid, "", limit=10)
+            return valid
 
     return []
