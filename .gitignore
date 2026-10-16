@@ -34,3 +34,6 @@ htmlcov/
 
 # Ai agents interaction data
 .agents/
+
+# Local quality runner
+check.sh
