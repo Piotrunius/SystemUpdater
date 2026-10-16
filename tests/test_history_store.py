@@ -429,7 +429,7 @@ class HistoryStoreTests(unittest.TestCase):
         self.assertIn("reboot", rendered)
         self.assertIn("[^] System · reboot", rendered)
 
-    def test_classify_run_status_priority_error_over_all(self):
+    def test_classify_run_status_priority_interrupted_over_all(self):
         run = {
             "id": "20261016T040000Z-00000001",
             "status": "interrupted",
@@ -445,12 +445,30 @@ class HistoryStoreTests(unittest.TestCase):
                 }
             ],
         }
-        self.assertEqual(classify_run_status(run, []), "error")
+        self.assertEqual(classify_run_status(run, []), "interrupted")
 
-    def test_classify_run_status_priority_reboot_over_warning_and_interrupted(self):
+    def test_classify_run_status_priority_error_over_reboot_and_warning(self):
         run = {
             "id": "20261016T040000Z-00000002",
-            "status": "interrupted",
+            "status": "error",
+            "reboot_required": True,
+            "update_count": 2,
+            "modules": [
+                {
+                    "name": "System",
+                    "key": "system",
+                    "status": "error",
+                    "reboot_required": True,
+                    "warnings": ["Warning text"],
+                }
+            ],
+        }
+        self.assertEqual(classify_run_status(run, []), "error")
+
+    def test_classify_run_status_priority_reboot_over_warning_and_updated(self):
+        run = {
+            "id": "20261016T040000Z-00000003",
+            "status": "ok",
             "reboot_required": True,
             "update_count": 2,
             "modules": [
@@ -465,10 +483,10 @@ class HistoryStoreTests(unittest.TestCase):
         }
         self.assertEqual(classify_run_status(run, []), "reboot")
 
-    def test_classify_run_status_priority_warning_over_interrupted(self):
+    def test_classify_run_status_priority_warning_over_updated(self):
         run = {
-            "id": "20261016T040000Z-00000003",
-            "status": "interrupted",
+            "id": "20261016T040000Z-00000004",
+            "status": "ok",
             "reboot_required": False,
             "update_count": 1,
             "modules": [
@@ -482,21 +500,22 @@ class HistoryStoreTests(unittest.TestCase):
         }
         self.assertEqual(classify_run_status(run, []), "warning")
 
-    def test_classify_run_status_priority_interrupted_over_updated(self):
+    def test_classify_run_status_priority_updated_over_uptodate(self):
         run = {
-            "id": "20261016T040000Z-00000004",
-            "status": "interrupted",
+            "id": "20261016T040000Z-00000005",
+            "status": "ok",
             "reboot_required": False,
             "update_count": 3,
             "modules": [
                 {
                     "name": "Flatpak",
                     "key": "flatpak",
-                    "status": "interrupted",
+                    "status": "ok",
+                    "details": ["app.foo.Bar"],
                 }
             ],
         }
-        self.assertEqual(classify_run_status(run, []), "interrupted")
+        self.assertEqual(classify_run_status(run, []), "updated")
 
 
 if __name__ == "__main__":

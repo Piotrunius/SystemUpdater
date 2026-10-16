@@ -104,6 +104,10 @@ def classify_run_status(
     run: dict[str, Any], previous_runs: list[dict[str, Any]]
 ) -> str:
     modules = run.get("modules") or []
+    if run.get("status") in ("interrupted", "cancelled") or any(
+        module.get("status") in ("interrupted", "cancelled") for module in modules
+    ):
+        return "interrupted"
     if run.get("status") == "error" or any(
         module.get("status") == "error" for module in modules
     ):
@@ -125,10 +129,6 @@ def classify_run_status(
         return "warning"
     if run.get("status") == "warning" and not modules:
         return "warning"
-    if run.get("status") in ("interrupted", "cancelled") or any(
-        module.get("status") in ("interrupted", "cancelled") for module in modules
-    ):
-        return "interrupted"
     if int(run.get("update_count", 0) or 0) > 0:
         return "updated"
     return "up-to-date"
