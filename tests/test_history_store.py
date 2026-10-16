@@ -213,6 +213,31 @@ class HistoryStoreTests(unittest.TestCase):
         self.assertNotIn("Reason:", rendered)
         self.assertNotIn("Details:", rendered)
 
+    def test_print_run_log_suppresses_redundant_up_to_date_message_inline(self):
+        run = {
+            "id": "20261016T050008Z-ca081dab",
+            "duration": 0.5,
+            "status": "up-to-date",
+            "modules": [
+                {
+                    "name": "SystemUpdater",
+                    "key": "self_update",
+                    "category": "Containers & Packages",
+                    "status": "unchanged",
+                    "message": "up to date",
+                    "commands": [],
+                }
+            ],
+        }
+        output = io.StringIO()
+
+        with contextlib.redirect_stdout(output):
+            print_run_log(run)
+
+        rendered = output.getvalue()
+        self.assertIn("SystemUpdater · up-to-date", rendered)
+        self.assertNotIn("SystemUpdater · up-to-date — up to date", rendered)
+
     def test_classified_log_status_uses_same_new_warning_rule(self):
         run = {
             "status": "warning",

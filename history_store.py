@@ -483,7 +483,19 @@ def print_run_log(run: dict[str, Any]) -> None:
                 )
             reason = "; ".join(reason_parts)
         elif not has_command_output:
-            reason = message
+            clean_msg = " ".join(message.casefold().replace("-", " ").split())
+            clean_label = " ".join(module_label.casefold().replace("-", " ").split())
+            if clean_msg and clean_msg not in (
+                clean_label,
+                "up to date",
+                "unchanged",
+                "ok",
+                "updated",
+                "skipped",
+            ):
+                reason = message
+            else:
+                reason = ""
         else:
             reason = ""
         module_heading = f"{_status_marker(module_status)} {c_bold}{module.get('name', 'Module')}{c_reset} {c_dim}·{c_reset} {module_label}"
