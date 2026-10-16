@@ -92,11 +92,9 @@ class RustupModule(BaseModule):
         if "unchanged" in out and "update available" not in out:
             return StepResult("unchanged")
 
-        matches = re.findall(
-            r"([\w\.\-]+)\s+updated\s+-\s+rustc\s+([^\s]+).*?->\s+rustc\s+([^\s]+)", out
-        )
+        matches = re.findall(r"([\w\.\-]+)\s+updated\s+-", out)
         if matches:
-            details = [tc for tc, _, _ in matches]
+            details = matches
             count = len(details)
             return StepResult(
                 "ok",
@@ -104,7 +102,7 @@ class RustupModule(BaseModule):
                 details=details,
             )
 
-        m_self = re.search(r"rustup updated.*?([0-9\.]+)\s+to\s+([0-9\.]+)", out)
+        m_self = re.search(r"\brustup updated\b", out)
         if m_self:
             return StepResult(
                 "ok",
@@ -480,11 +478,11 @@ class GhExtensionsModule(BaseModule):
             return StepResult("unchanged")
 
         matches = re.findall(
-            r"[Uu]pgraded\s+([\w\.\-\/]+)(?:\s+to\s+|\s+->\s+|\s+\([^)]*->\s*)([v\w\.\-]+)",
+            r"[Uu]pgraded\s+(?:extension\s+)?([\w\.\-\/]+)",
             out,
         )
         if matches:
-            details = [ext for ext, _ in matches]
+            details = matches
             count = len(details)
             return StepResult(
                 "ok",

@@ -89,20 +89,16 @@ class MasModule(BaseModule):
         outdated: dict[str, tuple[str, str]] = {}
         for line in output.splitlines():
             line_str = line.strip()
-            # Format: 497799835 Xcode (15.2 -> 15.3)
-            m = re.match(r"^\s*\d+\s+(.+?)\s+\((.+?)\s*->\s*(.+?)\)\s*$", line_str)
+            # Format: 497799835 Xcode (15.2 -> 15.3) or 497799835 Xcode (15.3)
+            m = re.match(r"^\s*\d+\s+(.+?)(?:\s+\((.+?)\))?\s*$", line_str)
             if m:
                 app_name = m.group(1).strip()
-                old_ver = m.group(2).strip()
-                new_ver = m.group(3).strip()
-                outdated[app_name] = (old_ver, new_ver)
-                continue
-            # Format without transition: 497799835 Xcode (15.3)
-            m_single = re.match(r"^\s*\d+\s+(.+?)\s+\((.+?)\)\s*$", line_str)
-            if m_single:
-                app_name = m_single.group(1).strip()
-                ver = m_single.group(2).strip()
-                outdated[app_name] = ("", ver)
+                ver_info = m.group(2) or ""
+                if "->" in ver_info:
+                    parts = [p.strip() for p in ver_info.split("->", 1)]
+                    outdated[app_name] = (parts[0], parts[1])
+                else:
+                    outdated[app_name] = ("", ver_info.strip())
         return outdated
 
     def _parse_upgraded(

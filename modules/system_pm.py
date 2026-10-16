@@ -308,8 +308,8 @@ class ApkModule(BaseModule):
 
         upgraded = []
         for line in out.splitlines():
-            # Matches: "(1/5) Upgrading foo (1.0 -> 2.0)"
-            m = re.search(r"Upgrading\s+([\w\.\-_]+)\s+\([^)]*->\s*([^)]+)\)", line)
+            # Matches: "(1/5) Upgrading foo (1.0 -> 2.0)" or "Upgrading foo"
+            m = re.search(r"Upgrading\s+([\w\.\-_]+)(?:\s+\([^)]*\))?", line)
             if m:
                 upgraded.append(m.group(1))
 
