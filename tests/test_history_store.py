@@ -429,6 +429,75 @@ class HistoryStoreTests(unittest.TestCase):
         self.assertIn("reboot", rendered)
         self.assertIn("[^] System · reboot", rendered)
 
+    def test_classify_run_status_priority_error_over_all(self):
+        run = {
+            "id": "20261016T040000Z-00000001",
+            "status": "interrupted",
+            "reboot_required": True,
+            "update_count": 2,
+            "modules": [
+                {
+                    "name": "System",
+                    "key": "system",
+                    "status": "error",
+                    "reboot_required": True,
+                    "warnings": ["Warning text"],
+                }
+            ],
+        }
+        self.assertEqual(classify_run_status(run, []), "error")
+
+    def test_classify_run_status_priority_reboot_over_warning_and_interrupted(self):
+        run = {
+            "id": "20261016T040000Z-00000002",
+            "status": "interrupted",
+            "reboot_required": True,
+            "update_count": 2,
+            "modules": [
+                {
+                    "name": "System",
+                    "key": "system",
+                    "status": "ok",
+                    "reboot_required": True,
+                    "warnings": ["Warning text"],
+                }
+            ],
+        }
+        self.assertEqual(classify_run_status(run, []), "reboot")
+
+    def test_classify_run_status_priority_warning_over_interrupted(self):
+        run = {
+            "id": "20261016T040000Z-00000003",
+            "status": "interrupted",
+            "reboot_required": False,
+            "update_count": 1,
+            "modules": [
+                {
+                    "name": "Homebrew",
+                    "key": "brew",
+                    "status": "warning",
+                    "warnings": ["Mirror connection timed out"],
+                }
+            ],
+        }
+        self.assertEqual(classify_run_status(run, []), "warning")
+
+    def test_classify_run_status_priority_interrupted_over_updated(self):
+        run = {
+            "id": "20261016T040000Z-00000004",
+            "status": "interrupted",
+            "reboot_required": False,
+            "update_count": 3,
+            "modules": [
+                {
+                    "name": "Flatpak",
+                    "key": "flatpak",
+                    "status": "interrupted",
+                }
+            ],
+        }
+        self.assertEqual(classify_run_status(run, []), "interrupted")
+
 
 if __name__ == "__main__":
     unittest.main()
