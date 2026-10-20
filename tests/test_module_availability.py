@@ -379,7 +379,10 @@ class ModuleAvailabilityTests(unittest.TestCase):
 
         ctx = FakeContext(installed=False)
 
-        with patch("modules.system_pm.get_os_release", return_value={"ID": "fedora"}):
+        with (
+            patch("modules.system_pm.get_os_release", return_value={"ID": "fedora"}),
+            patch("modules.system_pm.os.path.exists", return_value=False),
+        ):
             self.assertEqual(AptModule().availability_status(ctx), "[Unavailable]")
             self.assertEqual(PacmanModule().availability_status(ctx), "[Unavailable]")
             self.assertEqual(ZypperModule().availability_status(ctx), "[Unavailable]")
