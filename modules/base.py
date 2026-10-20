@@ -9,6 +9,7 @@ import os
 import platform
 import shlex
 import shutil
+import signal
 import subprocess
 import threading
 import time
@@ -22,6 +23,33 @@ if TYPE_CHECKING:
 
 from colors import Colors
 from ui import detect_warning
+
+
+def _stop_process_tree(proc: subprocess.Popen) -> None:
+    """Stop a command and its descendants, then reap the direct child."""
+    if os.name == "posix":
+        try:
+            os.killpg(proc.pid, signal.SIGTERM)
+        except OSError:
+            with contextlib.suppress(OSError):
+                proc.terminate()
+        with contextlib.suppress(subprocess.TimeoutExpired):
+            proc.wait(timeout=1.0)
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except OSError:
+            with contextlib.suppress(OSError):
+                proc.kill()
+    else:
+        with contextlib.suppress(OSError):
+            proc.terminate()
+        try:
+            proc.wait(timeout=1.0)
+        except subprocess.TimeoutExpired:
+            with contextlib.suppress(OSError):
+                proc.kill()
+    with contextlib.suppress(OSError, subprocess.TimeoutExpired):
+        proc.wait(timeout=1.0)
 
 
 def check_github_api(timeout: float = 3.0) -> StepResult | None:
@@ -192,6 +220,10 @@ class UpdateContext:
                         errors="replace",
                         bufsize=1,
                         env=run_env,
+                        # Keep the controlling TTY so sudo can use the
+                        # timestamp established by init_sudo(), while still
+                        # giving each command a process group for cleanup.
+                        process_group=0 if os.name == "posix" else None,
                     )
                     out_chunks = []
                     err_chunks = []
@@ -272,8 +304,7 @@ class UpdateContext:
                     try:
                         proc.wait(timeout=timeout)
                     except subprocess.TimeoutExpired:
-                        proc.kill()
-                        proc.wait()
+                        _stop_process_tree(proc)
                         t_out.join(timeout=0.5)
                         t_err.join(timeout=0.5)
                         last_code = 124
@@ -293,12 +324,7 @@ class UpdateContext:
                         )
                         return last_code, last_out, last_err
                     except KeyboardInterrupt:
-                        try:
-                            proc.terminate()
-                            proc.wait(timeout=1.0)
-                        except (OSError, subprocess.TimeoutExpired):
-                            with contextlib.suppress(OSError):
-                                proc.kill()
+                        _stop_process_tree(proc)
                         t_out.join(timeout=0.5)
                         t_err.join(timeout=0.5)
                         last_code = 130
@@ -382,6 +408,7 @@ class UpdateContext:
                             errors="replace",
                             bufsize=1,
                             env=run_env,
+                            process_group=0 if os.name == "posix" else None,
                         )
                         out_chunks = []
                         err_chunks = []
@@ -395,7 +422,7 @@ class UpdateContext:
                                     accumulator.append(stored_line)
                                     self.last_activity_time = time.monotonic()
                             except OSError:
-                                pass
+                                return
                             finally:
                                 pipe.close()
 
@@ -415,8 +442,7 @@ class UpdateContext:
                         try:
                             proc.wait(timeout=timeout)
                         except subprocess.TimeoutExpired:
-                            proc.kill()
-                            proc.wait()
+                            _stop_process_tree(proc)
                             t_out.join(timeout=0.5)
                             t_err.join(timeout=0.5)
                             last_code = 124
@@ -435,12 +461,7 @@ class UpdateContext:
                             )
                             return last_code, last_out, last_err
                         except KeyboardInterrupt:
-                            try:
-                                proc.terminate()
-                                proc.wait(timeout=1.0)
-                            except (OSError, subprocess.TimeoutExpired):
-                                with contextlib.suppress(OSError):
-                                    proc.kill()
+                            _stop_process_tree(proc)
                             t_out.join(timeout=0.5)
                             t_err.join(timeout=0.5)
                             last_code = 130

@@ -47,16 +47,28 @@ class GearLeverModule(BaseModule):
             return StepResult("warning", "GitHub API rate limit reached")
 
         if code != 0:
-            return StepResult("unchanged")
+            return StepResult(
+                "error",
+                "Gear Lever update check failed",
+                error_output=err or out,
+            )
 
-        updates = []
         try:
             json_start = out.find("{")
-            if json_start != -1:
-                data = json.loads(out[json_start:])
-                updates = data.get("updates", [])
-        except (json.JSONDecodeError, ValueError, TypeError):
-            pass
+            if json_start == -1:
+                raise ValueError("JSON update data was not found")
+            data, _ = json.JSONDecoder().raw_decode(out[json_start:])
+            if not isinstance(data, dict) or not isinstance(data.get("updates"), list):
+                raise TypeError("The update list has an unexpected format")
+            updates = data["updates"]
+            if any(not isinstance(update, dict) for update in updates):
+                raise TypeError("An update entry has an unexpected format")
+        except (json.JSONDecodeError, ValueError, TypeError) as error:
+            return StepResult(
+                "error",
+                "Gear Lever returned invalid update data",
+                error_output=str(error),
+            )
 
         if not updates:
             return StepResult("unchanged")
@@ -87,7 +99,7 @@ class GearLeverModule(BaseModule):
                 error_output=up_err or up_out,
             )
 
-        details = [u.get("name", "appimage") for u in updates if isinstance(u, dict)]
+        details = [str(update.get("name") or "appimage") for update in updates]
         count = len(details)
         return StepResult(
             "ok",

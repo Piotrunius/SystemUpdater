@@ -127,7 +127,7 @@ Pass `-v` or `--verbose` to inspect real-time command output, repository syncs, 
 
 ## Configuration
 
-The default configuration file is `~/.config/sysupdate/config.toml`. `$XDG_CONFIG_HOME` is respected. The installer creates it from [`config.example.toml`](config.example.toml) only if it does not already exist.
+The default configuration file is `${XDG_CONFIG_HOME:-$HOME/.config}/sysupdate/config.toml`. If `XDG_CONFIG_HOME` is unset, empty, or relative, SystemUpdater uses `$HOME/.config`. The installer creates the file from [`config.example.toml`](config.example.toml) only if it does not already exist.
 
 ```toml
 [misc]

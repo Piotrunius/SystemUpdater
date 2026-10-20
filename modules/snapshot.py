@@ -6,6 +6,7 @@ Directly replaces Topgrade/snapshot.sh.
 import os
 import time
 
+from config import xdg_directory
 from modules.base import BaseModule, UpdateContext
 from ui import StepResult
 
@@ -42,7 +43,7 @@ class SnapshotModule(BaseModule):
         )
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        cache_dir = os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache"))
+        cache_dir = xdg_directory("XDG_CACHE_HOME", "~/.cache")
         stamp_file = os.path.join(cache_dir, "topgrade_snapper_stamp")
         os.makedirs(cache_dir, exist_ok=True)
 

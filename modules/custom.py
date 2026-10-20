@@ -1,6 +1,6 @@
 """
 User-defined custom commands module.
-Executes custom commands defined in ~/.config/sysupdate/config.toml ([pre_commands], [commands], [post_commands]).
+Executes custom commands defined in the SystemUpdater config file ([pre_commands], [commands], [post_commands]).
 """
 
 from modules.base import BaseModule, UpdateContext

@@ -30,7 +30,7 @@ class VsCodeModule(BaseModule):
                 if subdirs:
                     return "active"
             except OSError:
-                pass
+                subdirs = []
         code, out, _ = ctx.run_cmd(
             ["code", "--list-extensions"], timeout=5, read_only=True
         )
@@ -82,7 +82,7 @@ class CursorModule(BaseModule):
                 if subdirs:
                     return "active"
             except OSError:
-                pass
+                subdirs = []
         code, out, _ = ctx.run_cmd(
             ["cursor", "--list-extensions"], timeout=5, read_only=True
         )
@@ -134,7 +134,7 @@ class VscodiumModule(BaseModule):
                 if subdirs:
                     return "active"
             except OSError:
-                pass
+                subdirs = []
         code, out, _ = ctx.run_cmd(
             ["codium", "--list-extensions"], timeout=5, read_only=True
         )

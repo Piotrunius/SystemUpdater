@@ -13,8 +13,13 @@ from pathlib import Path
 from typing import Any
 
 from colors import Colors, get_status_marker
+from config import xdg_directory
 
 RUN_ID_PATTERN = re.compile(r"^\d{8}T\d{6}Z-[0-9a-f]{8}$")
+ANSI_ESCAPE_PATTERN = re.compile(
+    r"\x1B(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1B\\)|[@-Z\\-_])"
+)
+TERMINAL_CONTROL_PATTERN = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
 TOKEN_PATTERN = re.compile(
     r"(?i)\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,})\b"
 )
@@ -36,12 +41,25 @@ def _modified_time(path: Path) -> float:
 
 
 def redact_text(value: str) -> str:
-    """Mask common credentials while retaining useful surrounding log context."""
-    redacted = URL_CREDENTIAL_PATTERN.sub(r"\1[REDACTED]@", value)
+    """Remove terminal control sequences and mask common credentials."""
+    safe_value = ANSI_ESCAPE_PATTERN.sub("", value)
+    safe_value = TERMINAL_CONTROL_PATTERN.sub("", safe_value)
+    redacted = URL_CREDENTIAL_PATTERN.sub(r"\1[REDACTED]@", safe_value)
     redacted = BEARER_PATTERN.sub("Bearer [REDACTED]", redacted)
     redacted = TOKEN_PATTERN.sub("[REDACTED_TOKEN]", redacted)
     redacted = ASSIGNMENT_SECRET_PATTERN.sub(r"\1\2[REDACTED]", redacted)
     return FLAG_SECRET_PATTERN.sub(r"\1[REDACTED]", redacted)
+
+
+def _sanitize_history_data(value: Any) -> Any:
+    """Sanitize older or externally modified history before printing it."""
+    if isinstance(value, str):
+        return redact_text(value)
+    if isinstance(value, list):
+        return [_sanitize_history_data(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _sanitize_history_data(item) for key, item in value.items()}
+    return value
 
 
 def _warning_signatures(module: dict[str, Any]) -> set[str]:
@@ -135,7 +153,7 @@ def classify_run_status(
 
 
 def _state_directory() -> Path:
-    root = os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state")
+    root = xdg_directory("XDG_STATE_HOME", "~/.local/state")
     return Path(root) / "sysupdate" / "history"
 
 
@@ -255,6 +273,7 @@ def print_history(runs: list[dict[str, Any]], limit: int = 10) -> None:
     if not runs:
         print("No saved update runs.")
         return
+    runs = [_sanitize_history_data(run) for run in runs]
 
     use_color = sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
     c_dim = Colors.DIM if use_color else ""
@@ -396,6 +415,7 @@ def _module_category(module: dict[str, Any]) -> str:
 
 
 def print_run_log(run: dict[str, Any]) -> None:
+    run = _sanitize_history_data(run)
     modules = run.get("modules", [])
     width = 80
     use_color = sys.stdout.isatty() and os.environ.get("NO_COLOR") is None

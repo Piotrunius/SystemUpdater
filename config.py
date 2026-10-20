@@ -1,13 +1,21 @@
 """
 Configuration loader for SystemUpdater.
-Supports ~/.config/sysupdate/config.toml using standard library tomllib.
+Supports the XDG config directory using the standard library tomllib.
 Provides parity with Topgrade configuration (custom commands, git repos, disable list).
 """
 
 import os
 import tomllib
 
-DEFAULT_CONFIG_PATH = os.path.expanduser("~/.config/sysupdate/config.toml")
+
+def xdg_directory(variable: str, fallback: str) -> str:
+    """Return an absolute XDG directory or its expanded default."""
+    path = os.environ.get(variable, "")
+    return path if path and os.path.isabs(path) else os.path.expanduser(fallback)
+
+
+CONFIG_HOME = xdg_directory("XDG_CONFIG_HOME", "~/.config")
+DEFAULT_CONFIG_PATH = os.path.join(CONFIG_HOME, "sysupdate", "config.toml")
 
 
 class Config:

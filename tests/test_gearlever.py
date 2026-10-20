@@ -243,6 +243,7 @@ Updating cloudflare…
                     "Digest: sha256:6d895cfb3a7cc8b939eda4f7f3cba5c45b569cd9532dad6e8da32cba76285654\nStatus: Downloaded newer image",
                     "",
                 ),
+                (0, "", ""),
             ]
         )
         result = DockerModule().run(context)

@@ -55,7 +55,7 @@ class RustupModule(BaseModule):
                 if toolchains:
                     return "active"
             except OSError:
-                pass
+                toolchains = []
         code, out, _ = ctx.run_cmd(
             ["rustup", "toolchain", "list"], timeout=5, read_only=True
         )
@@ -370,7 +370,7 @@ class MicroModule(BaseModule):
                 if custom:
                     return "active"
             except OSError:
-                pass
+                custom = []
         code, out, _ = ctx.run_cmd(
             ["micro", "-plugin", "list"], timeout=5, read_only=True
         )
@@ -446,7 +446,7 @@ class GhExtensionsModule(BaseModule):
                 if entries:
                     return "active"
             except OSError:
-                pass
+                entries = []
         code, out, _ = ctx.run_cmd(
             ["gh", "extension", "list"], timeout=5, read_only=True
         )
@@ -504,7 +504,7 @@ class SkillsModule(BaseModule):
     @classmethod
     def _find_lock_file(cls) -> str | None:
         xdg_state = os.environ.get("XDG_STATE_HOME")
-        if xdg_state:
+        if xdg_state and os.path.isabs(xdg_state):
             candidate = os.path.join(xdg_state, "skills", ".skill-lock.json")
             if os.path.isfile(candidate):
                 return candidate
@@ -544,7 +544,7 @@ class SkillsModule(BaseModule):
                     if has_updatable:
                         return "active"
         except (OSError, json.JSONDecodeError, ValueError, TypeError):
-            pass
+            return "unavailable"
         return "no-targets"
 
     def is_available(self, ctx: UpdateContext) -> bool:
@@ -564,6 +564,7 @@ class SkillsModule(BaseModule):
         xdg_state = os.environ.get("XDG_STATE_HOME")
         if (
             xdg_state
+            and os.path.isabs(xdg_state)
             and lock_file
             and not os.path.isfile(
                 os.path.join(xdg_state, "skills", ".skill-lock.json")
@@ -637,7 +638,7 @@ class AntigravityModule(BaseModule):
                 if subdirs:
                     return "active"
             except OSError:
-                pass
+                subdirs = []
         code, out, _ = ctx.run_cmd(
             ["antigravity", "--list-extensions"], timeout=5, read_only=True
         )
@@ -715,7 +716,7 @@ class YarnModule(BaseModule):
             os.path.expanduser("~/.yarn/global/package.json"),
         ]
         xdg_config = os.environ.get("XDG_CONFIG_HOME")
-        if xdg_config:
+        if xdg_config and os.path.isabs(xdg_config):
             global_files.insert(
                 0, os.path.join(xdg_config, "yarn", "global", "package.json")
             )
@@ -727,7 +728,7 @@ class YarnModule(BaseModule):
                     if isinstance(data, dict) and bool(data.get("dependencies")):
                         return "active"
                 except (OSError, json.JSONDecodeError, ValueError, TypeError):
-                    pass
+                    continue
         code, out, _ = ctx.run_cmd(
             ["yarn", "global", "list", "--depth=0"], timeout=10, read_only=True
         )
@@ -777,13 +778,21 @@ class UvModule(BaseModule):
         return ctx.which("uv") is not None
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        ctx.run_cmd(["uv", "self", "update"], timeout=30)
+        self_code, self_out, self_err = ctx.run_cmd(
+            ["uv", "self", "update"], timeout=30
+        )
         code, out, err = ctx.run_cmd(["uv", "tool", "upgrade", "--all"], timeout=180)
         if code != 0:
             return StepResult(
                 "error", "uv tool upgrade failed", error_output=err or out
             )
 
+        if self_code != 0:
+            return StepResult(
+                "error",
+                "uv tools were checked, but uv itself could not be updated",
+                error_output=self_err or self_out,
+            )
         if "Nothing to upgrade" in out or not out.strip():
             return StepResult("unchanged")
 
@@ -951,13 +960,21 @@ class ComposerModule(BaseModule):
         return ctx.which("composer") is not None
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        ctx.run_cmd(["composer", "self-update"], timeout=60)
+        self_code, self_out, self_err = ctx.run_cmd(
+            ["composer", "self-update"], timeout=60
+        )
         code, out, err = ctx.run_cmd(["composer", "global", "update"], timeout=180)
         if code != 0:
             return StepResult(
                 "error", "composer global update failed", error_output=err or out
             )
 
+        if self_code != 0:
+            return StepResult(
+                "error",
+                "Composer global packages were checked, but Composer itself could not be updated",
+                error_output=self_err or self_out,
+            )
         if "Nothing to modify in lock file" in out or "Nothing to install" in out:
             return StepResult("unchanged")
 
@@ -1025,11 +1042,19 @@ class MiseModule(BaseModule):
         return ctx.which("mise") is not None
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        ctx.run_cmd(["mise", "self-update", "-y"], timeout=60)
+        self_code, self_out, self_err = ctx.run_cmd(
+            ["mise", "self-update", "-y"], timeout=60
+        )
         code, out, err = ctx.run_cmd(["mise", "upgrade", "-y"], timeout=300)
         if code != 0:
             return StepResult("error", "mise upgrade failed", error_output=err or out)
 
+        if self_code != 0:
+            return StepResult(
+                "error",
+                "Toolchains were checked, but mise itself could not be updated",
+                error_output=self_err or self_out,
+            )
         return StepResult("ok", "updated")
 
 
@@ -1051,7 +1076,7 @@ class AsdfModule(BaseModule):
                 if entries:
                     return "active"
             except OSError:
-                pass
+                entries = []
         code, out, _ = ctx.run_cmd(
             ["asdf", "plugin", "list"], timeout=10, read_only=True
         )

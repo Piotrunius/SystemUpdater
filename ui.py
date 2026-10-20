@@ -20,12 +20,11 @@ _original_termios: list[Any] | None = None
 def _restore_terminal():
     global _original_termios
     if _original_termios is not None:
-        try:
-            if sys.stdin.isatty():
+        if sys.stdin.isatty():
+            with contextlib.suppress(termios.error, OSError):
                 termios.tcflush(sys.stdin, termios.TCIFLUSH)
+            with contextlib.suppress(termios.error, OSError):
                 termios.tcsetattr(sys.stdin, termios.TCSADRAIN, _original_termios)
-        except (termios.error, OSError):
-            pass
         _original_termios = None
 
 
@@ -40,7 +39,7 @@ def suppress_terminal_echo():
         yield
         return
 
-    try:
+    with contextlib.suppress(termios.error, OSError):
         old_attr = termios.tcgetattr(sys.stdin)
         _original_termios = old_attr
         new_attr = list(old_attr)
@@ -49,8 +48,6 @@ def suppress_terminal_echo():
         if hasattr(termios, "ECHOCTL"):
             new_attr[3] = new_attr[3] & ~termios.ECHOCTL
         termios.tcsetattr(sys.stdin, termios.TCSADRAIN, new_attr)
-    except (termios.error, OSError):
-        pass
 
     try:
         yield

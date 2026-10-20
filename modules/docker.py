@@ -78,6 +78,7 @@ class DockerModule(BaseModule):
             )
 
         if updated:
+            warnings = []
             if updated_images and not ctx.dry_run:
                 try:
                     ps_code, ps_out, _ = ctx.run_cmd(
@@ -89,7 +90,11 @@ class DockerModule(BaseModule):
                         ],
                         read_only=True,
                     )
-                    if ps_code == 0 and ps_out.strip():
+                    if ps_code != 0:
+                        warnings.append(
+                            "Updated Docker images, but could not check whether running Compose projects need recreation"
+                        )
+                    elif ps_out.strip():
                         compose_targets = set()
                         for line in ps_out.splitlines():
                             parts = line.strip().split("\t")
@@ -114,9 +119,29 @@ class DockerModule(BaseModule):
                                 if f_clean:
                                     up_cmd.extend(["-f", f_clean])
                             up_cmd.extend(["up", "-d"])
-                            ctx.run_cmd(up_cmd)
-                except (OSError, RuntimeError, KeyError, ValueError, StopIteration):
-                    pass
+                            up_code, _, _ = ctx.run_cmd(up_cmd)
+                            if up_code != 0:
+                                warnings.append(
+                                    f"Updated Docker images, but could not recreate Compose project {os.path.basename(wdir or cfg)}"
+                                )
+                except (
+                    OSError,
+                    RuntimeError,
+                    KeyError,
+                    ValueError,
+                    StopIteration,
+                ):
+                    warnings.append(
+                        "Updated Docker images, but Compose projects could not be checked or recreated"
+                    )
+
+            if warnings:
+                return StepResult(
+                    "error",
+                    "Docker images updated, but Compose projects could not be refreshed",
+                    details=updated,
+                    error_output="\n".join(warnings),
+                )
 
             return StepResult(
                 "ok",

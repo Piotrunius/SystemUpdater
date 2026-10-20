@@ -1,7 +1,7 @@
 """
 Registry of all update modules for SystemUpdater grouped cleanly by category.
 Modules automatically detect whether their underlying tools are installed on the system.
-Also loads user custom commands and git repositories from ~/.config/sysupdate/config.toml.
+Also loads user custom commands and git repositories from the XDG config directory.
 """
 
 from config import Config, get_config

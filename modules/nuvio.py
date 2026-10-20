@@ -15,11 +15,16 @@ import urllib.request
 import zipfile
 from typing import Any
 
+from config import xdg_directory
 from modules.base import BaseModule, UpdateContext, check_github_api
 from ui import StepResult
 
 REPO = "NuvioMedia/NuvioDesktop"
-TAG_FILE = os.path.expanduser("~/.config/nuvio/installed_release_tag")
+TAG_FILE = os.path.join(
+    xdg_directory("XDG_CONFIG_HOME", "~/.config"),
+    "nuvio",
+    "installed_release_tag",
+)
 TARGET_DIR = "/opt/nuvio/lib/app"
 CLASS_PATH = "com/nuvio/app/core/ui/AsyncImage_desktopKt.class"
 PATCH_SIGNATURE = b"\x57\x57\x00\x00\x00\x00\x00\x04\xb3"

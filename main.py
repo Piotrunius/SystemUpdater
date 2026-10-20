@@ -10,6 +10,7 @@ import json
 import os
 import platform
 import re
+import shlex
 
 # Ensure script directory is in sys.path
 import shutil
@@ -131,7 +132,7 @@ def latest_upstream_version():
         json.JSONDecodeError,
         UnicodeDecodeError,
     ):
-        pass
+        return latest_homebrew_version()
     return latest_homebrew_version()
 
 
@@ -274,13 +275,16 @@ def self_update():
     if not behind or behind == "0":
         return result("unchanged", "up to date")
     old_version = get_version()
-    merged = subprocess.run(
-        ["git", "merge", "--ff-only", "--quiet", update_ref],
-        cwd=SCRIPT_DIR,
-        check=False,
-        capture_output=True,
-        timeout=10,
-    )
+    try:
+        merged = subprocess.run(
+            ["git", "merge", "--ff-only", "--quiet", update_ref],
+            cwd=SCRIPT_DIR,
+            check=False,
+            capture_output=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return result("warning", "update skipped", ["The fast-forward update failed."])
     if merged.returncode != 0:
         return result(
             "warning",
@@ -297,7 +301,7 @@ def self_update():
 
 
 def edit_config(config_path: str):
-    expanded = os.path.expanduser(config_path)
+    expanded = os.path.abspath(os.path.expanduser(config_path))
     os.makedirs(os.path.dirname(expanded), exist_ok=True)
     if not os.path.exists(expanded):
         example_path = os.path.join(SCRIPT_DIR, "config.example.toml")
@@ -305,7 +309,7 @@ def edit_config(config_path: str):
             shutil.copy(example_path, expanded)
         else:
             with open(expanded, "w") as f:
-                f.write("# ~/.config/sysupdate/config.toml\n")
+                f.write("# SystemUpdater configuration\n")
 
     editor = os.environ.get("VISUAL") or os.environ.get("EDITOR")
     if not editor:
@@ -316,7 +320,22 @@ def edit_config(config_path: str):
     if not editor:
         editor = "nano"
 
-    subprocess.run([editor, expanded], check=False)
+    try:
+        editor_command = shlex.split(editor)
+    except ValueError as error:
+        print(f"Error: Invalid editor command: {error}", file=sys.stderr)
+        sys.exit(2)
+    if not editor_command:
+        print("Error: Editor command is empty.", file=sys.stderr)
+        sys.exit(2)
+
+    try:
+        result = subprocess.run([*editor_command, expanded], check=False)
+    except OSError as error:
+        print(f"Error: Could not start editor: {error}", file=sys.stderr)
+        sys.exit(1)
+    if result.returncode != 0:
+        sys.exit(result.returncode)
     sys.exit(0)
 
 
@@ -753,16 +772,31 @@ def main():
     if args.reboot and reboot_needed:
         print("Rebooting system as requested by --reboot...")
         sys.stdout.flush()
+        reboot_command = (
+            ["sudo", "shutdown", "-r", "now"]
+            if platform.system() == "Darwin"
+            else ["systemctl", "reboot"]
+        )
+        reboot_requested = False
         try:
-            if platform.system() == "Darwin":
-                subprocess.run(["sudo", "shutdown", "-r", "now"], check=False)
-            else:
-                subprocess.run(["systemctl", "reboot"], check=False)
+            reboot_requested = (
+                subprocess.run(reboot_command, check=False).returncode == 0
+            )
         except OSError:
+            reboot_requested = False
+        if not reboot_requested:
             try:
-                subprocess.run(["sudo", "reboot"], check=False)
+                reboot_requested = (
+                    subprocess.run(["sudo", "reboot"], check=False).returncode == 0
+                )
             except OSError:
-                pass
+                reboot_requested = False
+        if not reboot_requested:
+            print(
+                "Error: Could not request a reboot. Please restart the system manually.",
+                file=sys.stderr,
+            )
+            has_failures = True
 
     sys.exit(1 if has_failures else 0)
 

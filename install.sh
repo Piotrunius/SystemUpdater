@@ -4,7 +4,11 @@ set -euo pipefail
 # SystemUpdater Installer
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TARGET_DIR="${HOME}/.local/bin"
-CONFIG_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/sysupdate"
+CONFIG_HOME="${XDG_CONFIG_HOME:-${HOME}/.config}"
+if [[ "${CONFIG_HOME}" != /* ]]; then
+	CONFIG_HOME="${HOME}/.config"
+fi
+CONFIG_DIR="${CONFIG_HOME}/sysupdate"
 
 echo "Installing SystemUpdater..."
 
@@ -34,8 +38,14 @@ chmod +x "${SCRIPT_DIR}/main.py"
 
 # 3. Create ~/.local/bin symlink
 mkdir -p "${TARGET_DIR}"
-ln -sf "${SCRIPT_DIR}/main.py" "${TARGET_DIR}/sysupdate"
-chmod +x "${TARGET_DIR}/sysupdate"
+APP_LINK="${TARGET_DIR}/sysupdate"
+if [[ (-e "${APP_LINK}" || -L "${APP_LINK}") && ! "${APP_LINK}" -ef "${SCRIPT_DIR}/main.py" ]]; then
+	echo "Error: ${APP_LINK} already exists and does not point to this installation." >&2
+	echo "Move it aside before installing SystemUpdater here." >&2
+	exit 1
+fi
+ln -sf "${SCRIPT_DIR}/main.py" "${APP_LINK}"
+chmod +x "${APP_LINK}"
 
 # 4. Initialize config directory if not present
 mkdir -p "${CONFIG_DIR}"

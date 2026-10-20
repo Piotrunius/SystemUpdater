@@ -35,6 +35,13 @@ class BrewModule(BaseModule):
         return find_brew_bin(ctx) is not None
 
     def run(self, ctx: UpdateContext) -> StepResult:
+        if hasattr(os, "geteuid") and os.geteuid() == 0:
+            return StepResult(
+                "error",
+                "Homebrew cannot update while SystemUpdater is running as root",
+                error_output="Run SystemUpdater as the normal user to update Homebrew.",
+            )
+
         brew_bin = find_brew_bin(ctx) or "brew"
 
         # 1. brew update
