@@ -84,6 +84,27 @@ class NuvioAssetTests(unittest.TestCase):
             self.assertEqual(result.status, "warning")
             self.assertEqual(result.message, "GitHub API rate limit reached")
 
+    def test_nuvio_reapply_patch_returns_clean_updated_status(self):
+        from modules.base import UpdateContext
+
+        context = UpdateContext()
+        module = NuvioModule()
+
+        with (
+            patch.object(module, "_get_installed_tag", return_value="0.1.33-alpha"),
+            patch.object(module, "_get_github_token", return_value="token"),
+            patch.object(
+                module,
+                "_fetch_latest_release",
+                return_value={"tag_name": "0.1.33-alpha"},
+            ),
+            patch.object(module, "_find_target_jar", return_value="/fake/jar"),
+            patch.object(module, "_ensure_patched", return_value=True),
+        ):
+            result = module.run(context)
+            self.assertEqual(result.status, "ok")
+            self.assertEqual(result.message, "updated")
+
 
 class NuvioBytecodePatchTests(unittest.TestCase):
     def test_patch_bytecode_transforms_is_windows_check(self):

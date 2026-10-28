@@ -98,7 +98,7 @@ class NuvioModule(BaseModule):
             # Verify and ensure patch is applied on current jar
             patch_applied = self._ensure_patched(ctx)
             if patch_applied:
-                return StepResult("ok", f"Re-applied image patch on {installed_tag}")
+                return StepResult("ok", "updated")
             return StepResult("unchanged")
 
         # Update is available
