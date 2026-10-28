@@ -293,26 +293,20 @@ class NuvioModule(BaseModule):
             return False
 
     def _patch_bytecode(self, data: bytearray) -> bytearray:
-        pos = 0
-        found = False
-        while True:
-            idx = data.find(b"\xb1", pos)
-            if idx == -1:
-                break
-            if idx >= 26 and data[idx - 3] == 0xB3 and data[idx - 4] == 0x03:
-                clinit_start = idx - 26
-                data[clinit_start + 15 : clinit_start + 23] = bytes(
-                    [0x57, 0x57, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04]
-                )
-                found = True
-                break
-            pos = idx + 1
+        if PATCH_SIGNATURE in data:
+            return data
 
-        if not found and PATCH_SIGNATURE not in data:
+        pattern = re.compile(rb"\x04\xb8..\xa7\x00\x04\x03\xb3", re.DOTALL)
+        match = pattern.search(data)
+        if not match:
             raise ValueError(
                 "Could not locate AsyncImage_desktopKt.<clinit> bytecode pattern"
             )
 
+        start = match.start()
+        data[start : start + 8] = bytes(
+            [0x57, 0x57, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04]
+        )
         return data
 
     def _ensure_patched(self, ctx: UpdateContext, force: bool = False) -> bool:
