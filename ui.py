@@ -82,7 +82,7 @@ IGNORED_DIAGNOSTIC_SUBSTRINGS = (
 )
 
 REBOOT_TRIGGER_PATTERNS = re.compile(
-    r"(^|[\-_])(kernel|linux|systemd|glibc|libc6|musl|grub|shim|nvidia|microcode|ucode)([\-_]|$)",
+    r"(^|[\-_])(kernel|linux|systemd|glibc|libc6|musl|grub|shim|nvidia|microcode|ucode|firmware|dbus|kmod|akmod|dracut)([\-_]|$)",
     re.IGNORECASE,
 )
 
@@ -1031,11 +1031,12 @@ def extract_single_entity_version(details: list[str], message: str) -> str:
 
 
 CORE_SYSTEM_KEYWORDS = {
-    "linux",
     "kernel",
+    "linux",
     "systemd",
     "glibc",
-    "nobara",
+    "libc6",
+    "musl",
     "grub",
     "shim",
     "mesa",
@@ -1049,17 +1050,31 @@ CORE_SYSTEM_KEYWORDS = {
     "networkmanager",
     "firewalld",
     "systemupdater",
+    "sudo",
+    "openssh",
+    "ssh",
+    "dbus",
+    "polkit",
+    "pam",
+    "microcode",
+    "ucode",
+    "dracut",
+    "kmod",
+    "akmod",
+    "nobara",
 }
 
 DEV_TOOLS_KEYWORDS = {
     "python",
+    "python3",
     "node",
+    "nodejs",
     "rust",
     "rustc",
     "gcc",
     "llvm",
     "clang",
-    "go",
+    "golang",
     "ruby",
     "bun",
     "deno",
@@ -1067,52 +1082,124 @@ DEV_TOOLS_KEYWORDS = {
     "docker",
     "containerd",
     "podman",
+    "moby",
+    "runc",
     "antigravity",
-    "gh",
     "ripgrep",
     "tmux",
     "zsh",
     "bash",
-    "code",
+    "fish",
+    "curl",
+    "wget",
+    "wget2",
     "cursor",
     "neovim",
     "nvim",
     "helix",
+    "vim",
+    "fzf",
+    "bat",
+    "eza",
+    "jq",
+    "yq",
+    "socat",
+    "rsync",
+    "7zip",
     "brave",
     "firefox",
     "chrome",
 }
+
+EXACT_SHORT_KEYWORDS = {"go", "gh", "code", "tar"}
 
 
 def package_importance_score(pkg_line: str) -> int:
     clean = pkg_line.strip()
     name = clean.split(":")[0].split("->")[0].split()[0].lower().strip()
     short_name = name.split("/")[-1].split("@")[0]
+    tokens = set(re.split(r"[-_.]", short_name))
+
+    is_selinux = (
+        "selinux" in tokens
+        or short_name.endswith("-selinux")
+        or short_name.startswith("selinux-")
+    )
+    is_sub_firmware = short_name.endswith("-firmware") and short_name not in (
+        "linux-firmware",
+        "nvidia-gpu-firmware",
+        "amd-gpu-firmware",
+        "intel-gpu-firmware",
+    )
 
     score = 50
+    # Core system check
+    matched_core = False
     for kw in CORE_SYSTEM_KEYWORDS:
-        if kw in name or kw in short_name:
+        if kw == "linux" and is_selinux:
+            continue
+        if kw in tokens or (len(kw) >= 5 and (kw in short_name or kw in name)):
             score = 100
+            matched_core = True
             break
-    else:
-        for kw in DEV_TOOLS_KEYWORDS:
-            if kw in name or kw in short_name:
-                score = 80
-                break
 
-    if name.startswith(("lib", "@types/")) or name.endswith(
+    if not matched_core:
+        if short_name.endswith("-firmware") or "firmware" in tokens:
+            score = 75
+        else:
+            for kw in DEV_TOOLS_KEYWORDS:
+                if kw in tokens or (len(kw) >= 5 and (kw in short_name or kw in name)):
+                    score = 80
+                    break
+            else:
+                if any(kw in tokens for kw in EXACT_SHORT_KEYWORDS):
+                    score = 80
+
+    if is_selinux:
+        score = min(score, 60)
+    elif is_sub_firmware:
+        score = min(score, 70)
+
+    # Penalize subpackages / secondary components
+    if short_name.endswith(
         (
-            "-devel",
-            "-headers",
-            "-libs",
-            "-common",
-            "-static",
-            "-matched",
-            "-tools",
-            "-doc",
-            "-dbg",
-            "-debuginfo",
+            "-server",
+            "-client",
+            "-clients",
+            "-askpass",
+            "-whence",
+            "-plugin",
+            "-plugins",
         )
+    ):
+        score = max(10, score - 5)
+
+    if (
+        short_name.startswith(("lib", "@types/"))
+        or short_name.endswith(
+            (
+                "-devel",
+                "-headers",
+                "-libs",
+                "-common",
+                "-static",
+                "-matched",
+                "-tools",
+                "-doc",
+                "-dbg",
+                "-debuginfo",
+                "-filesystem",
+                "-macros",
+                "-qt",
+                "-qt5",
+                "-qt6",
+                "-gtk",
+                "-gtk3",
+                "-gtk4",
+            )
+        )
+        or "-plugins-" in short_name
+        or "-plugin-" in short_name
     ):
         score = max(10, score - 20)
 

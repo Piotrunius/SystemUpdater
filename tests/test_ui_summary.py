@@ -395,6 +395,11 @@ class SummaryFormattingTests(unittest.TestCase):
         self.assertTrue(check_packages_require_reboot(["systemd: 256 -> 257"])[0])
         self.assertTrue(check_packages_require_reboot(["glibc: 2.40 -> 2.41"])[0])
         self.assertTrue(check_packages_require_reboot(["libc6 -> 2.39"])[0])
+        self.assertTrue(check_packages_require_reboot(["amd-gpu-firmware"])[0])
+        self.assertTrue(check_packages_require_reboot(["intel-gpu-firmware"])[0])
+        self.assertTrue(check_packages_require_reboot(["dbus-broker"])[0])
+        self.assertTrue(check_packages_require_reboot(["akmod-nvidia"])[0])
+        self.assertTrue(check_packages_require_reboot(["dracut"])[0])
 
         # Packages that do not trigger reboot
         self.assertFalse(
@@ -404,6 +409,35 @@ class SummaryFormattingTests(unittest.TestCase):
             check_packages_require_reboot(["systemupdater: 0.1.6 -> 0.1.7"])[0]
         )
         self.assertFalse(check_packages_require_reboot(["node: 22.0 -> 22.1"])[0])
+        self.assertFalse(check_packages_require_reboot(["smartmontools-selinux"])[0])
+        self.assertFalse(check_packages_require_reboot(["cairo-gobject"])[0])
+
+    def test_package_importance_score_prioritizes_core_and_avoids_substring_collisions(
+        self,
+    ):
+        from ui import package_importance_score
+
+        # Core system security and tools rank at 100
+        self.assertEqual(package_importance_score("sudo"), 100)
+        self.assertEqual(package_importance_score("openssh"), 100)
+        self.assertEqual(package_importance_score("ca-certificates"), 100)
+        self.assertEqual(package_importance_score("linux-firmware"), 100)
+
+        # Subpackages have slight penalty
+        self.assertEqual(package_importance_score("openssh-server"), 95)
+        self.assertEqual(package_importance_score("sudo-python-plugin"), 95)
+
+        # Dev tools and fundamental utilities rank at 80
+        self.assertEqual(package_importance_score("curl"), 80)
+        self.assertEqual(package_importance_score("git"), 80)
+        self.assertEqual(package_importance_score("python3"), 80)
+        self.assertEqual(package_importance_score("docker-cli"), 80)
+
+        # Words containing short substrings like 'go' or 'linux' do not trigger false positives
+        self.assertEqual(package_importance_score("cairo-gobject"), 50)
+        self.assertEqual(package_importance_score("ghostscript"), 50)
+        self.assertEqual(package_importance_score("smartmontools-selinux"), 50)
+        self.assertEqual(package_importance_score("passt-selinux"), 50)
 
     def test_complete_step_triggers_reboot_for_kernel_update(self):
         ui = UI(is_interactive=False, verbose=True)
