@@ -79,6 +79,7 @@ IGNORED_DIAGNOSTIC_SUBSTRINGS = (
     "Error writing credentials to socket",
     "[RPM] file",
     "remove failed: No such file or directory",
+    "Sandbox unavailable",
 )
 
 REBOOT_TRIGGER_PATTERNS = re.compile(
@@ -622,8 +623,6 @@ class UI:
         verbose: bool = False,
     ) -> tuple[str, str]:
         if res.status == "ok":
-            if verbose and res.warnings:
-                return ("!", "warning")
             msg_text = self._resolve_ok_msg(label, res, module=module)
             if res.reboot_required:
                 return ("^", msg_text or "updated")

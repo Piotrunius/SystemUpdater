@@ -280,14 +280,28 @@ class SummaryFormattingTests(unittest.TestCase):
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
             res = StepResult(
-                "ok",
-                "1 package updated",
-                warnings=["Reboot required"],
+                "unchanged",
+                "up to date",
+                warnings=["Mirror sync incomplete"],
                 duration=2.5,
             )
             ui.print_result("Device Firmware", res)
         plain = re.sub(r"\x1b\[[0-9;]*m", "", output.getvalue())
         self.assertIn("[!] Device Firmware: warning (2.5s)", plain)
+
+    def test_live_output_preserves_ok_in_verbose_mode_even_with_warnings(self):
+        ui = UI(is_interactive=False, verbose=True)
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            res = StepResult(
+                "ok",
+                "1 package updated",
+                warnings=["Notice: tap formula changed"],
+                duration=2.5,
+            )
+            ui.print_result("Homebrew", res)
+        plain = re.sub(r"\x1b\[[0-9;]*m", "", output.getvalue())
+        self.assertIn("[✓] Homebrew: 1 package updated (2.5s)", plain)
 
     def test_live_output_shows_updated_for_single_entity_modules(self):
         ui = UI(is_interactive=False)
@@ -496,6 +510,28 @@ class SummaryFormattingTests(unittest.TestCase):
         ui._complete_step(res, ctx, command_start=0)
 
         self.assertEqual(res.status, "unchanged")
+        self.assertEqual(res.warnings, [])
+
+    def test_complete_step_ignores_homebrew_sandbox_unavailable_warning_in_command_log(
+        self,
+    ):
+        ui = UI(is_interactive=False, verbose=True)
+        ctx = UpdateContext(verbose=True)
+        ctx.command_log.append(
+            {
+                "command": ["brew", "upgrade"],
+                "returncode": 0,
+                "stdout": "==> Upgrading 1 outdated package:\nz3 4.14.0 -> 4.14.1\n",
+                "stderr": (
+                    "Warning: Sandbox unavailable: processing downloaded files without sandboxing!\n"
+                ),
+                "output_withheld": False,
+            }
+        )
+        res = StepResult("ok", "1 package upgraded")
+        ui._complete_step(res, ctx, command_start=0)
+
+        self.assertEqual(res.status, "ok")
         self.assertEqual(res.warnings, [])
 
     def test_personalized_unit_nouns_in_summary_and_resolve(self):

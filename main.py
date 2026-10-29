@@ -592,7 +592,7 @@ def main():
     reboot_requested_mode = args.reboot or cfg.reboot
     notify_mode = args.notify or cfg.notifications_enabled
 
-    ctx = UpdateContext(force=args.force, verbose=verbose_mode)
+    ctx = UpdateContext(force=args.force, verbose=False)
     all_modules: list[BaseModule] = get_all_modules(cfg)
 
     # List modules mode
@@ -671,6 +671,7 @@ def main():
         sudo.stop_sudo_keeper()
         sys.exit(130)
 
+    ctx.verbose = verbose_mode
     ui = UI(quiet=quiet_mode, verbose=verbose_mode)
     ui.print_header("System Updater")
 
