@@ -345,6 +345,14 @@ def edit_config(config_path: str):
     sys.exit(0)
 
 
+class HelpFormatter(argparse.RawDescriptionHelpFormatter):
+    def __init__(self, *args, **kwargs):
+        kwargs["max_help_position"] = 31
+        terminal_width = shutil.get_terminal_size(fallback=(100, 24)).columns
+        kwargs["width"] = max(terminal_width, 100)
+        super().__init__(*args, **kwargs)
+
+
 def parse_args():
     prog_name = "sysupdate"
     if sys.argv and sys.argv[0]:
@@ -354,7 +362,7 @@ def parse_args():
 
     parser = argparse.ArgumentParser(
         prog=prog_name,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
+        formatter_class=HelpFormatter,
         epilog=f"""
 Examples:
   {prog_name}                 Run complete system update
@@ -374,7 +382,7 @@ Examples:
         "--version",
         action=VersionAction,
         nargs=0,
-        help="Show installed version and latest available version",
+        help="Show installed and latest available version",
     )
     parser.add_argument(
         "-f",
@@ -386,7 +394,7 @@ Examples:
         "-q",
         "--quiet",
         action="store_true",
-        help="Suppress live step progress, display only the final summary and errors",
+        help="Suppress live step progress, show only final summary and errors",
     )
     parser.add_argument(
         "-v",
@@ -408,18 +416,18 @@ Examples:
     parser.add_argument(
         "--only",
         type=str,
-        help="Comma-separated list of module keys or aliases to run (e.g. 'dnf,flatpak,brew')",
+        help="Comma-separated module keys or aliases to run (e.g. 'dnf,brew')",
     )
     parser.add_argument(
         "--skip",
         type=str,
-        help="Comma-separated list of module keys to skip",
+        help="Comma-separated module keys to skip",
     )
     parser.add_argument(
         "-c",
         "--category",
         type=str,
-        help="Comma-separated list of categories to run (e.g. 'system', 'containers', 'dev', 'gaming')",
+        help="Comma-separated categories to run (e.g. 'system', 'dev', 'gaming')",
     )
     parser.add_argument(
         "--no-sudo",
@@ -452,7 +460,7 @@ Examples:
         "-r",
         "--reboot",
         action="store_true",
-        help="Reboot the system after updates if required by any module (e.g. kernel, systemd, firmware)",
+        help="Reboot system after updates if required (e.g. kernel, firmware)",
     )
     history_group = parser.add_mutually_exclusive_group()
     history_group.add_argument(
@@ -461,12 +469,12 @@ Examples:
         const=10,
         type=int,
         metavar="COUNT",
-        help="List the most recent update runs (default: 10, maximum: 30)",
+        help="List recent update runs (default: 10, maximum: 30)",
     )
     history_group.add_argument(
         "--show-log",
         metavar="RUN_ID",
-        help="Show the saved command output for a run listed by --history",
+        help="Show saved command output for a run listed by --history",
     )
     parser.add_argument(
         "--no-history",
