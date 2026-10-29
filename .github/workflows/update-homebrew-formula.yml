@@ -28,7 +28,7 @@ jobs:
       - name: Determine next SemVer version
         id: version
         env:
-          COMMIT_SUBJECT: ${{ github.event.head_commit.message }}
+          HEAD_MSG: ${{ github.event.head_commit.message }}
         run: |
           set -euo pipefail
 
@@ -39,10 +39,11 @@ jobs:
           python3 - <<'PY'
           import os
           import re
+          import subprocess
 
           cur_ver = os.environ.get("CUR_VER", "1.2.4")
           prev_tag = os.environ.get("PREV_TAG", "v1.2.4")
-          subject = os.environ.get("COMMIT_SUBJECT", "")
+          head_msg = os.environ.get("HEAD_MSG", "")
 
           m = re.match(r"^(\d+)\.(\d+)\.(\d+)$", cur_ver)
           if not m:
@@ -50,8 +51,33 @@ jobs:
 
           major, minor, patch = map(int, m.groups())
 
-          is_major = bool(re.search(r"^[a-zA-Z]+(\([^\)]+\))?!:", subject)) or "BREAKING CHANGE:" in subject or "BREAKING-CHANGE:" in subject
-          is_minor = bool(re.search(r"^feat(\([^\)]+\))?:", subject))
+          rev_range = f"{prev_tag}..HEAD" if prev_tag else "HEAD"
+          try:
+              commits_log = subprocess.check_output(
+                  ["git", "log", rev_range, "--pretty=format:%s%n%b%n---COMMIT-SPLIT---"],
+                  text=True
+              )
+          except Exception:
+              commits_log = head_msg
+
+          if not commits_log.strip():
+              commits_log = head_msg
+
+          is_major = False
+          is_minor = False
+
+          for commit in commits_log.split("---COMMIT-SPLIT---"):
+              lines = commit.strip().splitlines()
+              if not lines:
+                  continue
+              subject = lines[0].strip()
+              body = "\n".join(lines[1:]) if len(lines) > 1 else ""
+
+              if bool(re.search(r"^[a-zA-Z]+(\([^\)]+\))?!:", subject)) or "BREAKING CHANGE:" in body or "BREAKING-CHANGE:" in body:
+                  is_major = True
+                  break
+              if bool(re.search(r"^feat(\([^\)]+\))?:", subject)):
+                  is_minor = True
 
           if is_major:
               major += 1
