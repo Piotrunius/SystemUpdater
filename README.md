@@ -123,20 +123,20 @@ Use `sysupdate --help` for the options supported by the installed version.
 
 ### Shell completion
 
-SystemUpdater includes native autocompletions for Bash, Zsh, and Fish:
+SystemUpdater automatically detects installed shells (Zsh, Oh My Zsh, Bash, Fish) and installs completions to their respective user directories:
 
 ```bash
-# Bash
-mkdir -p ~/.local/share/bash-completion/completions
+sysupdate --generate-completion
+```
+
+You can also target a specific shell or print raw completion scripts to stdout:
+
+```bash
+# Install specifically for Zsh
+sysupdate --generate-completion zsh
+
+# Print raw script to stdout (e.g. for custom paths or inspection)
 sysupdate --generate-completion bash > ~/.local/share/bash-completion/completions/sysupdate
-
-# Zsh
-mkdir -p ~/.zsh/completions
-sysupdate --generate-completion zsh > ~/.zsh/completions/_sysupdate
-
-# Fish
-mkdir -p ~/.config/fish/completions
-sysupdate --generate-completion fish > ~/.config/fish/completions/sysupdate.fish
 ```
 
 ### Desktop notifications

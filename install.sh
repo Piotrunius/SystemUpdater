@@ -55,30 +55,7 @@ if [ ! -f "${CONFIG_DIR}/config.toml" ]; then
 fi
 
 # 5. Install shell completions
-COMPLETION_DIR_BASH="${XDG_DATA_HOME:-${HOME}/.local/share}/bash-completion/completions"
-COMPLETION_DIR_ZSH="${HOME}/.zsh/completions"
-COMPLETION_DIR_FISH="${CONFIG_HOME}/fish/completions"
-
-if [ -d "$(dirname "${COMPLETION_DIR_BASH}")" ] || [ -d "${COMPLETION_DIR_BASH}" ] || command -v bash >/dev/null 2>&1; then
-	mkdir -p "${COMPLETION_DIR_BASH}"
-	"${SCRIPT_DIR}/main.py" --generate-completion bash >"${COMPLETION_DIR_BASH}/sysupdate" 2>/dev/null || true
-fi
-
-if [ -d "${HOME}/.oh-my-zsh" ]; then
-	OMZ_COMP_DIR="${ZSH_CUSTOM:-${HOME}/.oh-my-zsh/custom}/completions"
-	mkdir -p "${OMZ_COMP_DIR}"
-	"${SCRIPT_DIR}/main.py" --generate-completion zsh >"${OMZ_COMP_DIR}/_sysupdate" 2>/dev/null || true
-fi
-
-if [ -d "${COMPLETION_DIR_ZSH}" ] || [ -d "${HOME}/.zsh" ] || [[ "${SHELL:-}" == *zsh* ]] || command -v zsh >/dev/null 2>&1; then
-	mkdir -p "${COMPLETION_DIR_ZSH}"
-	"${SCRIPT_DIR}/main.py" --generate-completion zsh >"${COMPLETION_DIR_ZSH}/_sysupdate" 2>/dev/null || true
-fi
-
-if [ -d "$(dirname "${COMPLETION_DIR_FISH}")" ] || [ -d "${COMPLETION_DIR_FISH}" ] || command -v fish >/dev/null 2>&1; then
-	mkdir -p "${COMPLETION_DIR_FISH}"
-	"${SCRIPT_DIR}/main.py" --generate-completion fish >"${COMPLETION_DIR_FISH}/sysupdate.fish" 2>/dev/null || true
-fi
+"${SCRIPT_DIR}/main.py" --generate-completion auto >/dev/null 2>&1 || true
 
 echo "Successfully installed SystemUpdater to ${TARGET_DIR}/sysupdate"
 

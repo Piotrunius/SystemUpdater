@@ -132,11 +132,10 @@ class ConfigTests(unittest.TestCase):
             [
                 "sysupdate",
                 "--generate-completion",
-                "zsh",
             ],
         ):
             args = parse_args()
-            self.assertEqual(args.generate_completion, "zsh")
+            self.assertEqual(args.generate_completion, "auto")
 
 
 if __name__ == "__main__":

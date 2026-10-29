@@ -5,6 +5,8 @@ Supports Bash, Zsh, and Fish with dynamic module and category resolution.
 
 from __future__ import annotations
 
+import os
+import shutil
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -270,3 +272,89 @@ def generate_fish_completion(modules: list[BaseModule]) -> str:
     ]
 
     return "\n".join(lines) + "\n"
+
+
+def _safe_write(path: str, content: str) -> bool:
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(content)
+        return True
+    except OSError:
+        return False
+
+
+def install_completions(
+    modules: list[BaseModule], target_shell: str | None = None
+) -> list[tuple[str, str]]:
+    """Install completion scripts directly to appropriate system/user locations.
+
+    Returns a list of tuples: (shell_or_target_name, absolute_file_path).
+    """
+    installed_targets: list[tuple[str, str]] = []
+    target = (target_shell or "auto").lower().strip()
+
+    shells_to_install: set[str] = set()
+    if target in ("bash", "zsh", "fish"):
+        shells_to_install.add(target)
+    else:
+        current_shell = os.path.basename(os.environ.get("SHELL", "")).lower()
+        if (
+            "zsh" in current_shell
+            or shutil.which("zsh")
+            or os.path.isdir(os.path.expanduser("~/.oh-my-zsh"))
+            or os.path.isdir(os.path.expanduser("~/.zsh"))
+        ):
+            shells_to_install.add("zsh")
+        if (
+            "bash" in current_shell
+            or shutil.which("bash")
+            or os.path.isfile(os.path.expanduser("~/.bashrc"))
+        ):
+            shells_to_install.add("bash")
+        if (
+            "fish" in current_shell
+            or shutil.which("fish")
+            or os.path.isdir(os.path.expanduser("~/.config/fish"))
+        ):
+            shells_to_install.add("fish")
+
+    # Zsh completion installation
+    if "zsh" in shells_to_install:
+        zsh_script = generate_zsh_completion(modules)
+        omz_dir = os.path.expanduser("~/.oh-my-zsh")
+        if os.path.isdir(omz_dir):
+            omz_custom = os.environ.get("ZSH_CUSTOM") or os.path.expanduser(
+                "~/.oh-my-zsh/custom"
+            )
+            omz_path = os.path.join(omz_custom, "completions", "_sysupdate")
+            if _safe_write(omz_path, zsh_script):
+                installed_targets.append(("Oh My Zsh", omz_path))
+
+        user_zsh_path = os.path.expanduser("~/.zsh/completions/_sysupdate")
+        if _safe_write(user_zsh_path, zsh_script):
+            installed_targets.append(("Zsh", user_zsh_path))
+
+    # Bash completion installation
+    if "bash" in shells_to_install:
+        bash_script = generate_bash_completion(modules)
+        xdg_data = os.environ.get("XDG_DATA_HOME") or os.path.expanduser(
+            "~/.local/share"
+        )
+        bash_path = os.path.join(
+            xdg_data, "bash-completion", "completions", "sysupdate"
+        )
+        if _safe_write(bash_path, bash_script):
+            installed_targets.append(("Bash", bash_path))
+
+    # Fish completion installation
+    if "fish" in shells_to_install:
+        fish_script = generate_fish_completion(modules)
+        xdg_config = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser(
+            "~/.config"
+        )
+        fish_path = os.path.join(xdg_config, "fish", "completions", "sysupdate.fish")
+        if _safe_write(fish_path, fish_script):
+            installed_targets.append(("Fish", fish_path))
+
+    return installed_targets

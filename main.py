@@ -33,6 +33,7 @@ from completions import (
     generate_bash_completion,
     generate_fish_completion,
     generate_zsh_completion,
+    install_completions,
 )
 from config import DEFAULT_CONFIG_PATH, get_config
 from history_store import (
@@ -347,7 +348,7 @@ def edit_config(config_path: str):
 
 class HelpFormatter(argparse.RawDescriptionHelpFormatter):
     def __init__(self, *args, **kwargs):
-        kwargs["max_help_position"] = 31
+        kwargs["max_help_position"] = 34
         terminal_width = shutil.get_terminal_size(fallback=(100, 24)).columns
         kwargs["width"] = max(terminal_width, 100)
         super().__init__(*args, **kwargs)
@@ -409,9 +410,11 @@ Examples:
     )
     parser.add_argument(
         "--generate-completion",
-        choices=["bash", "zsh", "fish"],
+        nargs="?",
+        const="auto",
+        choices=["auto", "bash", "zsh", "fish"],
         metavar="SHELL",
-        help="Generate shell completion script (bash, zsh, fish)",
+        help="Install shell completions (auto-detects shells or bash/zsh/fish)",
     )
     parser.add_argument(
         "--only",
@@ -519,12 +522,27 @@ def main():
 
     if args.generate_completion:
         all_mods = get_all_modules(cfg)
-        if args.generate_completion == "bash":
-            print(generate_bash_completion(all_mods))
-        elif args.generate_completion == "zsh":
-            print(generate_zsh_completion(all_mods))
-        elif args.generate_completion == "fish":
-            print(generate_fish_completion(all_mods))
+        target = args.generate_completion.lower().strip()
+
+        # If user explicitly specified a shell and output is piped/redirected, emit raw script
+        if target in ("bash", "zsh", "fish") and not sys.stdout.isatty():
+            if target == "bash":
+                print(generate_bash_completion(all_mods))
+            elif target == "zsh":
+                print(generate_zsh_completion(all_mods))
+            elif target == "fish":
+                print(generate_fish_completion(all_mods))
+            sys.exit(0)
+
+        # Interactive or auto mode: install directly to detected shell locations
+        installed = install_completions(all_mods, target_shell=target)
+        if installed:
+            print("Installed shell completions:")
+            for label, path in installed:
+                print(f"  • {label}: {path}")
+            print("\nReload your shell or start a new terminal session to activate.")
+        else:
+            print("No supported shells detected for completion installation.")
         sys.exit(0)
 
     history_store = HistoryStore()
