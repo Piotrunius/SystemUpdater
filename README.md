@@ -127,12 +127,15 @@ SystemUpdater includes native autocompletions for Bash, Zsh, and Fish:
 
 ```bash
 # Bash
+mkdir -p ~/.local/share/bash-completion/completions
 sysupdate --generate-completion bash > ~/.local/share/bash-completion/completions/sysupdate
 
 # Zsh
+mkdir -p ~/.zsh/completions
 sysupdate --generate-completion zsh > ~/.zsh/completions/_sysupdate
 
 # Fish
+mkdir -p ~/.config/fish/completions
 sysupdate --generate-completion fish > ~/.config/fish/completions/sysupdate.fish
 ```
 
