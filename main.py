@@ -29,6 +29,11 @@ if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 
 import sudo
+from completions import (
+    generate_bash_completion,
+    generate_fish_completion,
+    generate_zsh_completion,
+)
 from config import DEFAULT_CONFIG_PATH, get_config
 from history_store import (
     HistoryStore,
@@ -39,6 +44,7 @@ from history_store import (
 )
 from modules import get_all_modules
 from modules.base import BaseModule, UpdateContext
+from notifications import send_notification
 from ui import UI, StepResult, suppress_terminal_echo
 
 
@@ -389,6 +395,19 @@ Examples:
         help="Stream update command output live; keep internal probes quiet",
     )
     parser.add_argument(
+        "--notify",
+        action="store_true",
+        help="Send a desktop notification on completion",
+    )
+    parser.add_argument(
+        "--generate-completion",
+        "--generate-completions",
+        choices=["bash", "zsh", "fish"],
+        metavar="SHELL",
+        dest="generate_completion",
+        help="Generate shell completion script (bash, zsh, fish)",
+    )
+    parser.add_argument(
         "--only",
         type=str,
         help="Comma-separated list of module keys or aliases to run (e.g. 'dnf,flatpak,brew')",
@@ -490,6 +509,18 @@ def main():
     signal.signal(signal.SIGTERM, handle_sigterm)
 
     args = parse_args()
+    cfg = get_config(config_path=args.config)
+
+    if args.generate_completion:
+        all_mods = get_all_modules(cfg)
+        if args.generate_completion == "bash":
+            print(generate_bash_completion(all_mods))
+        elif args.generate_completion == "zsh":
+            print(generate_zsh_completion(all_mods))
+        elif args.generate_completion == "fish":
+            print(generate_fish_completion(all_mods))
+        sys.exit(0)
+
     history_store = HistoryStore()
     if args.history is not None:
         if args.history < 1 or args.history > 30:
@@ -529,8 +560,15 @@ def main():
     if args.edit_config:
         edit_config(args.config or DEFAULT_CONFIG_PATH)
 
-    ctx = UpdateContext(force=args.force, verbose=False)
-    cfg = get_config(config_path=args.config)
+    quiet_mode = args.quiet or cfg.quiet
+    verbose_mode = args.verbose or cfg.verbose
+    no_sudo_mode = args.no_sudo or cfg.no_sudo
+    no_snapshot_mode = args.no_snapshot or cfg.no_snapshot
+    no_history_mode = args.no_history or cfg.no_history
+    reboot_requested_mode = args.reboot or cfg.reboot
+    notify_mode = args.notify or cfg.notifications_enabled
+
+    ctx = UpdateContext(force=args.force, verbose=verbose_mode)
     all_modules: list[BaseModule] = get_all_modules(cfg)
 
     # List modules mode
@@ -550,14 +588,24 @@ def main():
 
     # Filter modules
     selected_keys = (
-        [k.strip().lower() for k in args.only.split(",")] if args.only else None
+        [k.strip().lower() for k in args.only.split(",")]
+        if args.only
+        else (cfg.only_keys if cfg.only_keys else None)
     )
     skip_keys = [k.strip().lower() for k in args.skip.split(",")] if args.skip else []
+    if cfg.skip_keys:
+        skip_keys.extend(cfg.skip_keys)
+
     selected_categories = (
-        [c.strip().lower() for c in args.category.split(",")] if args.category else None
+        [c.strip().lower() for c in args.category.split(",")]
+        if args.category
+        else (cfg.categories if cfg.categories else None)
+    )
+    skip_categories = (
+        [c.lower() for c in cfg.skip_categories] if cfg.skip_categories else []
     )
 
-    if args.no_snapshot:
+    if no_snapshot_mode:
         skip_keys.append("snapshot")
 
     modules_to_run: list[BaseModule] = []
@@ -565,11 +613,14 @@ def main():
         m_identifiers = {m.key.lower(), *(a.lower() for a in getattr(m, "aliases", []))}
         if selected_keys and not (m_identifiers & set(selected_keys)):
             continue
-        if selected_categories:
-            cat_lower = getattr(m, "category", "").lower()
-            if not any(sc in cat_lower for sc in selected_categories):
-                continue
-        if args.no_sudo and getattr(m, "requires_sudo", False):
+        cat_lower = getattr(m, "category", "").lower()
+        if selected_categories and not any(
+            sc in cat_lower for sc in selected_categories
+        ):
+            continue
+        if skip_categories and any(sc in cat_lower for sc in skip_categories):
+            continue
+        if no_sudo_mode and getattr(m, "requires_sudo", False):
             continue
         if (m_identifiers & set(skip_keys)) or (m_identifiers & cfg.disabled_keys):
             continue
@@ -596,8 +647,7 @@ def main():
         sudo.stop_sudo_keeper()
         sys.exit(130)
 
-    ctx.verbose = args.verbose
-    ui = UI(quiet=args.quiet, verbose=args.verbose)
+    ui = UI(quiet=quiet_mode, verbose=verbose_mode)
     ui.print_header("System Updater")
 
     results = []
@@ -707,7 +757,7 @@ def main():
         reboot_needed = any(
             getattr(r.get("result"), "reboot_required", False) for r in results
         )
-        if not args.no_history:
+        if not no_history_mode:
             history_data = {
                 "id": run_id,
                 "started_at": started_at.isoformat(),
@@ -738,7 +788,8 @@ def main():
     reboot_needed = any(
         getattr(r.get("result"), "reboot_required", False) for r in results
     )
-    if not args.no_history:
+
+    if not no_history_mode:
         history_data = {
             "id": run_id,
             "started_at": started_at.isoformat(),
@@ -769,7 +820,36 @@ def main():
 
     ui.print_summary(results, total_elapsed)
 
-    if args.reboot and reboot_needed:
+    if notify_mode:
+        only_err = cfg.notifications_only_on_error_or_reboot
+        if not (only_err and not (has_failures or reboot_needed)):
+            if has_failures:
+                send_notification(
+                    "System Update Failed",
+                    f"Update run finished with errors ({round(total_elapsed, 1)}s)",
+                    urgency="critical",
+                )
+            elif reboot_needed:
+                send_notification(
+                    "System Restart Required",
+                    f"Updates completed. System restart needed ({update_count} packages)",
+                    urgency="critical",
+                )
+            elif update_count > 0:
+                noun = "update" if update_count == 1 else "updates"
+                send_notification(
+                    "System Update Complete",
+                    f"{update_count} {noun} applied ({round(total_elapsed, 1)}s)",
+                    urgency="normal",
+                )
+            else:
+                send_notification(
+                    "System Up To Date",
+                    f"No updates required ({round(total_elapsed, 1)}s)",
+                    urgency="low",
+                )
+
+    if reboot_requested_mode and reboot_needed:
         print("Rebooting system as requested by --reboot...")
         sys.stdout.flush()
         reboot_command = (

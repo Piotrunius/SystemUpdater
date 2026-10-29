@@ -69,6 +69,75 @@ class ConfigTests(unittest.TestCase):
             args = parse_args()
             self.assertFalse(args.reboot)
 
+    def test_loads_behavior_notifications_modules_and_categories_config(self):
+        config = self.load_config(
+            "[behavior]\n"
+            "reboot = true\n"
+            "quiet = true\n"
+            "verbose = false\n"
+            "no_sudo = true\n"
+            "no_snapshot = true\n"
+            "no_history = true\n"
+            "command_timeout = 240\n"
+            "[notifications]\n"
+            "enabled = true\n"
+            "only_on_error_or_reboot = true\n"
+            "[modules]\n"
+            'disable = ["snap"]\n'
+            'skip = ["brew"]\n'
+            'only = ["dnf", "flatpak"]\n'
+            "[categories]\n"
+            'only = ["system", "dev"]\n'
+            'skip = ["gaming"]\n'
+        )
+        self.assertIsNone(config.load_error)
+        self.assertTrue(config.reboot)
+        self.assertTrue(config.quiet)
+        self.assertFalse(config.verbose)
+        self.assertTrue(config.no_sudo)
+        self.assertTrue(config.no_snapshot)
+        self.assertTrue(config.no_history)
+        self.assertEqual(config.command_timeout, 240)
+        self.assertTrue(config.notifications_enabled)
+        self.assertTrue(config.notifications_only_on_error_or_reboot)
+        self.assertEqual(config.disabled_keys, {"snap"})
+        self.assertEqual(config.skip_keys, ["brew"])
+        self.assertEqual(config.only_keys, ["dnf", "flatpak"])
+        self.assertEqual(config.categories, ["system", "dev"])
+        self.assertEqual(config.skip_categories, ["gaming"])
+
+    def test_parse_args_supports_notifications_and_completions(self):
+        import sys
+        from unittest.mock import patch
+
+        from main import parse_args
+
+        with patch.object(
+            sys,
+            "argv",
+            [
+                "sysupdate",
+                "--notify",
+                "--generate-completion",
+                "bash",
+            ],
+        ):
+            args = parse_args()
+            self.assertTrue(args.notify)
+            self.assertEqual(args.generate_completion, "bash")
+
+        with patch.object(
+            sys,
+            "argv",
+            [
+                "sysupdate",
+                "--generate-completions",
+                "zsh",
+            ],
+        ):
+            args = parse_args()
+            self.assertEqual(args.generate_completion, "zsh")
+
 
 if __name__ == "__main__":
     unittest.main()

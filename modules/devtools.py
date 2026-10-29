@@ -788,11 +788,23 @@ class UvModule(BaseModule):
             )
 
         if self_code != 0:
-            return StepResult(
-                "error",
-                "uv tools were checked, but uv itself could not be updated",
-                error_output=self_err or self_out,
+            self_output_combined = (self_err + " " + self_out).lower()
+            is_pm_managed = any(
+                phrase in self_output_combined
+                for phrase in (
+                    "standalone installer",
+                    "package-manager",
+                    "package manager",
+                    "not supported",
+                    "disable",
+                )
             )
+            if not is_pm_managed:
+                return StepResult(
+                    "error",
+                    "uv tools were checked, but uv itself could not be updated",
+                    error_output=self_err or self_out,
+                )
         if "Nothing to upgrade" in out or not out.strip():
             return StepResult("unchanged")
 

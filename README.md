@@ -13,6 +13,8 @@ Before system package updates, it can create a Btrfs snapshot through Snapper. I
 - Detects the distribution from `/etc/os-release` on Linux or system version on macOS and selects applicable package managers.
 - Checks installed tools and update targets before running their modules.
 - Supports module, category, quiet, and verbose selection.
+- Generates native shell completions for Bash, Zsh, and Fish (`--generate-completion`).
+- Sends native desktop notifications on Linux (`notify-send`) and macOS (`osascript`) upon completion (`--notify`).
 - Creates cooldown-limited Snapper snapshots before updates when available.
 - Detects reboot requirements from updated packages, firmware, macOS system updates, and system reboot markers.
 - Stores up to 30 private run records, with redacted and size-limited command output.
@@ -95,27 +97,60 @@ alias update="sysupdate"
 
 ## Usage
 
-| Option                        | Description                                                                        |
-| ----------------------------- | ---------------------------------------------------------------------------------- |
-| `-h`, `--help`                | Show command help                                                                  |
-| `--version`                   | Show installed and latest available versions                                       |
-| `-f`, `--force`               | Bypass safeguards such as the snapshot cooldown                                    |
-| `-q`, `--quiet`               | Hide live progress; show the final summary and errors                              |
-| `-v`, `--verbose`             | Stream update command output                                                       |
-| `--only KEYS`                 | Run only comma-separated module keys or aliases                                    |
-| `--skip KEYS`                 | Skip comma-separated module keys                                                   |
-| `-c`, `--category CATEGORIES` | Run comma-separated categories, such as `system`, `containers`, `dev`, or `gaming` |
-| `--no-sudo`                   | Skip modules requiring administrator privileges                                    |
-| `--no-snapshot`               | Skip the protective Btrfs snapshot                                                 |
-| `--config PATH`               | Use a configuration file at a custom path                                          |
-| `--edit-config`               | Open the configuration file in `$EDITOR`                                           |
-| `-l`, `--list`                | List registered modules and check availability                                     |
-| `-r`, `--reboot`              | Reboot after the summary and history are saved if updates require it               |
-| `--no-history`                | Do not record this run or its command logs in history                              |
-| `--history [COUNT]`           | List recent runs (default 10, maximum 30)                                          |
-| `--show-log RUN_ID`           | Show the saved details for a run                                                   |
+| Option                                                    | Description                                                                        |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `-h`, `--help`                                            | Show command help                                                                  |
+| `--version`                                               | Show installed and latest available versions                                       |
+| `-f`, `--force`                                           | Bypass safeguards such as the snapshot cooldown                                    |
+| `-q`, `--quiet`                                           | Hide live progress; show the final summary and errors                              |
+| `-v`, `--verbose`                                         | Stream update command output                                                       |
+| `--notify`                                                | Send desktop notification on completion (Linux `notify-send` / macOS `osascript`)  |
+| `--generate-completion`, `--generate-completions` `SHELL` | Generate shell completions for `bash`, `zsh`, or `fish`                            |
+| `--only KEYS`                                             | Run only comma-separated module keys or aliases                                    |
+| `--skip KEYS`                                             | Skip comma-separated module keys                                                   |
+| `-c`, `--category CATEGORIES`                             | Run comma-separated categories, such as `system`, `containers`, `dev`, or `gaming` |
+| `--no-sudo`                                               | Skip modules requiring administrator privileges                                    |
+| `--no-snapshot`                                           | Skip the protective Btrfs snapshot                                                 |
+| `--config PATH`                                           | Use a configuration file at a custom path                                          |
+| `--edit-config`                                           | Open the configuration file in `$EDITOR`                                           |
+| `-l`, `--list`                                            | List registered modules and check availability                                     |
+| `-r`, `--reboot`                                          | Reboot after the summary and history are saved if updates require it               |
+| `--no-history`                                            | Do not record this run or its command logs in history                              |
+| `--history [COUNT]`                                       | List recent runs (default 10, maximum 30)                                          |
+| `--show-log RUN_ID`                                       | Show the saved details for a run                                                   |
 
 Use `sysupdate --help` for the options supported by the installed version.
+
+### Shell completion
+
+SystemUpdater includes native autocompletions for Bash, Zsh, and Fish:
+
+```bash
+# Bash
+sysupdate --generate-completion bash > ~/.local/share/bash-completion/completions/sysupdate
+
+# Zsh
+sysupdate --generate-completion zsh > ~/.zsh/completions/_sysupdate
+
+# Fish
+sysupdate --generate-completion fish > ~/.config/fish/completions/sysupdate.fish
+```
+
+### Desktop notifications
+
+Send a notification upon completion with `--notify`:
+
+```bash
+sysupdate --notify
+```
+
+You can also enable notifications by default in `~/.config/sysupdate/config.toml`:
+
+```toml
+[notifications]
+enabled = true
+only_on_error_or_reboot = false
+```
 
 ### Verbose streaming
 
@@ -131,27 +166,67 @@ The default configuration file is `${XDG_CONFIG_HOME:-$HOME/.config}/sysupdate/c
 
 ```toml
 [misc]
-# Permanently disable selected module keys.
-# Run `sysupdate --list` to inspect module keys.
-# disable = ["snap", "docker", "antigravity"]
-
-# Minimum hours between protective Btrfs snapshots.
+# Minimum hours between protective Btrfs snapshots (default: 12)
 cooldown_hours = 12
 
+# Maximum seconds allowed per update command before timing out (default: 180)
+# command_timeout = 300
+
+[behavior]
+# Automatically reboot after updates if required by kernel or firmware (default: false)
+# reboot = false
+
+# Hide live step progress and display only final summary and errors (default: false)
+# quiet = false
+
+# Stream update command output live (default: false)
+# verbose = false
+
+# Skip all modules requiring administrator (sudo) privileges (default: false)
+# no_sudo = false
+
+# Skip protective Btrfs snapshot creation (default: false)
+# no_snapshot = false
+
+# Do not record update runs in history (default: false)
+# no_history = false
+
+[notifications]
+# Send desktop notifications on completion (Linux notify-send / macOS osascript)
+# enabled = false
+# only_on_error_or_reboot = false
+
+[modules]
+# Permanently disable selected module keys (run `sysupdate --list` to inspect keys)
+# disable = ["snap", "docker", "antigravity"]
+
+# Skip selected modules by default
+# skip = ["brew"]
+
+# Run only selected modules by default
+# only = ["dnf", "flatpak"]
+
+[categories]
+# Run only selected categories by default (e.g. "system", "containers", "dev", "gaming")
+# only = ["system", "dev"]
+
+# Skip selected categories by default
+# skip = ["gaming"]
+
 [git]
-# Local repositories to pull during an update run.
+# Local repositories to pull during an update run
 # repos = ["~/dotfiles", "~/Projects/my-app"]
 
 [pre_commands]
-# Commands to run before update modules.
+# Commands to run before update modules
 # "Clean build cache" = "my-cleanup-command"
 
 [commands]
-# Additional update commands.
+# Additional update commands
 # "Update custom tool" = "my-custom-cli update"
 
 [post_commands]
-# Commands to run after update modules.
+# Commands to run after update modules
 # "Refresh desktop database" = "update-desktop-database ~/.local/share/applications"
 ```
 

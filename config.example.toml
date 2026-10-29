@@ -2,12 +2,52 @@
 # SystemUpdater Configuration File
 
 [misc]
-# List of module keys to disable permanently
-# Run `sysupdate --list` to inspect all available module keys.
-# disable = ["snap", "docker", "antigravity"]
-
 # Minimum hours between protective Btrfs root snapshots (default: 12)
 cooldown_hours = 12
+
+# Maximum command timeout in seconds (default: 180)
+# command_timeout = 300
+
+[behavior]
+# Automatically reboot after updates if required by kernel or firmware (default: false)
+# reboot = false
+
+# Hide live step progress and display only final summary and errors (default: false)
+# quiet = false
+
+# Stream update command output live (default: false)
+# verbose = false
+
+# Skip all modules requiring administrator (sudo) privileges (default: false)
+# no_sudo = false
+
+# Skip protective Btrfs snapshot creation (default: false)
+# no_snapshot = false
+
+# Do not record update runs in history (default: false)
+# no_history = false
+
+[notifications]
+# Send desktop notifications on completion (Linux notify-send / macOS osascript)
+# enabled = false
+# only_on_error_or_reboot = false
+
+[modules]
+# Permanently disable selected module keys (run `sysupdate --list` to inspect keys)
+# disable = ["snap", "docker", "antigravity"]
+
+# Skip selected modules by default
+# skip = ["brew"]
+
+# Run only selected modules by default
+# only = ["dnf", "flatpak"]
+
+[categories]
+# Run only selected categories by default (e.g. "system", "containers", "dev", "gaming")
+# only = ["system", "dev"]
+
+# Skip selected categories by default
+# skip = ["gaming"]
 
 [git]
 # List of local git repositories to pull during the update
