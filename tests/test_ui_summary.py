@@ -34,6 +34,22 @@ class SummaryFormattingTests(unittest.TestCase):
         self.assertIn("      - Mirror timed out", output)
         self.assertIn("      - retry later", output)
 
+    def test_warning_details_strip_leading_bullets_and_dashes(self):
+        output = render_summary(
+            StepResult(
+                "warning",
+                "warning",
+                warnings=[
+                    "- cannot install best update candidate",
+                    "• conflict detected",
+                ],
+            )
+        )
+        self.assertIn("      - cannot install best update candidate", output)
+        self.assertIn("      - conflict detected", output)
+        self.assertNotIn("      - - ", output)
+        self.assertNotIn("      - • ", output)
+
     def test_error_uses_failed_label_and_nested_details(self):
         output = render_summary(
             StepResult(

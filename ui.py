@@ -743,7 +743,9 @@ class UI:
                     normalized = line.strip()
                     if normalized and normalized not in printed:
                         printed.add(normalized)
-                        print(f"{indent}- {normalized}")
+                        clean_line = re.sub(r"^[-*•]\s*", "", normalized).strip()
+                        if clean_line:
+                            print(f"{indent}- {clean_line}")
 
         def diagnostic_lines(output: str) -> list[str]:
             lines = [
