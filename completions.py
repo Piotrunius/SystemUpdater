@@ -72,11 +72,6 @@ OPTIONS = [
         "--generate-completion",
         "Generate shell completion script (bash, zsh, fish)",
     ),
-    (
-        "",
-        "--generate-completions",
-        "Alias for --generate-completion",
-    ),
 ]
 
 
@@ -116,7 +111,7 @@ _sysupdate() {{
     local categories="{categories}"
 
     case "$prev" in
-        --generate-completion|--generate-completions)
+        --generate-completion)
             COMPREPLY=($(compgen -W "bash zsh fish" -- "$cur"))
             return 0
             ;;
@@ -207,7 +202,6 @@ _sysupdate() {{
         '--show-log=[Show the saved command output for a run listed by --history]:run_id:'
         '--no-history[Do not record this run or its command logs in history]'
         '--generate-completion=[Generate shell completion script]:shell:(bash zsh fish)'
-        '--generate-completions=[Generate shell completion script]:shell:(bash zsh fish)'
     )
 
     _arguments -s -S $options
@@ -271,10 +265,6 @@ def generate_fish_completion(modules: list[BaseModule]) -> str:
         ("complete -c sysupdate -l no-history -d 'Do not save run record in history'"),
         (
             "complete -c sysupdate -l generate-completion -x -a 'bash zsh"
-            " fish' -d 'Generate shell completion script'"
-        ),
-        (
-            "complete -c sysupdate -l generate-completions -x -a 'bash zsh"
             " fish' -d 'Generate shell completion script'"
         ),
     ]

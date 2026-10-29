@@ -97,27 +97,27 @@ alias update="sysupdate"
 
 ## Usage
 
-| Option                                                    | Description                                                                        |
-| --------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `-h`, `--help`                                            | Show command help                                                                  |
-| `--version`                                               | Show installed and latest available versions                                       |
-| `-f`, `--force`                                           | Bypass safeguards such as the snapshot cooldown                                    |
-| `-q`, `--quiet`                                           | Hide live progress; show the final summary and errors                              |
-| `-v`, `--verbose`                                         | Stream update command output                                                       |
-| `--notify`                                                | Send desktop notification on completion (Linux `notify-send` / macOS `osascript`)  |
-| `--generate-completion`, `--generate-completions` `SHELL` | Generate shell completions for `bash`, `zsh`, or `fish`                            |
-| `--only KEYS`                                             | Run only comma-separated module keys or aliases                                    |
-| `--skip KEYS`                                             | Skip comma-separated module keys                                                   |
-| `-c`, `--category CATEGORIES`                             | Run comma-separated categories, such as `system`, `containers`, `dev`, or `gaming` |
-| `--no-sudo`                                               | Skip modules requiring administrator privileges                                    |
-| `--no-snapshot`                                           | Skip the protective Btrfs snapshot                                                 |
-| `--config PATH`                                           | Use a configuration file at a custom path                                          |
-| `--edit-config`                                           | Open the configuration file in `$EDITOR`                                           |
-| `-l`, `--list`                                            | List registered modules and check availability                                     |
-| `-r`, `--reboot`                                          | Reboot after the summary and history are saved if updates require it               |
-| `--no-history`                                            | Do not record this run or its command logs in history                              |
-| `--history [COUNT]`                                       | List recent runs (default 10, maximum 30)                                          |
-| `--show-log RUN_ID`                                       | Show the saved details for a run                                                   |
+| Option                        | Description                                                                        |
+| ----------------------------- | ---------------------------------------------------------------------------------- |
+| `-h`, `--help`                | Show command help                                                                  |
+| `--version`                   | Show installed and latest available versions                                       |
+| `-f`, `--force`               | Bypass safeguards such as the snapshot cooldown                                    |
+| `-q`, `--quiet`               | Hide live progress; show the final summary and errors                              |
+| `-v`, `--verbose`             | Stream update command output                                                       |
+| `--notify`                    | Send desktop notification on completion (Linux `notify-send` / macOS `osascript`)  |
+| `--generate-completion SHELL` | Generate shell completions for `bash`, `zsh`, or `fish`                            |
+| `--only KEYS`                 | Run only comma-separated module keys or aliases                                    |
+| `--skip KEYS`                 | Skip comma-separated module keys                                                   |
+| `-c`, `--category CATEGORIES` | Run comma-separated categories, such as `system`, `containers`, `dev`, or `gaming` |
+| `--no-sudo`                   | Skip modules requiring administrator privileges                                    |
+| `--no-snapshot`               | Skip the protective Btrfs snapshot                                                 |
+| `--config PATH`               | Use a configuration file at a custom path                                          |
+| `--edit-config`               | Open the configuration file in `$EDITOR`                                           |
+| `-l`, `--list`                | List registered modules and check availability                                     |
+| `-r`, `--reboot`              | Reboot after the summary and history are saved if updates require it               |
+| `--no-history`                | Do not record this run or its command logs in history                              |
+| `--history [COUNT]`           | List recent runs (default 10, maximum 30)                                          |
+| `--show-log RUN_ID`           | Show the saved details for a run                                                   |
 
 Use `sysupdate --help` for the options supported by the installed version.
 

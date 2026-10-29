@@ -18,7 +18,7 @@ class CompletionTests(unittest.TestCase):
         self.assertIn("complete -F _sysupdate sysupdate", script)
         self.assertIn("--notify", script)
         self.assertIn("--generate-completion", script)
-        self.assertIn("--generate-completions", script)
+        self.assertNotIn("--generate-completions", script)
         self.assertIn("dnf", script)
         self.assertIn("flatpak", script)
         self.assertIn("brew", script)
@@ -29,7 +29,7 @@ class CompletionTests(unittest.TestCase):
         self.assertIn("_sysupdate()", script)
         self.assertIn("--notify", script)
         self.assertIn("--generate-completion", script)
-        self.assertIn("--generate-completions", script)
+        self.assertNotIn("--generate-completions", script)
         self.assertIn("'flatpak'", script)
         self.assertIn("'brew'", script)
 
@@ -38,7 +38,7 @@ class CompletionTests(unittest.TestCase):
         self.assertIn("complete -c sysupdate", script)
         self.assertIn("-l notify", script)
         self.assertIn("-l generate-completion", script)
-        self.assertIn("-l generate-completions", script)
+        self.assertNotIn("-l generate-completions", script)
         self.assertIn("flatpak", script)
 
 

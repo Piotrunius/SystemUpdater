@@ -131,7 +131,7 @@ class ConfigTests(unittest.TestCase):
             "argv",
             [
                 "sysupdate",
-                "--generate-completions",
+                "--generate-completion",
                 "zsh",
             ],
         ):

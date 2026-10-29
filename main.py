@@ -401,10 +401,8 @@ Examples:
     )
     parser.add_argument(
         "--generate-completion",
-        "--generate-completions",
         choices=["bash", "zsh", "fish"],
         metavar="SHELL",
-        dest="generate_completion",
         help="Generate shell completion script (bash, zsh, fish)",
     )
     parser.add_argument(
