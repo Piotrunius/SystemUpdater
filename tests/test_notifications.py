@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from notifications import send_notification
 
@@ -11,7 +11,7 @@ class NotificationTests(unittest.TestCase):
             patch("shutil.which", return_value="/usr/bin/notify-send"),
             patch(
                 "subprocess.run",
-                return_value=unittest.mock.Mock(returncode=0),
+                return_value=Mock(returncode=0),
             ) as mock_run,
         ):
             ok = send_notification("Update Complete", "10 packages updated")
@@ -36,7 +36,7 @@ class NotificationTests(unittest.TestCase):
             patch("shutil.which", return_value="/usr/bin/osascript"),
             patch(
                 "subprocess.run",
-                return_value=unittest.mock.Mock(returncode=0),
+                return_value=Mock(returncode=0),
             ) as mock_run,
         ):
             ok = send_notification("Update Complete", "All good")

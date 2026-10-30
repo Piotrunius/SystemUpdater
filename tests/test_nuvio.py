@@ -74,6 +74,7 @@ class NuvioAssetTests(unittest.TestCase):
             hdrs=headers,
             fp=None,
         )
+        self.addCleanup(http_err.close)
 
         with (
             patch.object(module, "_get_installed_tag", return_value="0.1.0-alpha"),

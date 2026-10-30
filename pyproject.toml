@@ -1,0 +1,5 @@
+[tool.basedpyright]
+typeCheckingMode = "standard"
+reportImportCycles = true
+reportMissingTypeArgument = true
+reportUninitializedInstanceVariable = true

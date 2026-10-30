@@ -37,6 +37,7 @@ Transaction Summary:
             hdrs=headers,
             fp=None,
         )
+        self.addCleanup(error.close)
         mock_urlopen.side_effect = error
 
         context = UpdateContext()
@@ -119,6 +120,7 @@ Transaction Summary:
             hdrs=headers,
             fp=None,
         )
+        self.addCleanup(error.close)
         mock_urlopen.side_effect = error
 
         context = UpdateContext()

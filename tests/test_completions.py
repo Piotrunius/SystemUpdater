@@ -10,9 +10,14 @@ from completions import (
     install_completions,
 )
 from modules import get_all_modules
+from modules.base import BaseModule
 
 
 class CompletionTests(unittest.TestCase):
+    def __init__(self, methodName: str = "runTest") -> None:
+        super().__init__(methodName)
+        self.modules: list[BaseModule] = []
+
     def setUp(self):
         self.modules = get_all_modules()
 

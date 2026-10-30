@@ -87,6 +87,34 @@ REBOOT_TRIGGER_PATTERNS = re.compile(
     re.IGNORECASE,
 )
 
+ANSI_ESCAPE_PATTERN = re.compile(
+    r"\x1B(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1B\\)|[@-Z\\-_])"
+)
+TERMINAL_CONTROL_PATTERN = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
+TOKEN_PATTERN = re.compile(
+    r"(?i)\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,})\b"
+)
+BEARER_PATTERN = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+")
+URL_CREDENTIAL_PATTERN = re.compile(r"(https?://)[^/@\s]+:[^/@\s]+@")
+ASSIGNMENT_SECRET_PATTERN = re.compile(
+    r"(?i)\b(token|password|passwd|secret|key|api[_-]?key)(\s*[=:]\s*)([^\s,;]+)"
+)
+FLAG_SECRET_PATTERN = re.compile(
+    r"(?i)(--(?:token|password|secret|api-key)(?:=|\s+))([^\s]+)"
+)
+
+
+def redact_text(value: str) -> str:
+    """Remove terminal control sequences and mask common credentials."""
+    safe_value = ANSI_ESCAPE_PATTERN.sub("", value)
+    safe_value = TERMINAL_CONTROL_PATTERN.sub("", safe_value)
+    redacted = URL_CREDENTIAL_PATTERN.sub(r"\1[REDACTED]@", safe_value)
+    redacted = BEARER_PATTERN.sub("Bearer [REDACTED]", redacted)
+    redacted = TOKEN_PATTERN.sub("[REDACTED_TOKEN]", redacted)
+    redacted = ASSIGNMENT_SECRET_PATTERN.sub(r"\1\2[REDACTED]", redacted)
+    return FLAG_SECRET_PATTERN.sub(r"\1[REDACTED]", redacted)
+
+
 NON_FATAL_PATTERNS = [
     (
         re.compile(
@@ -448,8 +476,6 @@ class UI:
         note_start: int = 0,
         show_command_output: bool = False,
     ) -> None:
-        from history_store import redact_text
-
         records = (
             getattr(ctx, "command_log", [])[command_start:] if ctx is not None else []
         )

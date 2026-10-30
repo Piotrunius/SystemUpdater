@@ -25,7 +25,7 @@ from colors import Colors
 from ui import detect_warning
 
 
-def _stop_process_tree(proc: subprocess.Popen) -> None:
+def _stop_process_tree(proc: subprocess.Popen[Any]) -> None:
     """Stop a command and its descendants, then reap the direct child."""
     if os.name == "posix":
         try:

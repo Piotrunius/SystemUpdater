@@ -14,23 +14,9 @@ from typing import Any
 
 from colors import Colors, get_status_marker
 from config import xdg_directory
+from ui import check_packages_require_reboot, redact_text
 
 RUN_ID_PATTERN = re.compile(r"^\d{8}T\d{6}Z-[0-9a-f]{8}$")
-ANSI_ESCAPE_PATTERN = re.compile(
-    r"\x1B(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1B\\)|[@-Z\\-_])"
-)
-TERMINAL_CONTROL_PATTERN = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
-TOKEN_PATTERN = re.compile(
-    r"(?i)\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,})\b"
-)
-BEARER_PATTERN = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+")
-URL_CREDENTIAL_PATTERN = re.compile(r"(https?://)[^/@\s]+:[^/@\s]+@")
-ASSIGNMENT_SECRET_PATTERN = re.compile(
-    r"(?i)\b(token|password|passwd|secret|key|api[_-]?key)(\s*[=:]\s*)([^\s,;]+)"
-)
-FLAG_SECRET_PATTERN = re.compile(
-    r"(?i)(--(?:token|password|secret|api-key)(?:=|\s+))([^\s]+)"
-)
 
 
 def _modified_time(path: Path) -> float:
@@ -38,17 +24,6 @@ def _modified_time(path: Path) -> float:
         return path.stat().st_mtime
     except OSError:
         return 0.0
-
-
-def redact_text(value: str) -> str:
-    """Remove terminal control sequences and mask common credentials."""
-    safe_value = ANSI_ESCAPE_PATTERN.sub("", value)
-    safe_value = TERMINAL_CONTROL_PATTERN.sub("", safe_value)
-    redacted = URL_CREDENTIAL_PATTERN.sub(r"\1[REDACTED]@", safe_value)
-    redacted = BEARER_PATTERN.sub("Bearer [REDACTED]", redacted)
-    redacted = TOKEN_PATTERN.sub("[REDACTED_TOKEN]", redacted)
-    redacted = ASSIGNMENT_SECRET_PATTERN.sub(r"\1\2[REDACTED]", redacted)
-    return FLAG_SECRET_PATTERN.sub(r"\1[REDACTED]", redacted)
 
 
 def _sanitize_history_data(value: Any) -> Any:
@@ -135,8 +110,6 @@ def classify_run_status(
     ):
         return "reboot"
     # Backward compatibility with existing history runs containing reboot-triggering packages
-    from ui import check_packages_require_reboot
-
     for module in modules:
         if (
             module.get("status") == "ok"
@@ -437,13 +410,12 @@ def print_run_log(run: dict[str, Any]) -> None:
         module_status = str(module.get("status", "unknown"))
         if module_status == "unchanged" and module.get("warnings"):
             module_status = "warning"
-        elif module.get("reboot_required"):
+        elif (
+            module.get("reboot_required")
+            or module_status in ("ok", "updated")
+            and check_packages_require_reboot(module.get("details", []))[0]
+        ):
             module_status = "reboot"
-        elif module_status in ("ok", "updated"):
-            from ui import check_packages_require_reboot
-
-            if check_packages_require_reboot(module.get("details", []))[0]:
-                module_status = "reboot"
         _, module_label = _status_label(module_status)
         dur_str = f"{float(module.get('duration', 0)):.1f}s"
         print(
@@ -470,13 +442,12 @@ def print_run_log(run: dict[str, Any]) -> None:
         module_status = str(module.get("status", "unknown"))
         if module_status == "unchanged" and module.get("warnings"):
             module_status = "warning"
-        elif module.get("reboot_required"):
+        elif (
+            module.get("reboot_required")
+            or module_status in ("ok", "updated")
+            and check_packages_require_reboot(module.get("details", []))[0]
+        ):
             module_status = "reboot"
-        elif module_status in ("ok", "updated"):
-            from ui import check_packages_require_reboot
-
-            if check_packages_require_reboot(module.get("details", []))[0]:
-                module_status = "reboot"
         _, module_label = _status_label(module_status)
         commands = module.get("commands", [])
         error_output = module.get("error_output", "")

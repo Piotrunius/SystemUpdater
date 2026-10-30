@@ -62,11 +62,11 @@ echo "Successfully installed SystemUpdater to ${TARGET_DIR}/sysupdate"
 # Check if ~/.local/bin is in PATH
 if [[ ":$PATH:" != *":${TARGET_DIR}:"* ]]; then
 	SHELL_NAME="$(basename "${SHELL:-bash}")"
-	RC_FILE="~/.bashrc"
+	RC_FILE="${HOME}/.bashrc"
 	if [ "${SHELL_NAME}" = "zsh" ] || [ "$(uname -s)" = "Darwin" ]; then
-		RC_FILE="~/.zshrc"
+		RC_FILE="${HOME}/.zshrc"
 	elif [ "${SHELL_NAME}" = "fish" ]; then
-		RC_FILE="~/.config/fish/config.fish"
+		RC_FILE="${HOME}/.config/fish/config.fish"
 	fi
 	echo "Notice: ${TARGET_DIR} is not currently in your PATH."
 	echo "Add this line to your ${RC_FILE}:"

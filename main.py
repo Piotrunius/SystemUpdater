@@ -149,7 +149,8 @@ def parse_semver(v: str | None) -> tuple[int, int, int]:
     clean = str(v).lstrip("v").strip()
     match = re.match(r"^(\d+)\.(\d+)\.(\d+)", clean)
     if match:
-        return tuple(map(int, match.groups()))
+        major, minor, patch = match.groups()
+        return (int(major), int(minor), int(patch))
     return (0, 0, 0)
 
 
