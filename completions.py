@@ -165,7 +165,7 @@ _sysupdate() {{
     fi
 }}
 
-complete -F _sysupdate sysupdate
+complete -F _sysupdate sysupdate update
 """
 
 
@@ -174,7 +174,7 @@ def generate_zsh_completion(modules: list[BaseModule]) -> str:
     keys_formatted = " ".join(f"'{k}'" for k in module_keys)
     categories_formatted = " ".join(f"'{c}'" for c in CATEGORIES)
 
-    return f"""#compdef sysupdate
+    return f"""#compdef sysupdate update
 
 _sysupdate() {{
     local -a options
