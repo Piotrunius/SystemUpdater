@@ -310,6 +310,9 @@ jobs:
                   #!/bin/bash
                   exec "{v_py}" "{v_lib}/main.py" "$@"
                 EOS
+                (bin/"sysupdate").chmod 0755
+
+                generate_completions_from_executable(bin/"sysupdate", "--generate-completion", shells: [:bash, :zsh, :fish])
               end
 
               test do
