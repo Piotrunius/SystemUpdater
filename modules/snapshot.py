@@ -1,6 +1,5 @@
 """
 Btrfs root snapshot module using Snapper with cooldown tracking.
-Directly replaces Topgrade/snapshot.sh.
 """
 
 import os
@@ -44,8 +43,21 @@ class SnapshotModule(BaseModule):
 
     def run(self, ctx: UpdateContext) -> StepResult:
         cache_dir = xdg_directory("XDG_CACHE_HOME", "~/.cache")
-        stamp_file = os.path.join(cache_dir, "topgrade_snapper_stamp")
+        stamp_file = os.path.join(cache_dir, "sysupdate_snapper_stamp")
+        legacy_stamp_file = os.path.join(cache_dir, "topgrade_snapper_stamp")
         os.makedirs(cache_dir, exist_ok=True)
+
+        if os.path.exists(legacy_stamp_file):
+            if not os.path.exists(stamp_file):
+                try:
+                    os.replace(legacy_stamp_file, stamp_file)
+                except OSError:
+                    stamp_file = legacy_stamp_file
+            else:
+                try:
+                    os.remove(legacy_stamp_file)
+                except OSError:
+                    pass
 
         cooldown_minutes = self.cooldown_hours * 60
 

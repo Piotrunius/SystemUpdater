@@ -1,6 +1,6 @@
 """
 Sudo credential manager and keepalive background loop for SystemUpdater.
-Replaces Topgrade's pre_sudo and --sudoloop with a zero-leak daemon thread.
+Keeps sudo credentials cached with a zero-leak background daemon thread.
 """
 
 import os
