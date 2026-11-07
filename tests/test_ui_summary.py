@@ -479,6 +479,37 @@ class SummaryFormattingTests(unittest.TestCase):
         self.assertTrue(res.reboot_required)
         self.assertEqual(res.warnings, [])
 
+    def test_complete_step_does_not_trigger_reboot_for_homebrew(self):
+        from modules.brew import BrewModule
+
+        ui = UI(is_interactive=False, verbose=True)
+        brew_mod = BrewModule()
+        res = StepResult(
+            "ok", "4 packages upgraded", details=["systemd", "ruff", "mpv", "vim"]
+        )
+        ui._complete_step(res, None, command_start=0, module=brew_mod)
+
+        self.assertFalse(res.reboot_required)
+        self.assertEqual(res.warnings, [])
+
+    def test_is_reboot_eligible_module(self):
+        from modules.brew import BrewModule
+        from modules.firmware import FirmwareModule
+        from modules.flatpak import FlatpakModule
+        from modules.nobara import SystemPackagesModule
+        from ui import is_reboot_eligible_module
+
+        self.assertTrue(is_reboot_eligible_module(SystemPackagesModule()))
+        self.assertTrue(is_reboot_eligible_module(FirmwareModule()))
+        self.assertTrue(is_reboot_eligible_module(None))
+        self.assertFalse(is_reboot_eligible_module(BrewModule()))
+        self.assertFalse(is_reboot_eligible_module(FlatpakModule()))
+        self.assertFalse(
+            is_reboot_eligible_module(
+                {"name": "Homebrew", "key": "brew", "category": "Containers & Packages"}
+            )
+        )
+
     def test_complete_step_ignores_lvfs_triaged_issue_in_command_log(self):
         ui = UI(is_interactive=False, verbose=True)
         ctx = UpdateContext(verbose=True)

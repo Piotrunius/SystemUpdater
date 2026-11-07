@@ -237,11 +237,19 @@ The `[commands]`, `[pre_commands]`, and `[post_commands]` tables accept a displa
 
 ## Reboot handling
 
-SystemUpdater looks for reboot requirements reported by updated core packages (kernels, systemd, glibc, nvidia, microcode), firmware updates, and standard reboot marker files. When a component requires a reboot, it receives a distinct blue `[^]` marker in the live step output, run history, and `--show-log` views. A dedicated `── Reboot ──` section is displayed directly below the update summary detailing the exact components or packages that triggered the restart. `--reboot` requests a non-interactive `systemctl reboot` only when a reboot is required. The summary and run history are written before the reboot is requested. Without `--reboot`, the requirement is clearly reported and the machine is left running.
+SystemUpdater intelligently detects reboot requirements from system core packages, firmware updates, and host OS markers. Reboot detection is strictly scoped to host system components (`System Core` and `Firmware`); userland package managers and application runtimes (such as Homebrew, Flatpak, npm, or Docker) never trigger machine restart requirements.
+
+Detection leverages dynamic native OS tooling where available (such as DNF `needs-restarting -r`, openSUSE reboot markers, Debian/Ubuntu `/run/reboot-required` with `/run/reboot-required.pkgs`, and running kernel module validation) alongside core package pattern matching. When a component requires a reboot, it receives a distinct blue `[^]` marker in the live step output, run history, and `--show-log` views. A dedicated `── Reboot ──` section is displayed directly below the update summary detailing the exact components or packages that triggered the restart. `--reboot` requests a non-interactive `systemctl reboot` (or macOS restart) only when a reboot is required. The summary and run history are written before the reboot is requested. Without `--reboot`, the requirement is clearly reported and the machine is left running.
 
 ## Run history
 
-Run history is stored under `~/.local/state/sysupdate/history/`, or `$XDG_STATE_HOME/sysupdate/history/` when set. The last 30 runs are retained with private file permissions. Captured command output is redacted for common token and password patterns and size-limited; output from read-only commands is not saved because it may contain credentials.
+Run history is stored under `~/.local/state/sysupdate/history/`, or `$XDG_STATE_HOME/sysupdate/history/` when set. The last 30 runs are retained with private file permissions (`0700` directory, `0600` files). Captured command output and logs are automatically sanitized with comprehensive multi-layer redaction:
+
+- PEM and OpenSSH private key blocks
+- HTTP `Authorization` and `Proxy-Authorization` headers (including Basic auth and Bearer tokens)
+- URLs containing embedded credentials across all URI schemes (`https://`, `git://`, `ssh://`, etc.)
+- Developer ecosystem tokens (GitHub PATs, GitLab tokens, Slack, AWS Access Keys, OpenAI/Anthropic/HuggingFace API keys, PyPI, and npm tokens)
+- Quoted and unquoted sensitive flags and environment variable assignments (`--password`, `token=`, `"apiKey":`, etc.)
 
 `sysupdate --history` lists saved runs. Use a run ID with `sysupdate --show-log RUN_ID` to inspect module statuses, commands, exit codes, and captured output. Warning details are included in the relevant module output.
 

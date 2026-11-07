@@ -186,8 +186,27 @@ class SystemPackagesModule(BaseModule):
         # Parse upgraded packages
         upgraded_pkgs = parse_dnf_packages(out)
         count = len(upgraded_pkgs)
+
+        # Check if DNF / RPM indicates a system reboot is required
+        reboot_required = False
         if count > 0:
+            dnf_bin = ctx.which("dnf")
+            if dnf_bin:
+                nr_code, _, _ = ctx.run_cmd(
+                    [dnf_bin, "needs-restarting", "-C", "-r"], read_only=True
+                )
+                if nr_code == 1:
+                    reboot_required = True
+                elif nr_code != 0:
+                    nr_bin = ctx.which("needs-restarting")
+                    if nr_bin:
+                        nr2_code, _, _ = ctx.run_cmd([nr_bin, "-r"], read_only=True)
+                        if nr2_code == 1:
+                            reboot_required = True
+
             msg = f"{count} package{'s' if count != 1 else ''} upgraded"
-            return StepResult("ok", msg, details=upgraded_pkgs)
+            return StepResult(
+                "ok", msg, details=upgraded_pkgs, reboot_required=reboot_required
+            )
 
         return StepResult("ok", "System packages upgraded successfully")

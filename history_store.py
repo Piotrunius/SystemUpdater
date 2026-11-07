@@ -14,7 +14,7 @@ from typing import Any
 
 from colors import Colors, get_status_marker
 from config import xdg_directory
-from ui import check_packages_require_reboot, redact_text
+from ui import check_packages_require_reboot, is_reboot_eligible_module, redact_text
 
 RUN_ID_PATTERN = re.compile(r"^\d{8}T\d{6}Z-[0-9a-f]{8}$")
 
@@ -93,6 +93,16 @@ def has_new_warnings(
     return False
 
 
+def _module_requires_reboot(module: dict[str, Any]) -> bool:
+    if not is_reboot_eligible_module(module):
+        return False
+    if module.get("reboot_required"):
+        return True
+    if module.get("status") in ("ok", "updated", "reboot"):
+        return check_packages_require_reboot(module.get("details", []))[0]
+    return False
+
+
 def classify_run_status(
     run: dict[str, Any], previous_runs: list[dict[str, Any]]
 ) -> str:
@@ -105,17 +115,10 @@ def classify_run_status(
         module.get("status") == "error" for module in modules
     ):
         return "error"
-    if run.get("reboot_required") or any(
-        module.get("reboot_required") for module in modules
-    ):
+    if run.get("reboot_required") and not modules:
         return "reboot"
-    # Backward compatibility with existing history runs containing reboot-triggering packages
-    for module in modules:
-        if (
-            module.get("status") == "ok"
-            and check_packages_require_reboot(module.get("details", []))[0]
-        ):
-            return "reboot"
+    if any(_module_requires_reboot(m) for m in modules):
+        return "reboot"
     if has_new_warnings(modules, previous_runs):
         return "warning"
     if run.get("status") == "warning" and not modules:
@@ -410,11 +413,7 @@ def print_run_log(run: dict[str, Any]) -> None:
         module_status = str(module.get("status", "unknown"))
         if module_status == "unchanged" and module.get("warnings"):
             module_status = "warning"
-        elif (
-            module.get("reboot_required")
-            or module_status in ("ok", "updated")
-            and check_packages_require_reboot(module.get("details", []))[0]
-        ):
+        elif _module_requires_reboot(module):
             module_status = "reboot"
         _, module_label = _status_label(module_status)
         dur_str = f"{float(module.get('duration', 0)):.1f}s"
@@ -442,11 +441,7 @@ def print_run_log(run: dict[str, Any]) -> None:
         module_status = str(module.get("status", "unknown"))
         if module_status == "unchanged" and module.get("warnings"):
             module_status = "warning"
-        elif (
-            module.get("reboot_required")
-            or module_status in ("ok", "updated")
-            and check_packages_require_reboot(module.get("details", []))[0]
-        ):
+        elif _module_requires_reboot(module):
             module_status = "reboot"
         _, module_label = _status_label(module_status)
         commands = module.get("commands", [])

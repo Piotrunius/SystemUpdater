@@ -116,11 +116,15 @@ class AptModule(BaseModule):
 
         if upgraded:
             count = len(upgraded)
+            reboot_needed = os.path.exists("/run/reboot-required") or os.path.exists(
+                "/var/run/reboot-required"
+            )
             return StepResult(
                 "ok",
                 f"{count} package{'s' if count != 1 else ''} upgraded",
                 details=upgraded,
                 warnings=cleanup_warnings,
+                reboot_required=reboot_needed,
             )
 
         if "0 upgraded, 0 newly installed" in up_out:
@@ -190,10 +194,24 @@ class PacmanModule(BaseModule):
         upgraded = list(dict.fromkeys(upgraded))
         if upgraded:
             count = len(upgraded)
+            running_rel = (
+                getattr(os.uname(), "release", "") if hasattr(os, "uname") else ""
+            )
+            kernel_removed = bool(
+                running_rel
+                and os.path.isdir("/lib/modules")
+                and not os.path.exists(f"/lib/modules/{running_rel}")
+            )
+            reboot_needed = (
+                kernel_removed
+                or os.path.exists("/run/reboot-needed")
+                or os.path.exists("/var/run/reboot-needed")
+            )
             return StepResult(
                 "ok",
                 f"{count} package{'s' if count != 1 else ''} upgraded",
                 details=upgraded,
+                reboot_required=reboot_needed,
             )
 
         return StepResult("ok", "System packages upgraded")
@@ -268,10 +286,24 @@ class ZypperModule(BaseModule):
         upgraded = list(dict.fromkeys(upgraded))
         if upgraded:
             count = len(upgraded)
+            running_rel = (
+                getattr(os.uname(), "release", "") if hasattr(os, "uname") else ""
+            )
+            kernel_removed = bool(
+                running_rel
+                and os.path.isdir("/lib/modules")
+                and not os.path.exists(f"/lib/modules/{running_rel}")
+            )
+            reboot_needed = (
+                kernel_removed
+                or os.path.exists("/run/reboot-needed")
+                or os.path.exists("/var/run/reboot-needed")
+            )
             return StepResult(
                 "ok",
                 f"{count} package{'s' if count != 1 else ''} upgraded",
                 details=upgraded,
+                reboot_required=reboot_needed,
             )
 
         return StepResult("ok", "System packages upgraded")
@@ -316,10 +348,24 @@ class ApkModule(BaseModule):
         upgraded = list(dict.fromkeys(upgraded))
         if upgraded:
             count = len(upgraded)
+            running_rel = (
+                getattr(os.uname(), "release", "") if hasattr(os, "uname") else ""
+            )
+            kernel_removed = bool(
+                running_rel
+                and os.path.isdir("/lib/modules")
+                and not os.path.exists(f"/lib/modules/{running_rel}")
+            )
+            reboot_needed = (
+                kernel_removed
+                or os.path.exists("/run/reboot-needed")
+                or os.path.exists("/var/run/reboot-needed")
+            )
             return StepResult(
                 "ok",
                 f"{count} package{'s' if count != 1 else ''} upgraded",
                 details=upgraded,
+                reboot_required=reboot_needed,
             )
 
         return StepResult("unchanged")
@@ -362,10 +408,24 @@ class XbpsModule(BaseModule):
         upgraded = list(dict.fromkeys(upgraded))
         if upgraded:
             count = len(upgraded)
+            running_rel = (
+                getattr(os.uname(), "release", "") if hasattr(os, "uname") else ""
+            )
+            kernel_removed = bool(
+                running_rel
+                and os.path.isdir("/lib/modules")
+                and not os.path.exists(f"/lib/modules/{running_rel}")
+            )
+            reboot_needed = (
+                kernel_removed
+                or os.path.exists("/run/reboot-needed")
+                or os.path.exists("/var/run/reboot-needed")
+            )
             return StepResult(
                 "ok",
                 f"{count} package{'s' if count != 1 else ''} upgraded",
                 details=upgraded,
+                reboot_required=reboot_needed,
             )
 
         return StepResult("ok", "System packages upgraded")

@@ -48,6 +48,94 @@ class HistoryStoreTests(unittest.TestCase):
         self.assertNotIn("key=xyz", redacted)
         self.assertNotIn("user:pass", redacted)
 
+    def test_comprehensive_secret_forms_are_redacted(self):
+        cases = [
+            # Private keys
+            (
+                "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA0123\n-----END RSA PRIVATE KEY-----",
+                "[REDACTED_PRIVATE_KEY]",
+            ),
+            # Basic Auth and Bearer headers
+            (
+                "Authorization: Basic dXNlcjpwYXNz",
+                "Authorization: Basic [REDACTED]",
+            ),
+            (
+                "Proxy-Authorization: Basic dXNlcjpwYXNz",
+                "Proxy-Authorization: Basic [REDACTED]",
+            ),
+            # URLs with token-only credentials
+            (
+                "https://ghp_01234567890123456789@github.com/repo.git",
+                "https://[REDACTED]@github.com/repo.git",
+            ),
+            (
+                "ssh://user:secretpass@git.example.com/repo",
+                "ssh://[REDACTED]@git.example.com/repo",
+            ),
+            # Quoted assignments with spaces
+            (
+                'password="super secret phrase with spaces"',
+                'password="[REDACTED]"',
+            ),
+            (
+                "token='single quoted token with spaces'",
+                "token='[REDACTED]'",
+            ),
+            # JSON format credentials
+            (
+                '{"apiKey": "secret-api-key-value"}',
+                '{"apiKey": "[REDACTED]"}',
+            ),
+            # CLI Flags
+            (
+                '--password="super secret flag"',
+                '--password="[REDACTED]"',
+            ),
+            (
+                "--token secret_token_123",
+                "--token [REDACTED]",
+            ),
+            # Ecosystem tokens
+            (
+                f"GitLab token: {'glpat-' + 'x' * 22}",
+                "GitLab token: [REDACTED]",
+            ),
+            (
+                f"AI key: {'sk-ant-api03-' + 'x' * 25}",
+                "AI key: [REDACTED]",
+            ),
+            (
+                f"Found raw token {'sk-ant-api03-' + 'x' * 25} in log",
+                "Found raw token [REDACTED_TOKEN] in log",
+            ),
+            (
+                f"AWS: {'AKIA' + '1' * 16}",
+                "AWS: [REDACTED_TOKEN]",
+            ),
+        ]
+        for raw, expected in cases:
+            self.assertEqual(redact_text(raw), expected)
+
+    def test_homebrew_systemd_does_not_trigger_reboot_status(self):
+        run = {
+            "id": "20261106T170010Z-f2025e1e",
+            "status": "ok",
+            "update_count": 4,
+            "reboot_required": False,
+            "modules": [
+                {
+                    "name": "Homebrew",
+                    "key": "brew",
+                    "category": "Containers & Packages",
+                    "status": "ok",
+                    "reboot_required": False,
+                    "details": ["systemd", "ruff", "mpv", "vim"],
+                }
+            ],
+        }
+        self.assertEqual(classify_run_status(run, []), "updated")
+
     def test_persistent_warning_is_not_classified_as_new(self):
         module = {
             "key": "flatpak",

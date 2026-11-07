@@ -91,28 +91,70 @@ ANSI_ESCAPE_PATTERN = re.compile(
     r"\x1B(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1B\\)|[@-Z\\-_])"
 )
 TERMINAL_CONTROL_PATTERN = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
-TOKEN_PATTERN = re.compile(
-    r"(?i)\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,})\b"
+
+PRIVATE_KEY_PATTERN = re.compile(
+    r"-----BEGIN (?:[A-Z0-9_\-]+ )?PRIVATE KEY(?: BLOCK)?-----[\s\S]*?-----END (?:[A-Z0-9_\-]+ )?PRIVATE KEY(?: BLOCK)?-----"
 )
 BEARER_PATTERN = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+")
-URL_CREDENTIAL_PATTERN = re.compile(r"(https?://)[^/@\s]+:[^/@\s]+@")
+BASIC_AUTH_PATTERN = re.compile(
+    r"(?i)\b((?:Proxy-)?Authorization\s*:\s*Basic\s+)[A-Za-z0-9+/=]+"
+)
+URL_CREDENTIAL_PATTERN = re.compile(r"([a-zA-Z][a-zA-Z0-9+.-]*://)([^/@\s\r\n]+@)")
+TOKEN_PATTERN = re.compile(
+    r"(?i)\b(?:"
+    r"gh[pousr]_[A-Za-z0-9_]{20,}|"
+    r"github_pat_[A-Za-z0-9_]{20,}|"
+    r"glpat-[A-Za-z0-9_\-]{20,}|"
+    r"glcbt-[A-Za-z0-9_\-]{20,}|"
+    r"xox[baprs]-[0-9a-zA-Z]{10,}|"
+    r"AKIA[0-9A-Z]{16}|"
+    r"sk-[A-Za-z0-9_\-]{20,}|"
+    r"sk-ant-[A-Za-z0-9_\-]{20,}|"
+    r"pypi-[A-Za-z0-9_\-]{50,}|"
+    r"npm_[A-Za-z0-9]{36}|"
+    r"hf_[A-Za-z0-9]{34,}"
+    r")\b"
+)
 ASSIGNMENT_SECRET_PATTERN = re.compile(
-    r"(?i)\b(token|password|passwd|secret|key|api[_-]?key)(\s*[=:]\s*)([^\s,;]+)"
+    r"(?i)(\b[\"\']?(?:token|password|passwd|secret|key|api[_-]?key|auth[_-]?token|access[_-]?token|refresh[_-]?token|client[_-]?secret|api[_-]?secret|private[_-]?key|secret[_-]?key|ssh[_-]?key|deploy[_-]?key|credential|credentials|session[_-]?token)[\"\']?)(\s*[=:]\s*)(\"[^\"\r\n]*\"|'[^'\r\n]*'|[^\s,;]+)"
 )
 FLAG_SECRET_PATTERN = re.compile(
-    r"(?i)(--(?:token|password|secret|api-key)(?:=|\s+))([^\s]+)"
+    r"(?i)(--(?:token|password|passwd|secret|api[_-]?key|auth[_-]?token|access[_-]?token|client[_-]?secret|api[_-]?secret|private[_-]?key)(?:=|\s+))(\"[^\"\r\n]*\"|'[^'\r\n]*'|[^\s]+)"
 )
 
 
 def redact_text(value: str) -> str:
     """Remove terminal control sequences and mask common credentials."""
+    if not isinstance(value, str):
+        return "" if value is None else str(value)
     safe_value = ANSI_ESCAPE_PATTERN.sub("", value)
     safe_value = TERMINAL_CONTROL_PATTERN.sub("", safe_value)
-    redacted = URL_CREDENTIAL_PATTERN.sub(r"\1[REDACTED]@", safe_value)
+    redacted = PRIVATE_KEY_PATTERN.sub("[REDACTED_PRIVATE_KEY]", safe_value)
+    redacted = BASIC_AUTH_PATTERN.sub(r"\1[REDACTED]", redacted)
     redacted = BEARER_PATTERN.sub("Bearer [REDACTED]", redacted)
+    redacted = URL_CREDENTIAL_PATTERN.sub(r"\1[REDACTED]@", redacted)
     redacted = TOKEN_PATTERN.sub("[REDACTED_TOKEN]", redacted)
-    redacted = ASSIGNMENT_SECRET_PATTERN.sub(r"\1\2[REDACTED]", redacted)
-    return FLAG_SECRET_PATTERN.sub(r"\1[REDACTED]", redacted)
+
+    def _sub_assign(m: re.Match[str]) -> str:
+        prefix = m.group(1)
+        sep = m.group(2)
+        val = m.group(3)
+        if val.startswith(('"', "'")) and len(val) >= 2 and val[-1] == val[0]:
+            q = val[0]
+            return f"{prefix}{sep}{q}[REDACTED]{q}"
+        return f"{prefix}{sep}[REDACTED]"
+
+    redacted = ASSIGNMENT_SECRET_PATTERN.sub(_sub_assign, redacted)
+
+    def _sub_flag(m: re.Match[str]) -> str:
+        prefix = m.group(1)
+        val = m.group(2)
+        if val.startswith(('"', "'")) and len(val) >= 2 and val[-1] == val[0]:
+            q = val[0]
+            return f"{prefix}{q}[REDACTED]{q}"
+        return f"{prefix}[REDACTED]"
+
+    return FLAG_SECRET_PATTERN.sub(_sub_flag, redacted)
 
 
 NON_FATAL_PATTERNS = [
@@ -228,6 +270,97 @@ def get_reboot_trigger_packages(package_lines: list[str]) -> list[str]:
             seen.add(pkg_name)
             matched.append(pkg_name)
     return matched
+
+
+def is_reboot_eligible_module(module: Any) -> bool:
+    """Return True if the module is capable of requiring a host machine reboot."""
+    if module is None:
+        return True
+
+    if getattr(module, "can_trigger_reboot", False):
+        return True
+    if isinstance(module, dict) and module.get("can_trigger_reboot"):
+        return True
+
+    cat = (
+        str(
+            getattr(module, "category", "")
+            or (module.get("category", "") if isinstance(module, dict) else "")
+        )
+        .strip()
+        .lower()
+    )
+    key = (
+        str(
+            getattr(module, "key", "")
+            or (module.get("key", "") if isinstance(module, dict) else "")
+        )
+        .strip()
+        .lower()
+    )
+
+    non_system_categories = {
+        "containers & packages",
+        "applications & gaming",
+        "development environment",
+        "shell & dotfiles",
+        "system protection",
+        "app store",
+    }
+    if cat in non_system_categories:
+        return False
+
+    if cat in ("system core", "firmware"):
+        return True
+    return key in (
+        "system",
+        "apt",
+        "pacman",
+        "zypper",
+        "apk",
+        "xbps",
+        "macos",
+        "firmware",
+    )
+
+
+def check_system_reboot_required(
+    ctx: Any | None = None,
+    upgraded_packages: list[str] | None = None,
+    module: Any | None = None,
+) -> tuple[bool, str | None]:
+    """
+    Dynamically detect whether the host operating system requires a reboot.
+    Combines filesystem markers, running kernel state verification,
+    and package pattern fallbacks.
+    """
+    # 1. Standard Linux distro reboot marker files
+    for marker_path in (
+        "/run/reboot-required",
+        "/var/run/reboot-required",
+        "/run/reboot-needed",
+        "/var/run/reboot-needed",
+    ):
+        if os.path.exists(marker_path):
+            return True, f"marker file {marker_path} present"
+
+    # 2. Kernel module directory removal check (universal across Linux, e.g. Arch, Alpine, Void)
+    if sys.platform.startswith("linux") and hasattr(os, "uname"):
+        try:
+            running_release = os.uname().release
+            modules_dir = f"/lib/modules/{running_release}"
+            if os.path.isdir("/lib/modules") and not os.path.exists(modules_dir):
+                return True, f"running kernel {running_release} modules removed"
+        except OSError:
+            pass
+
+    # 3. Fallback package name heuristics for system packages
+    if upgraded_packages:
+        needed, pkg = check_packages_require_reboot(upgraded_packages)
+        if needed:
+            return True, f"core package updated ({pkg})"
+
+    return False, None
 
 
 class StepResult:
@@ -433,7 +566,9 @@ class UI:
                 "Cancelled by user",
                 duration=time.time() - start_time,
             )
-            self._complete_step(res, ctx, command_start, note_start=note_start)
+            self._complete_step(
+                res, ctx, command_start, note_start=note_start, module=module
+            )
             sys.stdout.write("\r\033[K")
             sys.stdout.flush()
             self._print_static_result(label, res, module=module)
@@ -450,7 +585,9 @@ class UI:
             sys.stdout.flush()
 
         res.duration = time.time() - start_time
-        self._complete_step(res, ctx, command_start, note_start=note_start)
+        self._complete_step(
+            res, ctx, command_start, note_start=note_start, module=module
+        )
         # Clear the status line
         sys.stdout.write("\r\033[K")
         sys.stdout.flush()
@@ -475,6 +612,7 @@ class UI:
         command_start: int,
         note_start: int = 0,
         show_command_output: bool = False,
+        module: Any | None = None,
     ) -> None:
         records = (
             getattr(ctx, "command_log", [])[command_start:] if ctx is not None else []
@@ -528,15 +666,14 @@ class UI:
             )
         )
 
-        # Universal reboot detection across all modules
-        if result.status in ("ok", "unchanged"):
-            reboot_needed, _ = check_packages_require_reboot(result.details)
-            if (
-                result.reboot_required
-                or reboot_needed
-                or os.path.exists("/run/reboot-required")
-                or os.path.exists("/var/run/reboot-required")
-            ):
+        # Universal reboot detection across eligible system/firmware modules
+        if result.status in ("ok", "unchanged") and is_reboot_eligible_module(module):
+            reboot_needed, _ = check_system_reboot_required(
+                ctx=ctx,
+                upgraded_packages=result.details,
+                module=module,
+            )
+            if result.reboot_required or reboot_needed:
                 result.reboot_required = True
 
         if show_command_output and not self.quiet:
@@ -1301,6 +1438,16 @@ def get_reboot_trigger_details(item: dict[str, Any]) -> list[str]:
     triggers = get_reboot_trigger_packages(res.details)
     if triggers:
         return triggers
+
+    # For Debian/Ubuntu, check if /run/reboot-required.pkgs lists packages
+    if os.path.exists("/run/reboot-required.pkgs"):
+        with (
+            contextlib.suppress(OSError),
+            open("/run/reboot-required.pkgs", encoding="utf-8") as f,
+        ):
+            pkgs = [line.strip() for line in f if line.strip()]
+            if pkgs:
+                return pkgs
 
     # For modules with details where items are relevant (e.g. firmware or macos update)
     mod_key = str(item.get("key") or getattr(item.get("module"), "key", "")).lower()
