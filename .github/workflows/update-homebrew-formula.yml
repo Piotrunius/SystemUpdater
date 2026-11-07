@@ -7,6 +7,9 @@ on:
     paths-ignore:
       - README.md
       - .gitignore
+      - ".github/**"
+      - "tests/**"
+      - "assets/**"
 
 permissions:
   contents: write
@@ -175,7 +178,8 @@ jobs:
 
               if is_breaking:
                   breaking.append(entry)
-              categorized.setdefault(type_title, []).append(entry)
+              else:
+                  categorized.setdefault(type_title, []).append(entry)
 
           lines = []
           if breaking:
