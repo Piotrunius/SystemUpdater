@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640">
+  <defs>
+    <linearGradient id="dividerGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.8" />
+      <stop offset="25%" stop-color="#334155" stop-opacity="0.8" />
+      <stop offset="100%" stop-color="#1e293b" stop-opacity="0.2" />
+    </linearGradient>
+  </defs>
+
+  <!-- Solid Full-Bleed Background (from edge to edge, no border, no floating card) -->
+  <rect width="1280" height="640" fill="#15181d" />
+
+  <!-- Top Metadata & Pill Badge -->
+  <g transform="translate(100, 100)">
+    <rect width="28" height="28" rx="6" fill="#161b22" stroke="#30363d" stroke-width="1" />
+    <path d="M14 7 L20 10.5 L20 17.5 L14 21 L8 17.5 L8 10.5 Z M14 7 L14 21 M8 10.5 L14 14 L20 10.5" fill="none" stroke="#58a6ff" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" />
+
+    <text x="40" y="19" font-family="JetBrainsMono Nerd Font, monospace" font-size="13" font-weight="600" fill="#7d8590" letter-spacing="1.5">CLI UTILITY · ZERO DEPENDENCIES</text>
+  </g>
+
+  <!-- Project Name -->
+  <text x="100" y="215" font-family="DejaVu Sans, Cantarell, -apple-system, sans-serif" font-size="72" font-weight="700" fill="#f0f6fc" letter-spacing="-1.5">SystemUpdater</text>
+
+  <!-- Subtitle -->
+  <text x="100" y="275" font-family="DejaVu Sans, Cantarell, -apple-system, sans-serif" font-size="24" font-weight="500" fill="#c9d1d9">
+    Unified, resilient update runner for Linux &amp; macOS
+  </text>
+
+  <!-- Concise Summary Statement -->
+  <text x="100" y="320" font-family="DejaVu Sans, Cantarell, -apple-system, sans-serif" font-size="16" font-weight="400" fill="#8b949e">
+    Automates multi-package updates, Btrfs snapshots, reboot checks, and run history from a single command.
+  </text>
+
+  <!-- Subtle Horizontal Divider -->
+  <line x1="100" y1="365" x2="1180" y2="365" stroke="url(#dividerGrad)" stroke-width="1" />
+
+  <!-- Grid of Key Architecture Strengths -->
+  <g transform="translate(100, 410)">
+    <!-- Column 1: Platform -->
+    <g transform="translate(0, 0)">
+      <text x="0" y="0" font-family="JetBrainsMono Nerd Font, monospace" font-size="12" font-weight="600" fill="#58a6ff" letter-spacing="1.2">PLATFORM</text>
+      <text x="0" y="26" font-family="DejaVu Sans, Cantarell, sans-serif" font-size="17" font-weight="600" fill="#f0f6fc">Linux &amp; macOS</text>
+      <text x="0" y="50" font-family="DejaVu Sans, Cantarell, sans-serif" font-size="14" fill="#8b949e">Auto-detects distribution &amp; tools</text>
+    </g>
+
+    <!-- Column 2: Safety -->
+    <g transform="translate(275, 0)">
+      <text x="0" y="0" font-family="JetBrainsMono Nerd Font, monospace" font-size="12" font-weight="600" fill="#58a6ff" letter-spacing="1.2">SAFETY</text>
+      <text x="0" y="26" font-family="DejaVu Sans, Cantarell, sans-serif" font-size="17" font-weight="600" fill="#f0f6fc">Btrfs Snapshots</text>
+      <text x="0" y="50" font-family="DejaVu Sans, Cantarell, sans-serif" font-size="14" fill="#8b949e">Cooldown-aware Snapper backups</text>
+    </g>
+
+    <!-- Column 3: Integrations -->
+    <g transform="translate(550, 0)">
+      <text x="0" y="0" font-family="JetBrainsMono Nerd Font, monospace" font-size="12" font-weight="600" fill="#58a6ff" letter-spacing="1.2">INTEGRATIONS</text>
+      <text x="0" y="26" font-family="DejaVu Sans, Cantarell, sans-serif" font-size="17" font-weight="600" fill="#f0f6fc">20+ Modules</text>
+      <text x="0" y="50" font-family="DejaVu Sans, Cantarell, sans-serif" font-size="14" fill="#8b949e">DNF, APT, Pacman, Brew, Flatpak...</text>
+    </g>
+
+    <!-- Column 4: Runtime -->
+    <g transform="translate(825, 0)">
+      <text x="0" y="0" font-family="JetBrainsMono Nerd Font, monospace" font-size="12" font-weight="600" fill="#58a6ff" letter-spacing="1.2">RUNTIME</text>
+      <text x="0" y="26" font-family="DejaVu Sans, Cantarell, sans-serif" font-size="17" font-weight="600" fill="#f0f6fc">Pure Python 3.11+</text>
+      <text x="0" y="50" font-family="DejaVu Sans, Cantarell, sans-serif" font-size="14" fill="#8b949e">Standard library, zero pip deps</text>
+    </g>
+  </g>
+
+  <!-- Bottom Details Bar -->
+  <g transform="translate(100, 545)">
+    <text x="0" y="0" font-family="JetBrainsMono Nerd Font, monospace" font-size="14" fill="#484f58">github.com/Piotrunius/SystemUpdater</text>
+    <text x="1080" y="0" font-family="DejaVu Sans, Cantarell, sans-serif" font-size="14" fill="#484f58" text-anchor="end">MIT License</text>
+  </g>
+</svg>

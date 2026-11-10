@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+@theme {
+  --color-zinc-850: #1a1a1e;
+  --color-zinc-750: #2c2c32;
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: #09090b;
+    color: #f4f4f5;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  /* Custom scrollbar for terminal/code blocks */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #09090b;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #27272a;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #3f3f46;
+  }
+  ::-webkit-scrollbar-corner {
+    background: #0c0c0e;
+  }
+}
