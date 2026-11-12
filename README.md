@@ -66,18 +66,18 @@ On normal runs, a clean checkout can fast-forward from its configured upstream. 
 
 ### Homebrew
 
-Install with one command via the official tap:
+Add the tap, trust it, and install SystemUpdater:
 
-```bash
-brew install Piotrunius/tap/systemupdater
-```
-
-Or add the tap first, trust it, and then install:
-
-```bash
+```sh
 brew tap Piotrunius/tap
 brew trust Piotrunius/tap
 brew install systemupdater
+```
+
+(Alternatively, as a single one-liner):
+
+```bash
+brew tap Piotrunius/tap && brew trust Piotrunius/tap && brew install systemupdater
 ```
 
 Update the Homebrew-managed installation with:
