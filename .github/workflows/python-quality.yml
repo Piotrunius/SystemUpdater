@@ -29,11 +29,5 @@ jobs:
       - name: Install quality tools
         run: python -m pip install pytest ruff
 
-      - name: Lint
-        run: ruff check .
-
-      - name: Check formatting
-        run: ruff format --check .
-
-      - name: Run tests
-        run: pytest -q
+      - name: Run unified quality checks
+        run: ./check.sh

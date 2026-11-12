@@ -46,7 +46,7 @@ from history_store import (
 from modules import get_all_modules
 from modules.base import BaseModule, UpdateContext
 from notifications import send_notification
-from ui import UI, StepResult, suppress_terminal_echo
+from ui import UI, StepResult, get_reboot_trigger_details, suppress_terminal_echo
 
 
 def git_output(*args, timeout=3):
@@ -797,6 +797,14 @@ def main():
             with contextlib.suppress(OSError):
                 history_store.save(history_data)
 
+        if notify_mode:
+            dur_str = f"{round(total_elapsed, 1)}s"
+            send_notification(
+                "System Update Interrupted",
+                f"Cancelled by user • {dur_str}",
+                urgency="normal",
+                category="device",
+            )
         ui.print_summary(results, total_elapsed, interrupted=True)
         sys.exit(130)
     finally:
@@ -849,30 +857,92 @@ def main():
     if notify_mode:
         only_err = cfg.notifications_only_on_error_or_reboot
         if not (only_err and not (has_failures or reboot_needed)):
+            if total_elapsed >= 60:
+                m = int(total_elapsed // 60)
+                s = int(total_elapsed % 60)
+                dur_str = f"{m}m {s:02d}s"
+            else:
+                dur_str = f"{round(total_elapsed, 1)}s"
+
             if has_failures:
+                failed_names = [
+                    r["name"] for r in results if r["result"].status == "error"
+                ]
+                if failed_names:
+                    top_failed = ", ".join(failed_names[:2])
+                    rem = len(failed_names) - 2
+                    failed_detail = (
+                        f"Failed: {top_failed} +{rem} more"
+                        if rem > 0
+                        else f"Failed: {top_failed}"
+                    )
+                else:
+                    failed_detail = "Update encountered errors"
                 send_notification(
                     "System Update Failed",
-                    f"Update run finished with errors ({round(total_elapsed, 1)}s)",
+                    f"{failed_detail} • {dur_str}",
                     urgency="critical",
+                    category="device.error",
                 )
             elif reboot_needed:
+                reboot_items = [
+                    r
+                    for r in results
+                    if getattr(r.get("result"), "reboot_required", False)
+                ]
+                reboot_pkgs: list[str] = []
+                for item in reboot_items:
+                    reboot_pkgs.extend(get_reboot_trigger_details(item))
+
+                if reboot_pkgs:
+                    count = len(reboot_pkgs)
+                    noun = "package requires" if count == 1 else "packages require"
+                    reboot_detail = f"{count} {noun} restart"
+                elif reboot_items:
+                    names = [r["name"] for r in reboot_items]
+                    reboot_detail = f"Restart needed by {', '.join(names[:2])}"
+                else:
+                    reboot_detail = "System restart required"
                 send_notification(
                     "System Restart Required",
-                    f"Updates completed. System restart needed ({update_count} packages)",
+                    f"{reboot_detail} • {dur_str}",
                     urgency="critical",
+                    category="device",
+                )
+            elif any(r["result"].status == "warning" for r in results):
+                warn_names = [
+                    r["name"] for r in results if r["result"].status == "warning"
+                ]
+                if warn_names:
+                    top_warn = ", ".join(warn_names[:2])
+                    rem = len(warn_names) - 2
+                    warn_detail = (
+                        f"Warnings: {top_warn} +{rem} more"
+                        if rem > 0
+                        else f"Warnings: {top_warn}"
+                    )
+                else:
+                    warn_detail = "Completed with warnings"
+                send_notification(
+                    "System Update Warnings",
+                    f"{warn_detail} • {dur_str}",
+                    urgency="normal",
+                    category="device",
                 )
             elif update_count > 0:
                 noun = "update" if update_count == 1 else "updates"
                 send_notification(
                     "System Update Complete",
-                    f"{update_count} {noun} applied ({round(total_elapsed, 1)}s)",
+                    f"{update_count} {noun} applied • {dur_str}",
                     urgency="normal",
+                    category="device",
                 )
             else:
                 send_notification(
                     "System Up To Date",
-                    f"No updates required ({round(total_elapsed, 1)}s)",
+                    f"All components up to date • {dur_str}",
                     urgency="low",
+                    category="device",
                 )
 
     if reboot_requested_mode and reboot_needed:

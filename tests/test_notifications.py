@@ -22,6 +22,33 @@ class NotificationTests(unittest.TestCase):
             self.assertIn("Update Complete", args)
             self.assertIn("10 packages updated", args)
 
+    def test_send_notification_linux_with_options(self):
+        with (
+            patch("platform.system", return_value="Linux"),
+            patch("shutil.which", return_value="/usr/bin/notify-send"),
+            patch(
+                "subprocess.run",
+                return_value=Mock(returncode=0),
+            ) as mock_run,
+        ):
+            ok = send_notification(
+                "Update Failed",
+                "Errors occurred",
+                urgency="normal",
+                icon="dialog-error",
+                category="device.error",
+                expire_time=5000,
+            )
+            self.assertTrue(ok)
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+            self.assertIn("-i", args)
+            self.assertIn("dialog-error", args)
+            self.assertIn("-c", args)
+            self.assertIn("device.error", args)
+            self.assertIn("-t", args)
+            self.assertIn("5000", args)
+
     def test_send_notification_linux_not_installed(self):
         with (
             patch("platform.system", return_value="Linux"),

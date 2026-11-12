@@ -15,6 +15,9 @@ def send_notification(
     message: str,
     urgency: str = "normal",  # "low", "normal", "critical"
     app_name: str = "SystemUpdater",
+    icon: str | None = None,
+    category: str | None = None,
+    expire_time: int | None = None,
 ) -> bool:
     """Send a native desktop notification on Linux or macOS.
 
@@ -28,7 +31,15 @@ def send_notification(
             return False
 
         urgency_arg = urgency if urgency in ("low", "normal", "critical") else "normal"
-        cmd = [notifier, "-a", app_name, "-u", urgency_arg, title, message]
+        cmd = [notifier, "-a", app_name, "-u", urgency_arg]
+        if icon:
+            cmd.extend(["-i", icon])
+        if category:
+            cmd.extend(["-c", category])
+        if expire_time is not None and expire_time >= 0:
+            cmd.extend(["-t", str(expire_time)])
+        cmd.extend([title, message])
+
         try:
             res = subprocess.run(cmd, check=False, capture_output=True, timeout=5)
             return res.returncode == 0

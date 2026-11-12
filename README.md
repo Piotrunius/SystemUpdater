@@ -255,13 +255,20 @@ Run history is stored under `~/.local/state/sysupdate/history/`, or `$XDG_STATE_
 
 ## Development
 
-The project has no third-party Python runtime dependencies. Tests use pytest:
+The project has no third-party Python runtime dependencies. A unified verification script checks shell formatting, Python linting, typing, Prettier formatting, web portal compilation, and unit tests:
+
+```bash
+./check.sh       # Run full quality and test suite
+./check.sh -f    # Automatically format and fix issues
+```
+
+You can also run pytest directly:
 
 ```bash
 python3 -m pytest
 ```
 
-The application entry point is `main.py`; update integrations live in `modules/`, and shared configuration, history, privilege, and terminal UI code live in the project root.
+The application entry point is `main.py`; update integrations live in `modules/`, and shared configuration, history, privilege, and terminal UI code live in the project root. The web documentation portal and interactive configuration builder live under `web/`.
 
 ## License
 
