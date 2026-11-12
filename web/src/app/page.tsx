@@ -7,8 +7,8 @@ import { ArrowRight, Sliders, Shield, Zap, Package } from "lucide-react";
 export default function Home() {
   const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
   const brewInstallCmd = `brew tap Piotrunius/tap
-  brew trust Piotrunius/tap
-  brew install systemupdater`;
+brew trust Piotrunius/tap
+brew install systemupdater`;
 
   const commonCommands = [
     {
