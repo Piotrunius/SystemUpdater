@@ -65,6 +65,41 @@ class PartialFailureTests(unittest.TestCase):
         self.assertEqual(result.details, ["updated"])
         self.assertIn("repository unavailable", result.error_output)
 
+    def test_partial_failure_summary_renders_updated_and_error_separately(self):
+        import contextlib
+        import io
+        import re
+
+        from ui import UI, StepResult
+
+        brew_res = StepResult(
+            "error",
+            "Homebrew upgrade failed",
+            details=["openssl@3", "libffi"],
+            error_output="Casks: Error: lulu: App source not found",
+        )
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            UI(is_interactive=False, verbose=False).print_summary(
+                [{"name": "Homebrew", "key": "brew", "result": brew_res}], 1.0
+            )
+        plain = re.sub(r"\x1b\[[0-9;]*m", "", out.getvalue())
+
+        # Should be listed under Updated components
+        self.assertIn("Updated components:", plain)
+        self.assertIn("• Homebrew: 2 packages updated", plain)
+        self.assertIn("- openssl@3", plain)
+        self.assertIn("- libffi", plain)
+
+        # In Errors section, only the actual error should be shown, not the successful packages
+        self.assertIn("Failed components:", plain)
+        self.assertIn("• Homebrew: failed", plain)
+        self.assertIn("- Casks: Error: lulu: App source not found", plain)
+        # Verify openssl@3 is NOT duplicated under Failed components
+        error_section = plain.split("Failed components:")[1]
+        self.assertNotIn("- openssl@3", error_section)
+        self.assertNotIn("- libffi", error_section)
+
 
 if __name__ == "__main__":
     unittest.main()

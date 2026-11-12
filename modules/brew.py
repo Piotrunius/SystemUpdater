@@ -34,6 +34,33 @@ class BrewModule(BaseModule):
     def is_available(self, ctx: UpdateContext) -> bool:
         return find_brew_bin(ctx) is not None
 
+    def _extract_brew_error(self, out: str | None, err: str | None) -> str:
+        combined = (err or "") + "\n" + (out or "")
+        lines = []
+        for line in combined.splitlines():
+            s = line.strip()
+            if not s:
+                continue
+            if (
+                s.startswith("Error:")
+                or "failed" in s.lower()
+                or "not there" in s.lower()
+            ):
+                lines.append(s)
+        if lines:
+            return "\n".join(dict.fromkeys(lines))
+        meaningful = [
+            ln.strip()
+            for ln in combined.splitlines()
+            if ln.strip()
+            and not ln.strip().startswith(("==>", "✔︎", "Warning: Temporary"))
+        ]
+        return (
+            "\n".join(meaningful[-3:])
+            if meaningful
+            else (err or out or "command failed").strip()
+        )
+
     def run(self, ctx: UpdateContext) -> StepResult:
         if hasattr(os, "geteuid") and os.geteuid() == 0:
             return StepResult(
@@ -50,7 +77,7 @@ class BrewModule(BaseModule):
             return StepResult(
                 "error",
                 "Homebrew repository update failed",
-                error_output=u_err or u_out,
+                error_output=self._extract_brew_error(u_out, u_err),
             )
 
         # 2. brew upgrade (formulae and casks)
@@ -81,9 +108,13 @@ class BrewModule(BaseModule):
 
         failed_commands = []
         if up_code != 0:
-            failed_commands.append(f"Formulae: {up_err or up_out or 'command failed'}")
+            failed_commands.append(
+                f"Formulae: {self._extract_brew_error(up_out, up_err)}"
+            )
         if cask_code != 0:
-            failed_commands.append(f"Casks: {cask_err or cask_out or 'command failed'}")
+            failed_commands.append(
+                f"Casks: {self._extract_brew_error(cask_out, cask_err)}"
+            )
         if failed_commands:
             return StepResult(
                 "error",

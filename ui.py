@@ -80,6 +80,10 @@ IGNORED_DIAGNOSTIC_SUBSTRINGS = (
     "[RPM] file",
     "remove failed: No such file or directory",
     "Sandbox unavailable",
+    "HOMEBREW_NO_ENV_HINTS",
+    "Temporary files retained at",
+    "/private/tmp/cask-",
+    "Some casks with `auto_updates true`",
 )
 
 REBOOT_TRIGGER_PATTERNS = re.compile(
@@ -886,8 +890,10 @@ class UI:
         package_updates = [
             r
             for r in results
-            if r["result"].status == "ok"
-            and r["result"].message
+            if (
+                (r["result"].status == "ok" and r["result"].message)
+                or (r["result"].status == "error" and r["result"].details)
+            )
             and getattr(r.get("module"), "category", "") != "System Protection"
             and r.get("key") != "snapshot"
         ]
@@ -939,7 +945,9 @@ class UI:
                 if is_single_entity_module(item):
                     print(f"    • {item['name']}: {msg_text}")
                 else:
-                    if res.details and not any(c.isdigit() for c in msg_text):
+                    if res.details and (
+                        res.status == "error" or not any(c.isdigit() for c in msg_text)
+                    ):
                         valid = [
                             d
                             for d in res.details
@@ -1021,11 +1029,14 @@ class UI:
             print(f"  {marker} Failed components:")
             for item in error_items:
                 res = item["result"]
-                details = (
-                    list(res.details)
-                    + list(res.warnings)
-                    + diagnostic_lines(res.error_output)
-                )
+                if item in package_updates:
+                    details = list(res.warnings) + diagnostic_lines(res.error_output)
+                else:
+                    details = (
+                        list(res.details)
+                        + list(res.warnings)
+                        + diagnostic_lines(res.error_output)
+                    )
                 if not details and res.message and res.message.lower() != "failed":
                     details.append(res.message)
                 print(f"    • {item['name']}: failed")

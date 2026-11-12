@@ -37,7 +37,9 @@ class SoftwareUpdateModule(BaseModule):
         sw_bin = ctx.which("softwareupdate") or "/usr/sbin/softwareupdate"
 
         # Check for available software updates
-        check_code, check_out, check_err = ctx.run_cmd([sw_bin, "-l"], read_only=True)
+        check_code, check_out, check_err = ctx.run_cmd(
+            [sw_bin, "-l"], read_only=True, timeout=180
+        )
         combined_check = (check_out or "") + "\n" + (check_err or "")
 
         if (
@@ -57,12 +59,25 @@ class SoftwareUpdateModule(BaseModule):
         if not items:
             return StepResult("unchanged", "up to date")
 
-        # Install updates
-        install_cmd = [sw_bin, "-ia"]
-        ins_code, ins_out, ins_err = ctx.run_cmd(install_cmd)
+        # Install updates with sudo and --agree-to-license to prevent interactive hangs
+        install_cmd = ["sudo", sw_bin, "-ia", "--agree-to-license"]
+        ins_code, ins_out, ins_err = ctx.run_cmd(install_cmd, timeout=900)
         combined_ins = (ins_out or "") + "\n" + (ins_err or "")
 
         if ins_code != 0:
+            ins_lower = combined_ins.lower()
+            if (
+                "system settings" in ins_lower
+                or "interactively" in ins_lower
+                or "volume owner" in ins_lower
+                or "ownership" in ins_lower
+            ):
+                return StepResult(
+                    "warning",
+                    "macOS upgrade requires System Settings",
+                    details=items,
+                    error_output=ins_err or ins_out,
+                )
             return StepResult(
                 "error",
                 "macOS software update failed",

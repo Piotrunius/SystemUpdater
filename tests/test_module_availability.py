@@ -135,6 +135,12 @@ class ModuleAvailabilityTests(unittest.TestCase):
         probe_error = FakeContext(error="registry is unavailable", return_code=1)
         self.assertTrue(bun.is_available(probe_error))
         self.assertEqual(bun.availability_status(probe_error), "[Unavailable]")
+        proto_error = FakeContext(
+            error="Error: proto::detect::failed\nhelp: Has the tool been installed?",
+            return_code=1,
+        )
+        self.assertFalse(bun.is_available(proto_error))
+        self.assertEqual(bun.availability_status(proto_error), "[Not Installed]")
 
     def test_yarn_and_asdf_require_targets(self):
         yarn = YarnModule()

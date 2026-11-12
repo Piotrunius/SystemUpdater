@@ -4,6 +4,7 @@ Developer tools, language runtimes, and shell extensions modules.
 
 import json
 import os
+import platform
 import re
 
 from modules.base import BaseModule, UpdateContext
@@ -308,6 +309,13 @@ class BunModule(BaseModule):
         )
         output = f"{out}\n{err}".strip().lower()
         if (
+            "proto::detect::failed" in output
+            or "has the tool been installed" in output
+            or "no version is set" in output
+            or "not installed" in output
+        ):
+            return "not-installed"
+        if (
             "no package.json was found" in output
             or "no global packages" in output
             or not output
@@ -330,6 +338,13 @@ class BunModule(BaseModule):
     def run(self, ctx: UpdateContext) -> StepResult:
         code, out, err = ctx.run_cmd(["bun", "update", "-g"])
         combined = (out or "") + "\n" + (err or "")
+        if (
+            "proto::detect::failed" in combined.lower()
+            or "has the tool been installed" in combined.lower()
+            or "no version is set" in combined.lower()
+        ):
+            return StepResult("unchanged", "no active version configured")
+
         if (
             "No package.json" in combined
             or "nothing to update" in combined
@@ -1002,8 +1017,16 @@ class GemModule(BaseModule):
     unit_name_plural = "gems"
 
     def _availability(self, ctx: UpdateContext) -> str:
-        if ctx.which("gem") is None:
+        gem_bin = ctx.which("gem")
+        if gem_bin is None:
             return "not-installed"
+
+        # On macOS, Apple's built-in system ruby (/usr/bin/gem) is SIP-protected and read-only
+        if platform.system() == "Darwin" and (
+            gem_bin == "/usr/bin/gem" or gem_bin.startswith("/System/")
+        ):
+            return "no-targets"
+
         code, out, _ = ctx.run_cmd(
             ["gem", "list", "--local"], timeout=5, read_only=True
         )
@@ -1035,6 +1058,19 @@ class GemModule(BaseModule):
 
     def run(self, ctx: UpdateContext) -> StepResult:
         code, out, err = ctx.run_cmd(["gem", "update", "--system"], timeout=180)
+
+        combined = (out or "") + "\n" + (err or "")
+        if (
+            "Gem::FilePermissionError" in combined
+            or "write permissions" in combined.lower()
+            or "permission denied" in combined.lower()
+        ):
+            return StepResult(
+                "warning",
+                "RubyGems directory is not writable (permission denied)",
+                error_output=err or out,
+            )
+
         if code != 0:
             return StepResult("error", "gem update failed", error_output=err or out)
 

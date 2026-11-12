@@ -64,6 +64,19 @@ class SoftwareUpdateModuleTests(unittest.TestCase):
         self.assertIn("macOS Sonoma 14.5-23F79", res.details)
         self.assertIn("Command Line Tools for Xcode-15.3", res.details)
 
+    def test_major_upgrade_requires_system_settings_returns_warning(self):
+        check_out = "* Title: macOS Sequoia 15.0, Version: 15.0, Action: restart,\n"
+        install_err = "Software Update Tool\nError: To install this update, you must run softwareupdate interactively or through System Settings."
+        ctx = FakeContext(
+            [
+                (0, check_out, ""),
+                (1, "", install_err),
+            ]
+        )
+        res = SoftwareUpdateModule().run(cast(Any, ctx))
+        self.assertEqual(res.status, "warning")
+        self.assertIn("System Settings", res.message)
+
 
 if __name__ == "__main__":
     unittest.main()

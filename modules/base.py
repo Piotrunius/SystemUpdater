@@ -144,6 +144,7 @@ class UpdateContext:
         self.env["DEBIAN_FRONTEND"] = "noninteractive"
         self.env["CI"] = "1"
         self.env["NONINTERACTIVE"] = "1"
+        self.env["HOMEBREW_NO_ENV_HINTS"] = "1"
         self.status_updater = None
         self.command_log: list[dict[str, Any]] = []
         self.deferred_notes: list[str] = []

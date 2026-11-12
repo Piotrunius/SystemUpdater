@@ -17,6 +17,7 @@ cd ~/.local/share/sysupdate
 ./install.sh`;
 
   const brewInstall = `brew tap Piotrunius/tap
+brew trust Piotrunius/tap
 brew install systemupdater`;
 
   const completionsCmd = `# Auto-detect installed shells and register completions

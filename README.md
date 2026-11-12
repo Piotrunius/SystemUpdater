@@ -72,10 +72,11 @@ Install with one command via the official tap:
 brew install Piotrunius/tap/systemupdater
 ```
 
-Or add the tap first and then install:
+Or add the tap first, trust it, and then install:
 
 ```bash
 brew tap Piotrunius/tap
+brew trust Piotrunius/tap
 brew install systemupdater
 ```
 
