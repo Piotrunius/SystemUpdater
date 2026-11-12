@@ -3,7 +3,7 @@
 
 [misc]
 # Minimum hours between protective Btrfs root snapshots (default: 12)
-cooldown_hours = 12
+# cooldown_hours = 12
 
 # Maximum command timeout in seconds (default: 180)
 # command_timeout = 300
