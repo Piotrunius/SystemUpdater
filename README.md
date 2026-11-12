@@ -170,7 +170,7 @@ The default configuration file is `${XDG_CONFIG_HOME:-$HOME/.config}/sysupdate/c
 ```toml
 [misc]
 # Minimum hours between protective Btrfs snapshots (default: 12)
-cooldown_hours = 12
+# cooldown_hours = 12
 
 # Maximum seconds allowed per update command before timing out (default: 180)
 # command_timeout = 300
