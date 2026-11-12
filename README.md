@@ -30,7 +30,7 @@ Availability depends on the operating system and tools installed on the machine.
 | System                       | DNF/DNF5, APT, Pacman and AUR helpers (yay/paru), Zypper, APK, XBPS, Nobara repository sync, macOS Software Update             |
 | Protection and firmware      | Snapper Btrfs snapshots, Firmware (fwupdmgr)                                                                                   |
 | Apps and gaming              | Flatpak, Nuvio Desktop, Gear Lever AppImages, ProtonPlus, Distrobox, Mac App Store (mas)                                       |
-| Containers and package tools | Homebrew, Docker images and Compose services, Podman auto-update, Vagrant boxes, Snap, Nix                                     |
+| Containers and package tools | Homebrew, Docker images, Podman auto-update, Vagrant boxes, Snap, Nix                                                          |
 | Development tools            | Shell plugins, Tealdeer, Rust, Python tools, Node.js package managers, Composer, Ruby gems, Mise, asdf, SDKMAN, GHCup, Flutter |
 | Editors and extensions       | Neovim, Micro, Helix, VS Code, Cursor, VSCodium, Tmux plugins, GitHub CLI extensions, Agent Skills, Antigravity                |
 | User configuration           | Chezmoi, Yadm, configured Git repositories, custom pre/update/post commands                                                    |

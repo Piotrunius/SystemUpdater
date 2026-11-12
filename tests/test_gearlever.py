@@ -245,7 +245,6 @@ Updating cloudflare…
                     "Digest: sha256:6d895cfb3a7cc8b939eda4f7f3cba5c45b569cd9532dad6e8da32cba76285654\nStatus: Downloaded newer image",
                     "",
                 ),
-                (0, "", ""),
             ]
         )
         result = DockerModule().run(context)
@@ -256,7 +255,7 @@ Updating cloudflare…
             ["ghcr.io/pelican/panel:latest"],
         )
 
-    def test_docker_recreates_compose_service_on_image_update(self):
+    def test_docker_does_not_recreate_compose_services(self):
         from modules.docker import DockerModule
 
         context = UpdateContext()
@@ -272,14 +271,6 @@ Updating cloudflare…
                     "Digest: sha256:6d895cfb3a7cc8b939eda4f7f3cba5c45b569cd9532dad6e8da32cba76285654\nStatus: Downloaded newer image",
                     "",
                 )
-            if "ps" in cmd:
-                return (
-                    0,
-                    "ghcr.io/pelican/panel:latest\t/opt/pelican/docker-compose.yml\t/opt/pelican\n",
-                    "",
-                )
-            if "compose" in cmd:
-                return (0, "[+] up 1/1\n ✔ Container pelican-panel-1 Recreated", "")
             return (0, "", "")
 
         context.run_cmd = Mock(side_effect=mock_run)
@@ -290,54 +281,9 @@ Updating cloudflare…
             result.details,
             ["ghcr.io/pelican/panel:latest"],
         )
-        self.assertTrue(
-            any("compose" in cmd and "up" in cmd for cmd in commands_run),
-            "Expected docker compose up -d to be executed",
-        )
-
-    def test_docker_recreates_compose_service_when_container_image_is_hash(self):
-        from modules.docker import DockerModule
-
-        context = UpdateContext()
-        commands_run = []
-
-        def mock_run(cmd, **kwargs):
-            commands_run.append(cmd)
-            if "images" in cmd:
-                return (0, "ghcr.io/pelican/panel:latest", "")
-            if "pull" in cmd:
-                return (
-                    0,
-                    "Digest: sha256:9a4364ce709cad6240deadde3396858cab8c00a3be456e5c4e424a10c71820a0\nStatus: Downloaded newer image",
-                    "",
-                )
-            if "ps" in cmd:
-                return (
-                    0,
-                    "6d895cfb3a7c\t/opt/pelican/docker-compose.yml\t/opt/pelican\td89bd597e01d\n",
-                    "",
-                )
-            if "inspect" in cmd:
-                return (
-                    0,
-                    "d89bd597e01d0c1de04bfc9d6883e2439bc83dfbc26accfc7d73dbca461eb5a8\tghcr.io/pelican/panel:latest\n",
-                    "",
-                )
-            if "compose" in cmd:
-                return (0, "[+] up 1/1\n ✔ Container pelican-panel-1 Recreated", "")
-            return (0, "", "")
-
-        context.run_cmd = Mock(side_effect=mock_run)
-        result = DockerModule().run(context)
-
-        self.assertEqual(result.status, "ok")
-        self.assertEqual(
-            result.details,
-            ["ghcr.io/pelican/panel:latest"],
-        )
-        self.assertTrue(
-            any("compose" in cmd and "up" in cmd for cmd in commands_run),
-            "Expected docker compose up -d to be executed after inspect resolution",
+        self.assertFalse(
+            any("compose" in cmd for cmd in commands_run),
+            "Docker module should not invoke docker compose",
         )
 
 

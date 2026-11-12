@@ -1,5 +1,3 @@
-import os
-
 from modules.base import BaseModule, UpdateContext
 from ui import StepResult
 
@@ -38,37 +36,6 @@ class DockerModule(BaseModule):
             "active": "[Active]",
         }[self._availability(ctx)]
 
-    @staticmethod
-    def _normalize_image_name(img: str) -> str:
-        s = img.strip()
-        for prefix in ("docker.io/library/", "docker.io/", "library/"):
-            if s.startswith(prefix):
-                s = s[len(prefix) :]
-                break
-        return s
-
-    @classmethod
-    def _image_matches(cls, candidate: str, updated_images: set[str]) -> bool:
-        if not candidate:
-            return False
-        if candidate in updated_images:
-            return True
-        norm_cand = cls._normalize_image_name(candidate)
-        cand_parts = norm_cand.split(":")
-        cand_repo = cand_parts[0]
-        cand_tag = cand_parts[1] if len(cand_parts) > 1 else None
-
-        for u in updated_images:
-            norm_u = cls._normalize_image_name(u)
-            if norm_cand == norm_u:
-                return True
-            u_parts = norm_u.split(":")
-            u_repo = u_parts[0]
-            u_tag = u_parts[1] if len(u_parts) > 1 else None
-            if cand_repo == u_repo and (not cand_tag or not u_tag or cand_tag == u_tag):
-                return True
-        return False
-
     def run(self, ctx: UpdateContext) -> StepResult:
         code, out, err = ctx.run_cmd(
             ["docker", "images", "--format", "{{.Repository}}:{{.Tag}}"]
@@ -89,7 +56,6 @@ class DockerModule(BaseModule):
             return StepResult("unchanged")
 
         updated = []
-        updated_images = set()
         errors = []
 
         for img in images:
@@ -97,7 +63,6 @@ class DockerModule(BaseModule):
             if p_code != 0:
                 errors.append(f"{img}: {p_err or p_out}")
             elif "Downloaded newer image" in p_out or "Pull complete" in p_out:
-                updated_images.add(img)
                 updated.append(img)
 
         if errors:
@@ -109,105 +74,6 @@ class DockerModule(BaseModule):
             )
 
         if updated:
-            warnings = []
-            if updated_images and not ctx.dry_run:
-                try:
-                    ps_code, ps_out, _ = ctx.run_cmd(
-                        [
-                            "docker",
-                            "ps",
-                            "--format",
-                            '{{.Image}}\t{{.Label "com.docker.compose.project.config_files"}}\t{{.Label "com.docker.compose.project.working_dir"}}\t{{.ID}}',
-                        ],
-                        read_only=True,
-                    )
-                    if ps_code != 0:
-                        warnings.append(
-                            "Updated Docker images, but could not check whether running Compose projects need recreation"
-                        )
-                    elif ps_out.strip():
-                        compose_targets = set()
-                        unresolved_containers = []
-                        for line in ps_out.splitlines():
-                            parts = line.strip().split("\t")
-                            if len(parts) >= 2:
-                                c_img = parts[0].strip()
-                                c_cfg = parts[1].strip()
-                                c_dir = parts[2].strip() if len(parts) > 2 else ""
-                                c_id = parts[3].strip() if len(parts) > 3 else ""
-                                if not c_cfg:
-                                    continue
-                                if self._image_matches(c_img, updated_images):
-                                    compose_targets.add((c_cfg, c_dir))
-                                elif c_id:
-                                    unresolved_containers.append((c_id, c_cfg, c_dir))
-
-                        if unresolved_containers:
-                            c_ids = [c[0] for c in unresolved_containers]
-                            insp_code, insp_out, _ = ctx.run_cmd(
-                                [
-                                    "docker",
-                                    "inspect",
-                                    *c_ids,
-                                    "--format",
-                                    '{{.Id}}{{"\\t"}}{{.Config.Image}}',
-                                ],
-                                read_only=True,
-                            )
-                            if insp_code == 0 and insp_out.strip():
-                                id_to_target = {
-                                    c[0]: (c[1], c[2]) for c in unresolved_containers
-                                }
-                                for insp_line in insp_out.splitlines():
-                                    insp_parts = insp_line.strip().split("\t")
-                                    if len(insp_parts) >= 2:
-                                        full_id = insp_parts[0].strip()
-                                        config_img = insp_parts[1].strip()
-                                        if self._image_matches(
-                                            config_img, updated_images
-                                        ):
-                                            for (
-                                                short_id,
-                                                target,
-                                            ) in id_to_target.items():
-                                                if full_id.startswith(
-                                                    short_id
-                                                ) or short_id.startswith(full_id):
-                                                    compose_targets.add(target)
-
-                        for cfg, wdir in compose_targets:
-                            up_cmd = ["docker", "compose"]
-                            if wdir and os.path.isdir(wdir):
-                                up_cmd.extend(["--project-directory", wdir])
-                            for f in cfg.split(","):
-                                f_clean = f.strip()
-                                if f_clean:
-                                    up_cmd.extend(["-f", f_clean])
-                            up_cmd.extend(["up", "-d"])
-                            up_code, _, _ = ctx.run_cmd(up_cmd)
-                            if up_code != 0:
-                                warnings.append(
-                                    f"Updated Docker images, but could not recreate Compose project {os.path.basename(wdir or cfg)}"
-                                )
-                except (
-                    OSError,
-                    RuntimeError,
-                    KeyError,
-                    ValueError,
-                    StopIteration,
-                ):
-                    warnings.append(
-                        "Updated Docker images, but Compose projects could not be checked or recreated"
-                    )
-
-            if warnings:
-                return StepResult(
-                    "error",
-                    "Docker images updated, but Compose projects could not be refreshed",
-                    details=updated,
-                    error_output="\n".join(warnings),
-                )
-
             return StepResult(
                 "ok",
                 f"{len(updated)} image{'s' if len(updated) != 1 else ''} updated",
