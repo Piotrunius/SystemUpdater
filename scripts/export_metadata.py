@@ -206,6 +206,7 @@ def export_metadata(output_path: str | None = None) -> dict[str, Any]:
         os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
+            f.write("\n")
         print(f"Exported {len(module_data)} modules and metadata to {output_path}")
 
     return data

@@ -8,7 +8,9 @@
     "prebuild": "python3 ../scripts/export_metadata.py src/data/generated-metadata.json",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "lint:fix": "eslint --fix",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "lucide-react": "^1.71.0",

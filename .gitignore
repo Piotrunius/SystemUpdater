@@ -35,11 +35,7 @@ htmlcov/
 # Ai agents interaction data
 .agents/
 
-# Local quality runner
-check.sh
-
 # Web portal
 web/node_modules/
 web/.next/
 web/out/
-

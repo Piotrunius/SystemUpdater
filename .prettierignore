@@ -1,0 +1,14 @@
+# Build outputs and dependencies
+node_modules/
+.next/
+out/
+dist/
+
+# Test caches
+.pytest_cache/
+.ruff_cache/
+*.stamp
+*.log
+
+# Generated metadata artifact
+web/src/data/generated-metadata.json
