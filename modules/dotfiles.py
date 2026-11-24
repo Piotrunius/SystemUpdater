@@ -2,6 +2,9 @@
 Dotfiles management update modules (chezmoi, yadm).
 """
 
+import os
+
+from config import xdg_directory
 from modules.base import BaseModule, UpdateContext
 from ui import StepResult
 
@@ -12,13 +15,31 @@ class ChezmoiModule(BaseModule):
     category = "Development Environment"
     description = "Updates managed dotfiles via chezmoi update"
 
+    def _availability(self, ctx: UpdateContext) -> str:
+        if ctx.which("chezmoi") is None:
+            return "not-installed"
+        data_home = xdg_directory("XDG_DATA_HOME", "~/.local/share")
+        source_dir = os.path.join(data_home, "chezmoi")
+        if os.path.isdir(source_dir):
+            return "active"
+        return "no-targets"
+
     def is_available(self, ctx: UpdateContext) -> bool:
-        return ctx.which("chezmoi") is not None
+        return self._availability(ctx) == "active"
+
+    def availability_status(self, ctx: UpdateContext) -> str:
+        return self.format_availability(self._availability(ctx))
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        code, out, err = ctx.run_cmd(["chezmoi", "update"], timeout=120)
+        code, out, err = ctx.run_cmd(
+            ["chezmoi", "update", "--no-tty"], timeout=120
+        )
         if code != 0:
             return StepResult("error", "chezmoi update failed", error_output=err or out)
+
+        combined = f"{out or ''}\n{err or ''}".lower()
+        if not combined.strip() or "already up to date" in combined:
+            return StepResult("unchanged")
 
         return StepResult("ok", "updated")
 

@@ -286,6 +286,24 @@ Updating cloudflare…
             "Docker module should not invoke docker compose",
         )
 
+    def test_docker_skips_local_images_without_digest_and_retries_pull(self):
+        from modules.docker import DockerModule
+
+        context = UpdateContext()
+        context.run_cmd = Mock(
+            side_effect=[
+                (0, "local-dev:latest\t<none>\nghcr.io/pelican/panel:latest\tsha256:abc\n", ""),
+                (0, "Status: Downloaded newer image\n", ""),
+            ]
+        )
+        result = DockerModule().run(context)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.details, ["ghcr.io/pelican/panel:latest"])
+        pull_call = context.run_cmd.call_args_list[1]
+        self.assertEqual(pull_call.args[0], ["docker", "pull", "ghcr.io/pelican/panel:latest"])
+        self.assertEqual(pull_call.kwargs.get("retries"), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

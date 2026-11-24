@@ -51,4 +51,8 @@ class NixModule(BaseModule):
         if code != 0:
             return StepResult("error", "nix-env update failed", error_output=err or out)
 
+        combined = f"{out or ''}\n{err or ''}".lower()
+        if not combined.strip() or "nothing to do" in combined:
+            return StepResult("unchanged")
+
         return StepResult("ok", "updated")

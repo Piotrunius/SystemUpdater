@@ -22,6 +22,13 @@ class TealdeerModule(BaseModule):
         if code != 0:
             return StepResult("error", "tldr update failed", error_output=err or out)
 
+        combined = f"{out or ''}\n{err or ''}".lower()
+        if (
+            "already up to date" in combined
+            or "cache is already up to date" in combined
+        ):
+            return StepResult("unchanged")
+
         return StepResult("ok", "updated")
 
 
@@ -43,6 +50,14 @@ class FisherModule(BaseModule):
         code, out, err = ctx.run_cmd(["fish", "-c", "fisher update"], timeout=120)
         if code != 0:
             return StepResult("error", "fisher update failed", error_output=err or out)
+
+        combined = f"{out or ''}\n{err or ''}".lower()
+        if not combined.strip() or (
+            "up to date" in combined
+            and "updating" not in combined
+            and "fetching" not in combined
+        ):
+            return StepResult("unchanged")
 
         return StepResult("ok", "updated")
 
@@ -73,5 +88,9 @@ class ZinitModule(BaseModule):
         code, out, err = ctx.run_cmd(cmd, timeout=180)
         if code != 0:
             return StepResult("error", "zinit update failed", error_output=err or out)
+
+        combined = f"{out or ''}\n{err or ''}".lower()
+        if "already up to date" in combined and "updating" not in combined and "fast-forward" not in combined:
+            return StepResult("unchanged")
 
         return StepResult("ok", "updated")

@@ -23,6 +23,9 @@ class PipenvModule(BaseModule):
             [pip_bin, "install", "--upgrade", "pipenv"], timeout=180
         )
         if code != 0:
+            combined = f"{out}\n{err}".lower()
+            if "externally-managed-environment" in combined:
+                return StepResult("unchanged")
             return StepResult("error", "pipenv upgrade failed", error_output=err or out)
 
         if "Requirement already satisfied" in out:
@@ -73,6 +76,12 @@ class SdkmanModule(BaseModule):
         code, out, err = ctx.run_cmd(cmd, timeout=180)
         if code != 0:
             return StepResult("error", "sdkman update failed", error_output=err or out)
+
+        combined = f"{out or ''}\n{err or ''}".lower()
+        if (
+            "no new version" in combined or "already up to date" in combined
+        ) and "installing:" not in combined and "upgrading" not in combined:
+            return StepResult("unchanged")
 
         return StepResult("ok", "updated")
 

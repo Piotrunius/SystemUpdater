@@ -25,7 +25,7 @@ class ProtonPlusModule(BaseModule):
         if gh_check is not None:
             return gh_check
 
-        code, out, err = ctx.run_cmd(["protonplus", "update", "all"], timeout=35)
+        code, out, err = ctx.run_cmd(["protonplus", "update", "all"], timeout=300)
         combined = (out or "") + "\n" + (err or "")
 
         if (

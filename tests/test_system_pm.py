@@ -42,6 +42,21 @@ class ApkModuleTests(unittest.TestCase):
 
         self.assertEqual(result.status, "unchanged")
 
+    def test_pacman_skips_aur_helpers_when_running_as_root(self):
+        from unittest.mock import patch
+
+        from modules.system_pm import PacmanModule
+
+        context = UpdateContext()
+        context.which = Mock(return_value="/usr/bin/yay")
+        context.run_cmd = Mock(return_value=(0, "there is nothing to do\n", ""))
+
+        with patch("modules.system_pm.os.geteuid", return_value=0, create=True):
+            result = PacmanModule().run(context)
+
+        self.assertEqual(result.status, "unchanged")
+        context.run_cmd.assert_called_once_with(["pacman", "-Syu", "--noconfirm"], timeout=600)
+
 
 if __name__ == "__main__":
     unittest.main()

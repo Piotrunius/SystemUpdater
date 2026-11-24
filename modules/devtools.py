@@ -757,6 +757,7 @@ class UvModule(BaseModule):
                 "error", "uv tool upgrade failed", error_output=err or out
             )
 
+        self_updated = False
         if self_code != 0:
             self_output_combined = (self_err + " " + self_out).lower()
             is_pm_managed = any(
@@ -775,9 +776,37 @@ class UvModule(BaseModule):
                     "uv tools were checked, but uv itself could not be updated",
                     error_output=self_err or self_out,
                 )
-        if "Nothing to upgrade" in out or not out.strip():
+        else:
+            self_combined = f"{self_out}\n{self_err}".lower()
+            if self_combined.strip() and not any(
+                phrase in self_combined
+                for phrase in (
+                    "you're on the latest version",
+                    "already on the latest",
+                    "up to date",
+                    "up-to-date",
+                )
+            ):
+                self_updated = True
+
+        tools_combined = f"{out or ''}\n{err or ''}"
+        upgraded_tools = list(
+            dict.fromkeys(
+                re.findall(r"^\s*Updated\s+([\w\.\-_]+)", tools_combined, re.MULTILINE)
+            )
+        )
+        tools_unchanged = "Nothing to upgrade" in tools_combined or not tools_combined.strip()
+        if tools_unchanged and not self_updated and not upgraded_tools:
             return StepResult("unchanged")
 
+        details = upgraded_tools if upgraded_tools else (["uv"] if self_updated else [])
+        if details:
+            count = len(details)
+            return StepResult(
+                "ok",
+                f"{count} tool{'s' if count != 1 else ''} updated",
+                details=details,
+            )
         return StepResult("ok", "updated")
 
 
@@ -837,7 +866,20 @@ class PoetryModule(BaseModule):
 
     def run(self, ctx: UpdateContext) -> StepResult:
         code, out, err = ctx.run_cmd(["poetry", "self", "update"], timeout=120)
+        combined = f"{out or ''}\n{err or ''}".lower()
         if code != 0:
+            if any(
+                phrase in combined
+                for phrase in (
+                    'command "self update" is not defined',
+                    "not defined",
+                    "not installed via",
+                    "externally managed",
+                    "pipx",
+                    "homebrew",
+                )
+            ):
+                return StepResult("unchanged")
             return StepResult("error", "poetry update failed", error_output=err or out)
 
         if "You are using the latest version" in out:
@@ -941,13 +983,39 @@ class ComposerModule(BaseModule):
                 "error", "composer global update failed", error_output=err or out
             )
 
+        self_updated = False
         if self_code != 0:
-            return StepResult(
-                "error",
-                "Composer global packages were checked, but Composer itself could not be updated",
-                error_output=self_err or self_out,
+            self_combined = f"{self_out}\n{self_err}".lower()
+            is_pm_managed = any(
+                phrase in self_combined
+                for phrase in (
+                    'command "self-update" is not defined',
+                    "not defined",
+                    "disabled",
+                    "package manager",
+                    "permission denied",
+                )
             )
-        if "Nothing to modify in lock file" in out or "Nothing to install" in out:
+            if not is_pm_managed:
+                return StepResult(
+                    "error",
+                    "Composer global packages were checked, but Composer itself could not be updated",
+                    error_output=self_err or self_out,
+                )
+        else:
+            self_combined = f"{self_out}\n{self_err}".lower()
+            if "already using" not in self_combined and "up to date" not in self_combined and self_combined.strip():
+                self_updated = True
+
+        combined = f"{out or ''}\n{err or ''}"
+        if (
+            not self_updated
+            and (
+                "Nothing to modify in lock file" in combined
+                or "Nothing to install" in combined
+                or not combined.strip()
+            )
+        ):
             return StepResult("unchanged")
 
         return StepResult("ok", "updated")
@@ -1147,12 +1215,45 @@ class MiseModule(BaseModule):
         if code != 0:
             return StepResult("error", "mise upgrade failed", error_output=err or out)
 
+        self_updated = False
         if self_code != 0:
-            return StepResult(
-                "error",
-                "Toolchains were checked, but mise itself could not be updated",
-                error_output=self_err or self_out,
+            self_combined = f"{self_out}\n{self_err}".lower()
+            is_pm_managed = any(
+                phrase in self_combined
+                for phrase in (
+                    "homebrew",
+                    "package manager",
+                    "apt",
+                    "dnf",
+                    "pacman",
+                    "cargo",
+                    "self-update is disabled",
+                    "not supported",
+                    "cannot self-update",
+                )
             )
+            if not is_pm_managed:
+                return StepResult(
+                    "error",
+                    "Toolchains were checked, but mise itself could not be updated",
+                    error_output=self_err or self_out,
+                )
+        else:
+            self_combined = f"{self_out}\n{self_err}".lower()
+            if self_combined.strip() and "already up to date" not in self_combined and "already on the latest" not in self_combined:
+                self_updated = True
+
+        combined = f"{out or ''}\n{err or ''}".lower()
+        if (
+            not self_updated
+            and (
+                not combined.strip()
+                or "all tools are up to date" in combined
+                or "nothing to upgrade" in combined
+            )
+        ):
+            return StepResult("unchanged")
+
         return StepResult("ok", "updated")
 
 
@@ -1200,6 +1301,10 @@ class AsdfModule(BaseModule):
                 "error", "asdf plugin update failed", error_output=err or out
             )
 
+        lines = [line.strip().lower() for line in (out or "").splitlines() if line.strip()]
+        if not lines or all("already up to date" in line or "up-to-date" in line for line in lines):
+            return StepResult("unchanged")
+
         return StepResult("ok", "updated")
 
 
@@ -1226,6 +1331,14 @@ class NeovimModule(BaseModule):
                 "error", "Neovim Lazy sync failed", error_output=err or out
             )
 
+        combined = f"{out or ''}\n{err or ''}".lower()
+        if (
+            not combined.strip()
+            or "0 updated" in combined
+            or "already up to date" in combined
+        ):
+            return StepResult("unchanged")
+
         return StepResult("ok", "updated")
 
 
@@ -1246,5 +1359,13 @@ class TmuxPluginsModule(BaseModule):
         code, out, err = ctx.run_cmd([tpm_script, "all"], timeout=120)
         if code != 0:
             return StepResult("error", "TPM update failed", error_output=err or out)
+
+        combined = f"{out or ''}\n{err or ''}".lower()
+        if (
+            "already up to date" in combined
+            and "updating" not in combined
+            and "updated" not in combined
+        ) or not combined.strip():
+            return StepResult("unchanged")
 
         return StepResult("ok", "updated")

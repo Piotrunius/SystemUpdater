@@ -61,6 +61,55 @@ class DevtoolsModulesTests(unittest.TestCase):
         self.assertEqual(result.message, "2 extensions updated")
         self.assertEqual(result.details, ["dlvhdr/gh-dash", "seachicken/gh-poi"])
 
+    def test_uv_reports_ok_when_self_updated_even_if_tools_unchanged(self):
+        from modules.devtools import UvModule
+
+        context = UpdateContext()
+        context.run_cmd = Mock(
+            side_effect=[
+                (0, "Updating uv from v0.6.0 to v0.6.1\n", ""),
+                (0, "Nothing to upgrade\n", ""),
+            ]
+        )
+        result = UvModule().run(context)
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.details, ["uv"])
+
+    def test_mise_composer_poetry_handle_package_manager_managed_self_update(self):
+        from modules.devtools import ComposerModule, MiseModule, PoetryModule
+
+        mise_ctx = UpdateContext()
+        mise_ctx.run_cmd = Mock(
+            side_effect=[
+                (1, "", "self-update is disabled (installed via Homebrew)"),
+                (0, "mise all tools are up to date\n", ""),
+            ]
+        )
+        self.assertEqual(MiseModule().run(mise_ctx).status, "unchanged")
+
+        comp_ctx = UpdateContext()
+        comp_ctx.run_cmd = Mock(
+            side_effect=[
+                (1, "", 'Command "self-update" is not defined.'),
+                (0, "Nothing to modify in lock file\n", ""),
+            ]
+        )
+        self.assertEqual(ComposerModule().run(comp_ctx).status, "unchanged")
+
+        poetry_ctx = UpdateContext()
+        poetry_ctx.run_cmd = Mock(
+            return_value=(1, "", 'Command "self update" is not defined.')
+        )
+        self.assertEqual(PoetryModule().run(poetry_ctx).status, "unchanged")
+
+    def test_editors_return_unchanged_when_no_extensions_need_update(self):
+        from modules.editors import CursorModule, VsCodeModule, VscodiumModule
+
+        for mod in (VsCodeModule(), CursorModule(), VscodiumModule()):
+            ctx = UpdateContext()
+            ctx.run_cmd = Mock(return_value=(0, "No extension to update.\n", ""))
+            self.assertEqual(mod.run(ctx).status, "unchanged")
+
 
 if __name__ == "__main__":
     unittest.main()

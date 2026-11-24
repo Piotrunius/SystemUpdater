@@ -3,9 +3,52 @@ Editor extensions and toolchains update modules (VS Code, Cursor, VSCodium, Heli
 """
 
 import os
+import re
 
 from modules.base import BaseModule, UpdateContext
 from ui import StepResult
+
+
+def _run_vscode_like_update(
+    ctx: UpdateContext, binary: str, label: str
+) -> StepResult:
+    code, out, err = ctx.run_cmd([binary, "--update-extensions"], timeout=180)
+    if code != 0:
+        return StepResult(
+            "error", f"{label} extensions update failed", error_output=err or out
+        )
+
+    combined = f"{out or ''}\n{err or ''}"
+    lowered = combined.lower()
+    if (
+        "no extension to update" in lowered
+        or "no extensions to update" in lowered
+        or not combined.strip()
+    ):
+        return StepResult("unchanged")
+
+    exts: list[str] = []
+    for line in combined.splitlines():
+        m = re.search(
+            r"Extension\s+'([^']+)'\s+(?:v[^\s]+\s+)?was successfully updated",
+            line,
+            re.IGNORECASE,
+        )
+        if not m:
+            m = re.search(r"Updated\s+extension\s+([^\s]+)", line, re.IGNORECASE)
+        if m:
+            exts.append(m.group(1))
+    exts = list(dict.fromkeys(exts))
+
+    if exts:
+        count = len(exts)
+        return StepResult(
+            "ok",
+            f"{count} extension{'s' if count != 1 else ''} updated",
+            details=exts,
+        )
+
+    return StepResult("ok", "updated")
 
 
 class VsCodeModule(BaseModule):
@@ -46,13 +89,7 @@ class VsCodeModule(BaseModule):
         return self.format_availability(self._availability(ctx))
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        code, out, err = ctx.run_cmd(["code", "--update-extensions"], timeout=180)
-        if code != 0:
-            return StepResult(
-                "error", "VS Code extensions update failed", error_output=err or out
-            )
-
-        return StepResult("ok", "updated")
+        return _run_vscode_like_update(ctx, "code", "VS Code")
 
 
 class CursorModule(BaseModule):
@@ -93,13 +130,7 @@ class CursorModule(BaseModule):
         return self.format_availability(self._availability(ctx))
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        code, out, err = ctx.run_cmd(["cursor", "--update-extensions"], timeout=180)
-        if code != 0:
-            return StepResult(
-                "error", "Cursor extensions update failed", error_output=err or out
-            )
-
-        return StepResult("ok", "updated")
+        return _run_vscode_like_update(ctx, "cursor", "Cursor")
 
 
 class VscodiumModule(BaseModule):
@@ -140,13 +171,7 @@ class VscodiumModule(BaseModule):
         return self.format_availability(self._availability(ctx))
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        code, out, err = ctx.run_cmd(["codium", "--update-extensions"], timeout=180)
-        if code != 0:
-            return StepResult(
-                "error", "VSCodium extensions update failed", error_output=err or out
-            )
-
-        return StepResult("ok", "updated")
+        return _run_vscode_like_update(ctx, "codium", "VSCodium")
 
 
 class HelixModule(BaseModule):
@@ -172,5 +197,20 @@ class HelixModule(BaseModule):
             return StepResult(
                 "error", "Helix grammar build failed", error_output=err_b or out_b
             )
+
+        fetch_combined = f"{out or ''}\n{err or ''}".lower()
+        build_combined = f"{out_b or ''}\n{err_b or ''}".lower()
+        fetch_unchanged = (
+            "0 updated" in fetch_combined
+            or "already up to date" in fetch_combined
+            or not fetch_combined.strip()
+        )
+        build_unchanged = (
+            "0 grammars built" in build_combined
+            or "already up to date" in build_combined
+            or not build_combined.strip()
+        )
+        if fetch_unchanged and build_unchanged:
+            return StepResult("unchanged")
 
         return StepResult("ok", "updated")

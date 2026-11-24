@@ -154,20 +154,18 @@ class PacmanModule(BaseModule):
         return "[Not Installed]" if is_arch else "[Unavailable]"
 
     def run(self, ctx: UpdateContext) -> StepResult:
+        is_root = hasattr(os, "geteuid") and os.geteuid() == 0
         aur_helper = None
-        for candidate in ["yay", "paru"]:
-            if ctx.which(candidate):
-                aur_helper = candidate
-                break
+        if not is_root:
+            for candidate in ["yay", "paru"]:
+                if ctx.which(candidate):
+                    aur_helper = candidate
+                    break
 
-        cmd = [
-            aur_helper or "sudo",
-            "pacman" if not aur_helper else aur_helper,
-            "-Syu",
-            "--noconfirm",
-        ]
         if aur_helper:
             cmd = [aur_helper, "-Syu", "--noconfirm"]
+        elif is_root:
+            cmd = ["pacman", "-Syu", "--noconfirm"]
         else:
             cmd = ["sudo", "pacman", "-Syu", "--noconfirm"]
 

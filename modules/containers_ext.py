@@ -82,4 +82,8 @@ class VagrantModule(BaseModule):
                 "error", "vagrant box update failed", error_output=err or out
             )
 
+        combined = f"{out or ''}\n{err or ''}".lower()
+        if "already have the latest version" in combined or "is up to date" in combined:
+            return StepResult("unchanged")
+
         return StepResult("ok", "updated")
