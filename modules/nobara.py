@@ -143,6 +143,8 @@ class SystemPackagesModule(BaseModule):
     requires_sudo = True
 
     def is_available(self, ctx: UpdateContext) -> bool:
+        if os.path.exists("/run/ostree-booted"):
+            return False
         return ctx.which("dnf") is not None
 
     def availability_status(self, ctx: UpdateContext) -> str:

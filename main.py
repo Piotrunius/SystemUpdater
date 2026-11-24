@@ -6,15 +6,16 @@ Crafted for Nobara Linux with modular architecture and flicker-free TUI.
 
 import argparse
 import contextlib
+import difflib
+import fcntl
 import json
 import os
 import platform
 import re
 import shlex
-
-# Ensure script directory is in sys.path
 import shutil
 import signal
+import socket
 import subprocess
 import sys
 import time
@@ -29,6 +30,7 @@ if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 
 import sudo
+from cli_spec import CATEGORY_ALIASES, CLI_CATEGORIES
 from colors import colors_enabled
 from completions import (
     generate_bash_completion,
@@ -36,7 +38,7 @@ from completions import (
     generate_zsh_completion,
     install_completions,
 )
-from config import DEFAULT_CONFIG_PATH, get_config
+from config import DEFAULT_CONFIG_PATH, get_config, xdg_directory
 from history_store import (
     HistoryStore,
     classify_run_status,
@@ -392,23 +394,26 @@ Examples:
         "-f",
         "--force",
         action="store_true",
-        help="Force execution (e.g. bypass Btrfs snapshot cooldown)",
+        help="Force execution (bypass snapshot cooldown and pre-flight skips)",
     )
     parser.add_argument(
         "-q",
         "--quiet",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=None,
         help="Suppress live step progress, show only final summary and errors",
     )
     parser.add_argument(
         "-v",
         "--verbose",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=None,
         help="Stream update command output live; keep internal probes quiet",
     )
     parser.add_argument(
         "--notify",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=None,
         help="Send a desktop notification on completion",
     )
     parser.add_argument(
@@ -436,6 +441,11 @@ Examples:
         help="Comma-separated categories to run (e.g. 'system', 'dev', 'gaming')",
     )
     parser.add_argument(
+        "--retry-failed",
+        action="store_true",
+        help="Retry only modules that failed or were interrupted in the last run",
+    )
+    parser.add_argument(
         "--no-sudo",
         action="store_true",
         help="Skip all modules requiring administrator (sudo) privileges",
@@ -443,7 +453,25 @@ Examples:
     parser.add_argument(
         "--no-snapshot",
         action="store_true",
-        help="Skip protective Btrfs snapshot",
+        help="Skip protective system snapshot",
+    )
+    parser.add_argument(
+        "--self-update",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Enable or disable automatic Git self-update",
+    )
+    parser.add_argument(
+        "--skip-on-battery",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Skip update run when running on battery power",
+    )
+    parser.add_argument(
+        "--check-network",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Verify network connectivity before running updates",
     )
     parser.add_argument(
         "--config",
@@ -465,7 +493,8 @@ Examples:
     parser.add_argument(
         "-r",
         "--reboot",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=None,
         help="Reboot system after updates if required (e.g. kernel, firmware)",
     )
     history_group = parser.add_mutually_exclusive_group()
@@ -493,6 +522,136 @@ Examples:
 
 def handle_sigterm(signum, frame):
     raise KeyboardInterrupt
+
+
+def is_on_battery() -> bool:
+    """Return True when the host is clearly running on battery power."""
+    sys_name = platform.system()
+    if sys_name == "Linux":
+        ps_dir = "/sys/class/power_supply"
+        if not os.path.isdir(ps_dir):
+            return False
+        saw_mains = False
+        mains_online = False
+        saw_discharging = False
+        try:
+            for entry in os.listdir(ps_dir):
+                base = os.path.join(ps_dir, entry)
+                type_path = os.path.join(base, "type")
+                if not os.path.isfile(type_path):
+                    continue
+                with open(type_path, encoding="utf-8") as tf:
+                    ps_type = tf.read().strip().lower()
+                if ps_type == "mains":
+                    saw_mains = True
+                    online_path = os.path.join(base, "online")
+                    if os.path.isfile(online_path):
+                        with open(online_path, encoding="utf-8") as of:
+                            if of.read().strip() == "1":
+                                mains_online = True
+                elif ps_type == "battery":
+                    status_path = os.path.join(base, "status")
+                    if os.path.isfile(status_path):
+                        with open(status_path, encoding="utf-8") as sf:
+                            if sf.read().strip().lower() == "discharging":
+                                saw_discharging = True
+        except OSError:
+            return False
+        if saw_mains:
+            return not mains_online
+        return saw_discharging
+
+    if sys_name == "Darwin":
+        pmset = shutil.which("pmset")
+        if not pmset:
+            return False
+        try:
+            res = subprocess.run(
+                [pmset, "-g", "batt"],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=3,
+            )
+            return "Battery Power" in (res.stdout or "")
+        except (OSError, subprocess.SubprocessError):
+            return False
+
+    return False
+
+
+def is_network_available(timeout: float = 3.0) -> bool:
+    """Return True when at least one external HTTPS endpoint accepts a TCP connection."""
+    for host in ("1.1.1.1", "8.8.8.8", "github.com"):
+        try:
+            with socket.create_connection((host, 443), timeout=timeout):
+                return True
+        except OSError:
+            continue
+    return False
+
+
+@contextlib.contextmanager
+def acquire_run_lock():
+    """Acquire a non-blocking single-instance lock for update runs."""
+    runtime_dir = os.environ.get("XDG_RUNTIME_DIR", "")
+    if runtime_dir and os.path.isabs(runtime_dir) and os.path.isdir(runtime_dir):
+        lock_path = os.path.join(runtime_dir, "sysupdate.lock")
+    else:
+        state_dir = os.path.join(
+            xdg_directory("XDG_STATE_HOME", "~/.local/state"), "sysupdate"
+        )
+        os.makedirs(state_dir, mode=0o700, exist_ok=True)
+        lock_path = os.path.join(state_dir, "run.lock")
+
+    fd = open(lock_path, "a+", encoding="utf-8")
+    locked = False
+    try:
+        try:
+            fcntl.flock(fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            locked = True
+        except BlockingIOError:
+            fd.close()
+            print(
+                "Error: Another SystemUpdater run is already in progress.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        fd.seek(0)
+        fd.truncate()
+        fd.write(f"{os.getpid()}\n")
+        fd.flush()
+        yield
+    finally:
+        if locked:
+            with contextlib.suppress(OSError):
+                fcntl.flock(fd.fileno(), fcntl.LOCK_UN)
+        if not fd.closed:
+            with contextlib.suppress(OSError):
+                fd.close()
+
+
+def _validate_filter_tokens(
+    tokens: list[str],
+    valid_set: set[str],
+    flag_name: str,
+) -> tuple[list[str], list[str]]:
+    known: list[str] = []
+    unknown: list[str] = []
+    for token in tokens:
+        if not token:
+            continue
+        if token in valid_set:
+            known.append(token)
+        else:
+            unknown.append(token)
+            matches = difflib.get_close_matches(token, sorted(valid_set), n=1, cutoff=0.6)
+            hint = f" (did you mean '{matches[0]}'?)" if matches else ""
+            print(
+                f"Warning: Unknown value '{token}' in {flag_name}{hint}.",
+                file=sys.stderr,
+            )
+    return known, unknown
 
 
 def _format_history_modules(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -580,20 +739,34 @@ def main():
         print_run_log(run_data)
         sys.exit(0)
 
-    self_update_result = None
-    if not is_homebrew_install() and not (args.list or args.edit_config):
-        self_update_result = self_update()
+    quiet_mode = args.quiet if args.quiet is not None else cfg.quiet
+    verbose_mode = args.verbose if args.verbose is not None else cfg.verbose
+    if args.verbose is True and args.quiet is None:
+        quiet_mode = False
+    if args.quiet is True and args.verbose is None:
+        verbose_mode = False
 
-    if args.edit_config:
-        edit_config(args.config or DEFAULT_CONFIG_PATH)
-
-    quiet_mode = args.quiet or cfg.quiet
-    verbose_mode = args.verbose or cfg.verbose
     no_sudo_mode = args.no_sudo or cfg.no_sudo
     no_snapshot_mode = args.no_snapshot or cfg.no_snapshot
     no_history_mode = args.no_history or cfg.no_history
-    reboot_requested_mode = args.reboot or cfg.reboot
-    notify_mode = args.notify or cfg.notifications_enabled
+    reboot_requested_mode = args.reboot if args.reboot is not None else cfg.reboot
+    notify_mode = (
+        args.notify if args.notify is not None else cfg.notifications_enabled
+    )
+    self_update_mode = (
+        args.self_update if args.self_update is not None else cfg.self_update
+    )
+    skip_on_battery_mode = (
+        args.skip_on_battery
+        if args.skip_on_battery is not None
+        else cfg.skip_on_battery
+    )
+    check_network_mode = (
+        args.check_network if args.check_network is not None else cfg.check_network
+    )
+
+    if args.edit_config:
+        edit_config(args.config or DEFAULT_CONFIG_PATH)
 
     use_color = sys.stdout.isatty() and colors_enabled()
     ctx = UpdateContext(
@@ -612,6 +785,8 @@ def main():
                 f"using defaults. {cfg.load_error}",
                 file=sys.stderr,
             )
+        for cfg_warn in cfg.warnings:
+            print(f"Warning: {cfg_warn}", file=sys.stderr)
         print(f"{'Key':<14} {'Name':<28} {'Status':<16} {'Description'}")
         print("─" * 80)
         for m in all_modules:
@@ -619,169 +794,306 @@ def main():
             print(f"{m.key:<14} {m.name:<28} {status:<16} {m.description}")
         sys.exit(0)
 
-    # Filter modules
-    selected_keys = (
-        [k.strip().lower() for k in args.only.split(",")]
-        if args.only
-        else (cfg.only_keys if cfg.only_keys else None)
-    )
-    skip_keys = [k.strip().lower() for k in args.skip.split(",")] if args.skip else []
-    if cfg.skip_keys:
-        skip_keys.extend(cfg.skip_keys)
-
-    selected_categories = (
-        [c.strip().lower() for c in args.category.split(",")]
-        if args.category
-        else (cfg.categories if cfg.categories else None)
-    )
-    skip_categories = (
-        [c.lower() for c in cfg.skip_categories] if cfg.skip_categories else []
-    )
-
-    if no_snapshot_mode:
-        skip_keys.append("snapshot")
-
-    modules_to_run: list[BaseModule] = []
-    for m in all_modules:
-        m_identifiers = {m.key.lower(), *(a.lower() for a in getattr(m, "aliases", []))}
-        if selected_keys and not (m_identifiers & set(selected_keys)):
-            continue
-        cat_lower = getattr(m, "category", "").lower()
-        if selected_categories and not any(
-            sc in cat_lower for sc in selected_categories
-        ):
-            continue
-        if skip_categories and any(sc in cat_lower for sc in skip_categories):
-            continue
-        if no_sudo_mode and getattr(m, "requires_sudo", False):
-            continue
-        if (m_identifiers & set(skip_keys)) or (m_identifiers & cfg.disabled_keys):
-            continue
-        if m.is_available(ctx):
-            modules_to_run.append(m)
-
-    if not modules_to_run:
-        print("No matching or available modules selected to run.")
+    if skip_on_battery_mode and not args.force and is_on_battery():
+        print("Skipping update run because the system is running on battery power.")
         sys.exit(0)
 
-    # Availability checks can run read-only queries; history records update work only.
-    ctx.command_log.clear()
-    ctx._logged_output_chars = 0
-
-    # Check if any selected module requires sudo upfront
-    needs_sudo = any(getattr(m, "requires_sudo", False) for m in modules_to_run)
-    try:
-        if needs_sudo and not sudo.init_sudo(interactive=sys.stdin.isatty()):
-            print(
-                "Error: Administrator privileges (sudo) required but could not be obtained."
-            )
-            sys.exit(1)
-    except KeyboardInterrupt:
-        sudo.stop_sudo_keeper()
-        sys.exit(130)
-
-    ctx.verbose = verbose_mode
-    ui = UI(quiet=quiet_mode, verbose=verbose_mode, use_color=use_color)
-    ui.print_header("System Updater")
-
-    results = []
-    if cfg.load_error:
-        results.append(
-            {
-                "name": "Configuration",
-                "key": "config",
-                "category": "System Protection",
-                "result": StepResult(
-                    "warning",
-                    f"Could not load configuration; using defaults: {cfg.load_error}",
-                ),
-            }
+    if check_network_mode and not args.force and not is_network_available():
+        print(
+            "Error: Network connectivity check failed; aborting update run.",
+            file=sys.stderr,
         )
-    total_start = time.time()
-    started_at = datetime.now(UTC)
-    run_id = history_store.new_run_id(started_at)
-    current_category = None
-    self_update_printed = False
+        sys.exit(1)
 
-    try:
-        with suppress_terminal_echo():
-            for m in modules_to_run:
-                if m.category != current_category:
-                    current_category = m.category
-                    ui.print_category(current_category)
-                    if (
-                        current_category == "Containers & Packages"
-                        and self_update_result
-                    ):
-                        self_update_step = StepResult(
-                            *self_update_result[:2],
-                            duration=self_update_result[2],
-                            details=self_update_result[3],
+    with acquire_run_lock():
+        self_update_result = None
+        if self_update_mode and not is_homebrew_install():
+            self_update_result = self_update()
+
+        # Filter modules
+        known_module_ids = {
+            ident.lower()
+            for m in all_modules
+            for ident in (m.key, *getattr(m, "aliases", []))
+            if ident
+        }
+        known_category_tokens = {
+            *(c.lower() for c in CLI_CATEGORIES),
+            *(a.lower() for a in CATEGORY_ALIASES),
+            *(getattr(m, "category", "").lower() for m in all_modules if getattr(m, "category", "")),
+        }
+
+        if args.retry_failed:
+            recent = history_store.list_runs(1)
+            if not recent:
+                print("No previous update runs found in history.")
+                sys.exit(0)
+            failed_keys = [
+                str(mod.get("key") or mod.get("name") or "").strip().lower()
+                for mod in (recent[0].get("modules") or [])
+                if mod.get("status") in ("error", "interrupted", "cancelled")
+            ]
+            failed_keys = [k for k in failed_keys if k]
+            if not failed_keys:
+                print("No failed or interrupted modules in the last run.")
+                sys.exit(0)
+            selected_keys: list[str] | None = failed_keys
+            selected_categories: list[str] | None = None
+        elif args.only:
+            raw_only = [k.strip().lower() for k in args.only.split(",") if k.strip()]
+            known_only, unknown_only = _validate_filter_tokens(
+                raw_only, known_module_ids, "--only"
+            )
+            if raw_only and not known_only and unknown_only:
+                print(
+                    "Error: No valid module keys specified in --only.",
+                    file=sys.stderr,
+                )
+                sys.exit(2)
+            selected_keys = raw_only
+            selected_categories = None
+        elif args.category:
+            raw_cats = [c.strip().lower() for c in args.category.split(",") if c.strip()]
+            raw_cats = [CATEGORY_ALIASES.get(c, c) for c in raw_cats]
+            valid_cat_check = known_category_tokens
+            known_cats = [
+                c
+                for c in raw_cats
+                if any(c in tok for tok in valid_cat_check)
+            ]
+            unknown_cats = [c for c in raw_cats if c not in known_cats]
+            for uc in unknown_cats:
+                matches = difflib.get_close_matches(
+                    uc, sorted(CLI_CATEGORIES), n=1, cutoff=0.6
+                )
+                hint = f" (did you mean '{matches[0]}'?)" if matches else ""
+                print(
+                    f"Warning: Unknown category '{uc}' in --category{hint}.",
+                    file=sys.stderr,
+                )
+            if raw_cats and not known_cats and unknown_cats:
+                print(
+                    "Error: No valid categories specified in --category.",
+                    file=sys.stderr,
+                )
+                sys.exit(2)
+            selected_keys = None
+            selected_categories = raw_cats
+        else:
+            selected_keys = cfg.only_keys if cfg.only_keys else None
+            selected_categories = (
+                [CATEGORY_ALIASES.get(c, c) for c in cfg.categories]
+                if cfg.categories
+                else None
+            )
+
+        skip_keys = [k.strip().lower() for k in args.skip.split(",") if k.strip()] if args.skip else []
+        if args.skip:
+            _validate_filter_tokens(skip_keys, known_module_ids, "--skip")
+        if cfg.skip_keys:
+            skip_keys.extend(cfg.skip_keys)
+
+        skip_categories = (
+            [CATEGORY_ALIASES.get(c.lower(), c.lower()) for c in cfg.skip_categories]
+            if cfg.skip_categories
+            else []
+        )
+
+        if no_snapshot_mode:
+            skip_keys.append("snapshot")
+
+        modules_to_run: list[BaseModule] = []
+        for m in all_modules:
+            m_identifiers = {
+                m.key.lower(),
+                *(a.lower() for a in getattr(m, "aliases", [])),
+            }
+            if selected_keys and not (m_identifiers & set(selected_keys)):
+                continue
+            cat_lower = getattr(m, "category", "").lower()
+            if selected_categories and not any(
+                sc in cat_lower for sc in selected_categories
+            ):
+                continue
+            if skip_categories and any(sc in cat_lower for sc in skip_categories):
+                continue
+            if no_sudo_mode and getattr(m, "requires_sudo", False):
+                continue
+            if (m_identifiers & set(skip_keys)) or (m_identifiers & cfg.disabled_keys):
+                continue
+            if m.is_available(ctx):
+                modules_to_run.append(m)
+
+        if not modules_to_run:
+            print("No matching or available modules selected to run.")
+            sys.exit(0)
+
+        # Availability checks can run read-only queries; history records update work only.
+        ctx.command_log.clear()
+        ctx._logged_output_chars = 0
+
+        # Check if any selected module requires sudo upfront
+        needs_sudo = any(getattr(m, "requires_sudo", False) for m in modules_to_run)
+        try:
+            if needs_sudo and not sudo.init_sudo(interactive=sys.stdin.isatty()):
+                print(
+                    "Error: Administrator privileges (sudo) required but could not be obtained."
+                )
+                sys.exit(1)
+        except KeyboardInterrupt:
+            sudo.stop_sudo_keeper()
+            sys.exit(130)
+
+        ctx.verbose = verbose_mode
+        ui = UI(quiet=quiet_mode, verbose=verbose_mode, use_color=use_color)
+        ui.print_header("System Updater")
+
+        results = []
+        if cfg.load_error:
+            results.append(
+                {
+                    "name": "Configuration",
+                    "key": "config",
+                    "category": "System Protection",
+                    "result": StepResult(
+                        "warning",
+                        f"Could not load configuration; using defaults: {cfg.load_error}",
+                    ),
+                }
+            )
+        for cfg_warn in cfg.warnings:
+            results.append(
+                {
+                    "name": "Configuration",
+                    "key": "config",
+                    "category": "System Protection",
+                    "result": StepResult("warning", cfg_warn),
+                }
+            )
+        total_start = time.time()
+        started_at = datetime.now(UTC)
+        run_id = history_store.new_run_id(started_at)
+        current_category = None
+        self_update_printed = False
+
+        try:
+            with suppress_terminal_echo():
+                for m in modules_to_run:
+                    if m.category != current_category:
+                        current_category = m.category
+                        ui.print_category(current_category)
+                        if (
+                            current_category == "Containers & Packages"
+                            and self_update_result
+                        ):
+                            self_update_step = StepResult(
+                                *self_update_result[:2],
+                                duration=self_update_result[2],
+                                details=self_update_result[3],
+                            )
+                            ui.print_result(
+                                "SystemUpdater",
+                                self_update_step,
+                            )
+                            results.append(
+                                {
+                                    "name": "SystemUpdater",
+                                    "key": "self_update",
+                                    "category": "Containers & Packages",
+                                    "result": self_update_step,
+                                }
+                            )
+                            self_update_printed = True
+                    command_start = len(ctx.command_log)
+                    try:
+                        step_res = ui.run_step(
+                            m.name, lambda mod=m: mod.run(ctx), ctx=ctx, module=m
                         )
-                        ui.print_result(
-                            "SystemUpdater",
-                            self_update_step,
-                        )
+                    except KeyboardInterrupt:
                         results.append(
                             {
-                                "name": "SystemUpdater",
-                                "key": "self_update",
-                                "category": "Containers & Packages",
-                                "result": self_update_step,
+                                "name": m.name,
+                                "key": m.key,
+                                "module": m,
+                                "result": getattr(ui, "last_interrupted_result", None)
+                                or StepResult(
+                                    "interrupted",
+                                    "Cancelled by user",
+                                ),
+                                "commands": ctx.command_log[command_start:],
                             }
                         )
-                        self_update_printed = True
-                command_start = len(ctx.command_log)
-                try:
-                    step_res = ui.run_step(
-                        m.name, lambda mod=m: mod.run(ctx), ctx=ctx, module=m
-                    )
-                except KeyboardInterrupt:
+                        raise
                     results.append(
                         {
                             "name": m.name,
                             "key": m.key,
                             "module": m,
-                            "result": getattr(ui, "last_interrupted_result", None)
-                            or StepResult(
-                                "interrupted",
-                                "Cancelled by user",
-                            ),
+                            "result": step_res,
                             "commands": ctx.command_log[command_start:],
                         }
                     )
-                    raise
-                results.append(
-                    {
-                        "name": m.name,
-                        "key": m.key,
-                        "module": m,
-                        "result": step_res,
-                        "commands": ctx.command_log[command_start:],
-                    }
+                if self_update_result and not self_update_printed:
+                    ui.print_category("Containers & Packages")
+                    self_update_step = StepResult(
+                        *self_update_result[:2],
+                        duration=self_update_result[2],
+                        details=self_update_result[3],
+                    )
+                    ui.print_result(
+                        "SystemUpdater",
+                        self_update_step,
+                    )
+                    results.append(
+                        {
+                            "name": "SystemUpdater",
+                            "key": "self_update",
+                            "category": "Containers & Packages",
+                            "result": self_update_step,
+                        }
+                    )
+        except KeyboardInterrupt:
+            sudo.stop_sudo_keeper()
+            total_elapsed = time.time() - total_start
+            update_count = sum(
+                r["result"].status == "ok"
+                and r.get("key") != "snapshot"
+                and getattr(r.get("module"), "category", "") != "System Protection"
+                for r in results
+            )
+            reboot_needed = any(
+                getattr(r.get("result"), "reboot_required", False) for r in results
+            )
+            if not no_history_mode:
+                history_data = {
+                    "id": run_id,
+                    "started_at": started_at.isoformat(),
+                    "finished_at": datetime.now(UTC).isoformat(),
+                    "duration": round(total_elapsed, 2),
+                    "status": "interrupted",
+                    "update_count": update_count,
+                    "reboot_required": reboot_needed,
+                    "modules": _format_history_modules(results),
+                }
+                with contextlib.suppress(OSError):
+                    history_store.save(history_data)
+
+            if notify_mode:
+                dur_str = f"{round(total_elapsed, 1)}s"
+                send_notification(
+                    "System Update Interrupted",
+                    f"Cancelled by user • {dur_str}",
+                    urgency="normal",
+                    category="device",
                 )
-            if self_update_result and not self_update_printed:
-                ui.print_category("Containers & Packages")
-                self_update_step = StepResult(
-                    *self_update_result[:2],
-                    duration=self_update_result[2],
-                    details=self_update_result[3],
-                )
-                ui.print_result(
-                    "SystemUpdater",
-                    self_update_step,
-                )
-                results.append(
-                    {
-                        "name": "SystemUpdater",
-                        "key": "self_update",
-                        "category": "Containers & Packages",
-                        "result": self_update_step,
-                    }
-                )
-    except KeyboardInterrupt:
-        sudo.stop_sudo_keeper()
+            ui.print_summary(results, total_elapsed, interrupted=True)
+            sys.exit(130)
+        finally:
+            sudo.stop_sudo_keeper()
+
         total_elapsed = time.time() - total_start
+        finished_at = datetime.now(UTC)
+        has_failures = any(r["result"].status == "error" for r in results)
         update_count = sum(
             r["result"].status == "ok"
             and r.get("key") != "snapshot"
@@ -791,198 +1103,168 @@ def main():
         reboot_needed = any(
             getattr(r.get("result"), "reboot_required", False) for r in results
         )
+
         if not no_history_mode:
             history_data = {
                 "id": run_id,
                 "started_at": started_at.isoformat(),
-                "finished_at": datetime.now(UTC).isoformat(),
+                "finished_at": finished_at.isoformat(),
                 "duration": round(total_elapsed, 2),
-                "status": "interrupted",
+                "status": "unknown",
                 "update_count": update_count,
                 "reboot_required": reboot_needed,
                 "modules": _format_history_modules(results),
             }
-            with contextlib.suppress(OSError):
+            history_data["status"] = classify_run_status(
+                history_data, history_store.list_runs(30)
+            )
+            try:
                 history_store.save(history_data)
+            except OSError as error:
+                results.append(
+                    {
+                        "name": "Run History",
+                        "key": "history",
+                        "result": StepResult(
+                            "warning",
+                            "Could not save update history",
+                            error_output=str(error),
+                        ),
+                    }
+                )
+
+        ui.print_summary(results, total_elapsed)
 
         if notify_mode:
-            dur_str = f"{round(total_elapsed, 1)}s"
-            send_notification(
-                "System Update Interrupted",
-                f"Cancelled by user • {dur_str}",
-                urgency="normal",
-                category="device",
-            )
-        ui.print_summary(results, total_elapsed, interrupted=True)
-        sys.exit(130)
-    finally:
-        sudo.stop_sudo_keeper()
+            only_err = cfg.notifications_only_on_error_or_reboot
+            if not (only_err and not (has_failures or reboot_needed)):
+                if total_elapsed >= 60:
+                    m = int(total_elapsed // 60)
+                    s = int(total_elapsed % 60)
+                    dur_str = f"{m}m {s:02d}s"
+                else:
+                    dur_str = f"{round(total_elapsed, 1)}s"
 
-    total_elapsed = time.time() - total_start
-    finished_at = datetime.now(UTC)
-    has_failures = any(r["result"].status == "error" for r in results)
-    update_count = sum(
-        r["result"].status == "ok"
-        and r.get("key") != "snapshot"
-        and getattr(r.get("module"), "category", "") != "System Protection"
-        for r in results
-    )
-    reboot_needed = any(
-        getattr(r.get("result"), "reboot_required", False) for r in results
-    )
+                if has_failures:
+                    failed_names = [
+                        r["name"] for r in results if r["result"].status == "error"
+                    ]
+                    if failed_names:
+                        top_failed = ", ".join(failed_names[:2])
+                        rem = len(failed_names) - 2
+                        failed_detail = (
+                            f"Failed: {top_failed} +{rem} more"
+                            if rem > 0
+                            else f"Failed: {top_failed}"
+                        )
+                    else:
+                        failed_detail = "Update encountered errors"
+                    send_notification(
+                        "System Update Failed",
+                        f"{failed_detail} • {dur_str}",
+                        urgency="critical",
+                        category="device.error",
+                    )
+                elif reboot_needed:
+                    reboot_items = [
+                        r
+                        for r in results
+                        if getattr(r.get("result"), "reboot_required", False)
+                    ]
+                    reboot_pkgs: list[str] = []
+                    for item in reboot_items:
+                        reboot_pkgs.extend(get_reboot_trigger_details(item))
 
-    if not no_history_mode:
-        history_data = {
-            "id": run_id,
-            "started_at": started_at.isoformat(),
-            "finished_at": finished_at.isoformat(),
-            "duration": round(total_elapsed, 2),
-            "status": "unknown",
-            "update_count": update_count,
-            "reboot_required": reboot_needed,
-            "modules": _format_history_modules(results),
-        }
-        history_data["status"] = classify_run_status(
-            history_data, history_store.list_runs(30)
-        )
-        try:
-            history_store.save(history_data)
-        except OSError as error:
-            results.append(
-                {
-                    "name": "Run History",
-                    "key": "history",
-                    "result": StepResult(
-                        "warning",
-                        "Could not save update history",
-                        error_output=str(error),
-                    ),
-                }
-            )
+                    if reboot_pkgs:
+                        count = len(reboot_pkgs)
+                        noun = "package requires" if count == 1 else "packages require"
+                        reboot_detail = f"{count} {noun} restart"
+                    elif reboot_items:
+                        names = [r["name"] for r in reboot_items]
+                        reboot_detail = f"Restart needed by {', '.join(names[:2])}"
+                    else:
+                        reboot_detail = "System restart required"
+                    send_notification(
+                        "System Restart Required",
+                        f"{reboot_detail} • {dur_str}",
+                        urgency="critical",
+                        category="device",
+                    )
+                elif any(r["result"].status == "warning" for r in results):
+                    warn_names = [
+                        r["name"] for r in results if r["result"].status == "warning"
+                    ]
+                    if warn_names:
+                        top_warn = ", ".join(warn_names[:2])
+                        rem = len(warn_names) - 2
+                        warn_detail = (
+                            f"Warnings: {top_warn} +{rem} more"
+                            if rem > 0
+                            else f"Warnings: {top_warn}"
+                        )
+                    else:
+                        warn_detail = "Completed with warnings"
+                    send_notification(
+                        "System Update Warnings",
+                        f"{warn_detail} • {dur_str}",
+                        urgency="normal",
+                        category="device",
+                    )
+                elif update_count > 0:
+                    noun = "update" if update_count == 1 else "updates"
+                    send_notification(
+                        "System Update Complete",
+                        f"{update_count} {noun} applied • {dur_str}",
+                        urgency="normal",
+                        category="device",
+                    )
+                else:
+                    send_notification(
+                        "System Up To Date",
+                        f"All components up to date • {dur_str}",
+                        urgency="low",
+                        category="device",
+                    )
 
-    ui.print_summary(results, total_elapsed)
-
-    if notify_mode:
-        only_err = cfg.notifications_only_on_error_or_reboot
-        if not (only_err and not (has_failures or reboot_needed)):
-            if total_elapsed >= 60:
-                m = int(total_elapsed // 60)
-                s = int(total_elapsed % 60)
-                dur_str = f"{m}m {s:02d}s"
-            else:
-                dur_str = f"{round(total_elapsed, 1)}s"
-
+        if reboot_requested_mode and reboot_needed:
             if has_failures:
-                failed_names = [
-                    r["name"] for r in results if r["result"].status == "error"
-                ]
-                if failed_names:
-                    top_failed = ", ".join(failed_names[:2])
-                    rem = len(failed_names) - 2
-                    failed_detail = (
-                        f"Failed: {top_failed} +{rem} more"
-                        if rem > 0
-                        else f"Failed: {top_failed}"
-                    )
-                else:
-                    failed_detail = "Update encountered errors"
-                send_notification(
-                    "System Update Failed",
-                    f"{failed_detail} • {dur_str}",
-                    urgency="critical",
-                    category="device.error",
-                )
-            elif reboot_needed:
-                reboot_items = [
-                    r
-                    for r in results
-                    if getattr(r.get("result"), "reboot_required", False)
-                ]
-                reboot_pkgs: list[str] = []
-                for item in reboot_items:
-                    reboot_pkgs.extend(get_reboot_trigger_details(item))
-
-                if reboot_pkgs:
-                    count = len(reboot_pkgs)
-                    noun = "package requires" if count == 1 else "packages require"
-                    reboot_detail = f"{count} {noun} restart"
-                elif reboot_items:
-                    names = [r["name"] for r in reboot_items]
-                    reboot_detail = f"Restart needed by {', '.join(names[:2])}"
-                else:
-                    reboot_detail = "System restart required"
-                send_notification(
-                    "System Restart Required",
-                    f"{reboot_detail} • {dur_str}",
-                    urgency="critical",
-                    category="device",
-                )
-            elif any(r["result"].status == "warning" for r in results):
-                warn_names = [
-                    r["name"] for r in results if r["result"].status == "warning"
-                ]
-                if warn_names:
-                    top_warn = ", ".join(warn_names[:2])
-                    rem = len(warn_names) - 2
-                    warn_detail = (
-                        f"Warnings: {top_warn} +{rem} more"
-                        if rem > 0
-                        else f"Warnings: {top_warn}"
-                    )
-                else:
-                    warn_detail = "Completed with warnings"
-                send_notification(
-                    "System Update Warnings",
-                    f"{warn_detail} • {dur_str}",
-                    urgency="normal",
-                    category="device",
-                )
-            elif update_count > 0:
-                noun = "update" if update_count == 1 else "updates"
-                send_notification(
-                    "System Update Complete",
-                    f"{update_count} {noun} applied • {dur_str}",
-                    urgency="normal",
-                    category="device",
+                print(
+                    "Skipping automatic reboot because one or more update modules failed.",
+                    file=sys.stderr,
                 )
             else:
-                send_notification(
-                    "System Up To Date",
-                    f"All components up to date • {dur_str}",
-                    urgency="low",
-                    category="device",
+                print("Rebooting system as requested by --reboot...")
+                sys.stdout.flush()
+                reboot_command = (
+                    ["sudo", "-n", "shutdown", "-r", "now"]
+                    if platform.system() == "Darwin"
+                    else ["systemctl", "reboot"]
                 )
-
-    if reboot_requested_mode and reboot_needed:
-        print("Rebooting system as requested by --reboot...")
-        sys.stdout.flush()
-        reboot_command = (
-            ["sudo", "shutdown", "-r", "now"]
-            if platform.system() == "Darwin"
-            else ["systemctl", "reboot"]
-        )
-        reboot_requested = False
-        try:
-            reboot_requested = (
-                subprocess.run(reboot_command, check=False).returncode == 0
-            )
-        except OSError:
-            reboot_requested = False
-        if not reboot_requested:
-            try:
-                reboot_requested = (
-                    subprocess.run(["sudo", "reboot"], check=False).returncode == 0
-                )
-            except OSError:
                 reboot_requested = False
-        if not reboot_requested:
-            print(
-                "Error: Could not request a reboot. Please restart the system manually.",
-                file=sys.stderr,
-            )
-            has_failures = True
+                try:
+                    reboot_requested = (
+                        subprocess.run(reboot_command, check=False).returncode == 0
+                    )
+                except OSError:
+                    reboot_requested = False
+                if not reboot_requested:
+                    try:
+                        reboot_requested = (
+                            subprocess.run(
+                                ["sudo", "-n", "reboot"], check=False
+                            ).returncode
+                            == 0
+                        )
+                    except OSError:
+                        reboot_requested = False
+                if not reboot_requested:
+                    print(
+                        "Error: Could not request a reboot. Please restart the system manually.",
+                        file=sys.stderr,
+                    )
+                    has_failures = True
 
-    sys.exit(1 if has_failures else 0)
+        sys.exit(1 if has_failures else 0)
 
 
 if __name__ == "__main__":

@@ -31,6 +31,10 @@ class CompletionTests(unittest.TestCase):
         self.assertIn("dnf", script)
         self.assertIn("flatpak", script)
         self.assertIn("brew", script)
+        self.assertIn("applications", script)
+        self.assertIn("--retry-failed", script)
+        self.assertIn("--no-self-update", script)
+        self.assertNotIn(" editors ", script)
 
     def test_generate_zsh_completion(self):
         script = generate_zsh_completion(self.modules)

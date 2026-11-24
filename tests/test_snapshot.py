@@ -11,7 +11,9 @@ class SnapshotTests(unittest.TestCase):
     def test_module_is_available_only_for_snapper_btrfs_root_configuration(self):
         module = SnapshotModule()
         context = Mock()
-        context.which.return_value = "/usr/bin/snapper"
+        context.which.side_effect = lambda name: (
+            "/usr/bin/snapper" if name == "snapper" else None
+        )
 
         with (
             patch("modules.snapshot._root_filesystem_type", return_value="ext4"),
@@ -31,9 +33,53 @@ class SnapshotTests(unittest.TestCase):
         ):
             self.assertTrue(module.is_available(context))
 
+    def test_timeshift_backend_availability_cooldown_and_creation(self):
+        module = SnapshotModule(cooldown_hours=6)
+        context = UpdateContext()
+        context.which = Mock(
+            side_effect=lambda name: "/usr/bin/timeshift" if name == "timeshift" else None
+        )
+        context.run_cmd = Mock(return_value=(0, "Snapshot created", ""))
+
+        with (
+            tempfile.TemporaryDirectory() as cache_dir,
+            patch.dict(os.environ, {"XDG_CACHE_HOME": cache_dir}),
+            patch("modules.snapshot._root_filesystem_type", return_value="ext4"),
+            patch(
+                "modules.snapshot.os.path.isfile",
+                side_effect=lambda p: p == "/etc/timeshift/timeshift.json",
+            ),
+        ):
+            self.assertTrue(module.is_available(context))
+            res = module.run(context)
+            self.assertEqual(res.status, "ok")
+            context.run_cmd.assert_called_once_with(
+                [
+                    "sudo",
+                    "timeshift",
+                    "--create",
+                    "--comments",
+                    "system-updater",
+                    "--scripted",
+                ],
+                timeout=180,
+            )
+            self.assertTrue(
+                os.path.exists(os.path.join(cache_dir, "sysupdate_timeshift_stamp"))
+            )
+
+            context.run_cmd.reset_mock()
+            res_cool = module.run(context)
+            self.assertEqual(res_cool.status, "unchanged")
+            self.assertEqual(res_cool.message, "cooldown active")
+            context.run_cmd.assert_not_called()
+
     def test_configured_cooldown_prevents_redundant_snapshot(self):
         module = SnapshotModule(cooldown_hours=8)
         context = UpdateContext()
+        context.which = Mock(
+            side_effect=lambda name: "/usr/bin/snapper" if name == "snapper" else None
+        )
         context.run_cmd = Mock(side_effect=AssertionError("snapshot should be skipped"))
 
         with (
@@ -53,6 +99,9 @@ class SnapshotTests(unittest.TestCase):
     def test_legacy_stamp_migrates_automatically_and_respects_cooldown(self):
         module = SnapshotModule(cooldown_hours=8)
         context = UpdateContext()
+        context.which = Mock(
+            side_effect=lambda name: "/usr/bin/snapper" if name == "snapper" else None
+        )
         context.run_cmd = Mock(side_effect=AssertionError("snapshot should be skipped"))
 
         with (
@@ -75,6 +124,9 @@ class SnapshotTests(unittest.TestCase):
     def test_successful_snapshot_creates_new_stamp_file(self):
         module = SnapshotModule(cooldown_hours=8)
         context = UpdateContext()
+        context.which = Mock(
+            side_effect=lambda name: "/usr/bin/snapper" if name == "snapper" else None
+        )
         context.run_cmd = Mock(return_value=(0, "created", ""))
 
         with (

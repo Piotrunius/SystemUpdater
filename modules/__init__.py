@@ -72,7 +72,9 @@ from modules.snapshot import SnapshotModule
 from modules.system_pm import (
     ApkModule,
     AptModule,
+    BootcModule,
     PacmanModule,
+    RpmOstreeModule,
     XbpsModule,
     ZypperModule,
 )
@@ -108,6 +110,8 @@ def get_all_modules(cfg: Config | None = None) -> list[BaseModule]:
             ZypperModule(),  # Zypper (openSUSE Tumbleweed / Leap)
             ApkModule(),  # APK (Alpine Linux)
             XbpsModule(),  # XBPS (Void Linux)
+            BootcModule(),  # bootc immutable image OS
+            RpmOstreeModule(),  # rpm-ostree (Silverblue, Kinoite, Bazzite)
             SoftwareUpdateModule(),  # macOS (Apple softwareupdate)
             FirmwareModule(),
         ]

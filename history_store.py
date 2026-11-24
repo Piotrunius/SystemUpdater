@@ -311,6 +311,9 @@ KNOWN_CATEGORIES: dict[str, str] = {
     "alpine_packages": "System Core",
     "xbps": "System Core",
     "xbps_packages": "System Core",
+    "bootc": "System Core",
+    "ostree": "System Core",
+    "rpm_ostree": "System Core",
     # Applications & Gaming
     "flatpak": "Applications & Gaming",
     "gearlever": "Applications & Gaming",

@@ -380,3 +380,113 @@ class XbpsModule(BaseModule):
             )
 
         return StepResult("ok", "System packages upgraded")
+
+
+class BootcModule(BaseModule):
+    name = "System"
+    key = "bootc"
+    aliases: ClassVar[list[str]] = ["system"]
+    category = "System Core"
+    description = "Upgrades bootable container OS image via bootc"
+    requires_sudo = True
+
+    def is_available(self, ctx: UpdateContext) -> bool:
+        return (
+            ctx.which("bootc") is not None and os.path.exists("/run/ostree-booted")
+        )
+
+    def availability_status(self, ctx: UpdateContext) -> str:
+        return "[Active]" if self.is_available(ctx) else "[Unavailable]"
+
+    def run(self, ctx: UpdateContext) -> StepResult:
+        code, out, err = ctx.run_cmd(["sudo", "bootc", "upgrade"], timeout=600)
+        if code != 0:
+            return StepResult("error", "bootc upgrade failed", error_output=err or out)
+
+        combined = f"{out or ''}\n{err or ''}".lower()
+        if (
+            "no changes" in combined
+            or "already up to date" in combined
+            or "up-to-date" in combined
+        ):
+            return StepResult("unchanged")
+
+        return StepResult(
+            "ok",
+            "OS image staged for next boot",
+            reboot_required=True,
+        )
+
+
+class RpmOstreeModule(BaseModule):
+    name = "System"
+    key = "ostree"
+    aliases: ClassVar[list[str]] = [
+        "rpm-ostree",
+        "silverblue",
+        "kinoite",
+        "bazzite",
+        "system",
+    ]
+    category = "System Core"
+    description = "Upgrades immutable Fedora/Silverblue/Bazzite OS via rpm-ostree"
+    requires_sudo = False
+
+    def is_available(self, ctx: UpdateContext) -> bool:
+        return (
+            ctx.which("rpm-ostree") is not None
+            and os.path.exists("/run/ostree-booted")
+            and ctx.which("bootc") is None
+        )
+
+    def availability_status(self, ctx: UpdateContext) -> str:
+        return "[Active]" if self.is_available(ctx) else "[Unavailable]"
+
+    @staticmethod
+    def _parse_upgraded(output: str) -> list[str]:
+        packages: list[str] = []
+        in_upgraded = False
+        for line in output.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("Upgraded:"):
+                in_upgraded = True
+                continue
+            if in_upgraded:
+                if not stripped or not line.startswith((" ", "\t")):
+                    in_upgraded = False
+                    continue
+                if ":" in stripped or " -> " in stripped:
+                    pkg = stripped.split(":", 1)[0].split("->", 1)[0].split()[0].strip()
+                    if pkg:
+                        packages.append(pkg)
+        return list(dict.fromkeys(packages))
+
+    def run(self, ctx: UpdateContext) -> StepResult:
+        code, out, err = ctx.run_cmd(["rpm-ostree", "upgrade"], timeout=600)
+        if code != 0:
+            return StepResult(
+                "error", "rpm-ostree upgrade failed", error_output=err or out
+            )
+
+        combined = f"{out or ''}\n{err or ''}"
+        lowered = combined.lower()
+        if "no upgrade available" in lowered or "already at latest" in lowered:
+            return StepResult("unchanged")
+
+        upgraded = self._parse_upgraded(combined)
+        reboot_needed = (
+            "systemctl reboot" in lowered
+            or "queued for next boot" in lowered
+            or "upgraded:" in lowered
+            or bool(upgraded)
+        )
+        if upgraded:
+            count = len(upgraded)
+            return StepResult(
+                "ok",
+                f"{count} package{'s' if count != 1 else ''} upgraded",
+                details=upgraded,
+                reboot_required=reboot_needed,
+            )
+
+        return StepResult("ok", "OS deployment staged", reboot_required=reboot_needed)

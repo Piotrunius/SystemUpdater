@@ -6,8 +6,32 @@ Provides full customization for modules, behavior, notifications, and custom com
 
 from __future__ import annotations
 
+import difflib
 import os
 import tomllib
+
+KNOWN_SECTIONS: dict[str, set[str]] = {
+    "misc": {"disable", "cooldown_hours", "command_timeout"},
+    "behavior": {
+        "reboot",
+        "quiet",
+        "verbose",
+        "no_sudo",
+        "no_snapshot",
+        "no_history",
+        "command_timeout",
+        "self_update",
+        "skip_on_battery",
+        "check_network",
+    },
+    "notifications": {"enabled", "only_on_error_or_reboot"},
+    "modules": {"disable", "skip", "only"},
+    "categories": {"only", "skip"},
+    "git": {"repos"},
+    "pre_commands": set(),
+    "commands": set(),
+    "post_commands": set(),
+}
 
 
 def xdg_directory(variable: str, fallback: str) -> str:
@@ -38,6 +62,9 @@ class Config:
         self.no_sudo: bool = False
         self.no_snapshot: bool = False
         self.no_history: bool = False
+        self.self_update: bool = True
+        self.skip_on_battery: bool = False
+        self.check_network: bool = False
         self.notifications_enabled: bool = False
         self.notifications_only_on_error_or_reboot: bool = False
         self.command_timeout: int | None = None
@@ -46,6 +73,7 @@ class Config:
             os.path.expanduser(config_path) if config_path else DEFAULT_CONFIG_PATH
         )
         self.load_error: str | None = None
+        self.warnings: list[str] = []
 
         self._load_config()
 
@@ -66,9 +94,25 @@ class Config:
         self.no_sudo = False
         self.no_snapshot = False
         self.no_history = False
+        self.self_update = True
+        self.skip_on_battery = False
+        self.check_network = False
         self.notifications_enabled = False
         self.notifications_only_on_error_or_reboot = False
         self.command_timeout = None
+        self.warnings.clear()
+
+    def _warn_unknown_keys(self, section_name: str, section_data: dict[str, object]):
+        allowed = KNOWN_SECTIONS.get(section_name)
+        if not allowed:
+            return
+        for key in section_data:
+            if key not in allowed:
+                matches = difflib.get_close_matches(key, sorted(allowed), n=1, cutoff=0.6)
+                hint = f" (did you mean '{matches[0]}'?)" if matches else ""
+                self.warnings.append(
+                    f"Unknown configuration key '{section_name}.{key}'{hint}"
+                )
 
     def _load_config(self):
         target_path = self.config_path
@@ -86,10 +130,21 @@ class Config:
             with open(target_path, "rb") as f:
                 data = tomllib.load(f)
 
+            for section_key in data:
+                if section_key not in KNOWN_SECTIONS:
+                    matches = difflib.get_close_matches(
+                        section_key, sorted(KNOWN_SECTIONS), n=1, cutoff=0.6
+                    )
+                    hint = f" (did you mean '[{matches[0]}]'?)" if matches else ""
+                    self.warnings.append(
+                        f"Unknown configuration section '[{section_key}]'{hint}"
+                    )
+
             # [misc] table (backward compatibility)
             misc = data.get("misc", {})
             if not isinstance(misc, dict):
                 raise TypeError("[misc] must be a TOML table")
+            self._warn_unknown_keys("misc", misc)
 
             if "disable" in misc:
                 disabled = misc["disable"]
@@ -126,6 +181,7 @@ class Config:
                 beh = data["behavior"]
                 if not isinstance(beh, dict):
                     raise TypeError("[behavior] must be a TOML table")
+                self._warn_unknown_keys("behavior", beh)
                 for bool_field in (
                     "reboot",
                     "quiet",
@@ -133,6 +189,9 @@ class Config:
                     "no_sudo",
                     "no_snapshot",
                     "no_history",
+                    "self_update",
+                    "skip_on_battery",
+                    "check_network",
                 ):
                     if bool_field in beh:
                         val = beh[bool_field]
@@ -156,6 +215,7 @@ class Config:
                 notif_sec = data["notifications"]
                 if not isinstance(notif_sec, dict):
                     raise TypeError("[notifications] must be a TOML table")
+                self._warn_unknown_keys("notifications", notif_sec)
                 if "enabled" in notif_sec:
                     if not isinstance(notif_sec["enabled"], bool):
                         raise ValueError("notifications.enabled must be a boolean")
@@ -174,6 +234,7 @@ class Config:
                 mod_sec = data["modules"]
                 if not isinstance(mod_sec, dict):
                     raise TypeError("[modules] must be a TOML table")
+                self._warn_unknown_keys("modules", mod_sec)
                 if "disable" in mod_sec:
                     disabled = mod_sec["disable"]
                     if not isinstance(disabled, list) or not all(
@@ -201,6 +262,7 @@ class Config:
                 cat_sec = data["categories"]
                 if not isinstance(cat_sec, dict):
                     raise TypeError("[categories] must be a TOML table")
+                self._warn_unknown_keys("categories", cat_sec)
                 if "only" in cat_sec:
                     cats = cat_sec["only"]
                     if not isinstance(cats, list) or not all(
@@ -230,6 +292,7 @@ class Config:
             git_sec = data.get("git", {})
             if not isinstance(git_sec, dict):
                 raise TypeError("[git] must be a TOML table")
+            self._warn_unknown_keys("git", git_sec)
             if "repos" in git_sec:
                 repos = git_sec["repos"]
                 if not isinstance(repos, list) or not all(

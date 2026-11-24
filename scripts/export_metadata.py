@@ -30,9 +30,11 @@ SYSTEM_PM_NAMES = {
     "zypper": "Zypper",
     "apk": "APK",
     "xbps": "XBPS",
+    "bootc": "bootc",
+    "ostree": "rpm-ostree",
     "macos": "macOS Software Update",
     "reposync": "Nobara Repositories",
-    "snapshot": "Snapper Btrfs Snapshots",
+    "snapshot": "Snapper / Timeshift Snapshots",
 }
 MACOS_ONLY_KEYS = {"macos", "mas"}
 LINUX_ONLY_KEYS = {
@@ -43,6 +45,8 @@ LINUX_ONLY_KEYS = {
     "zypper",
     "apk",
     "xbps",
+    "bootc",
+    "ostree",
     "snapshot",
     "firmware",
     "flatpak",

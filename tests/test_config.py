@@ -67,7 +67,18 @@ class ConfigTests(unittest.TestCase):
 
         with patch.object(sys, "argv", ["sysupdate"]):
             args = parse_args()
+            self.assertIsNone(args.reboot)
+
+        with patch.object(
+            sys,
+            "argv",
+            ["sysupdate", "--no-reboot", "--no-quiet", "--no-self-update", "--retry-failed"],
+        ):
+            args = parse_args()
             self.assertFalse(args.reboot)
+            self.assertFalse(args.quiet)
+            self.assertFalse(args.self_update)
+            self.assertTrue(args.retry_failed)
 
     def test_loads_behavior_notifications_modules_and_categories_config(self):
         config = self.load_config(
@@ -136,6 +147,26 @@ class ConfigTests(unittest.TestCase):
         ):
             args = parse_args()
             self.assertEqual(args.generate_completion, "auto")
+
+    def test_warns_on_unknown_config_sections_and_keys(self):
+        config = self.load_config(
+            "[notification]\n"
+            "enabled = true\n"
+            "[behavior]\n"
+            "self_update = false\n"
+            "skip_on_battery = true\n"
+            "check_network = true\n"
+            "quie = true\n"
+        )
+        self.assertIsNone(config.load_error)
+        self.assertFalse(config.self_update)
+        self.assertTrue(config.skip_on_battery)
+        self.assertTrue(config.check_network)
+        self.assertEqual(len(config.warnings), 2)
+        self.assertIn("[notification]", config.warnings[0])
+        self.assertIn("[notifications]", config.warnings[0])
+        self.assertIn("behavior.quie", config.warnings[1])
+        self.assertIn("quiet", config.warnings[1])
 
 
 if __name__ == "__main__":
