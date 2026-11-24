@@ -391,9 +391,7 @@ class BootcModule(BaseModule):
     requires_sudo = True
 
     def is_available(self, ctx: UpdateContext) -> bool:
-        return (
-            ctx.which("bootc") is not None and os.path.exists("/run/ostree-booted")
-        )
+        return ctx.which("bootc") is not None and os.path.exists("/run/ostree-booted")
 
     def availability_status(self, ctx: UpdateContext) -> str:
         return "[Active]" if self.is_available(ctx) else "[Unavailable]"

@@ -604,14 +604,10 @@ def acquire_run_lock():
         os.makedirs(state_dir, mode=0o700, exist_ok=True)
         lock_path = os.path.join(state_dir, "run.lock")
 
-    fd = open(lock_path, "a+", encoding="utf-8")
-    locked = False
-    try:
+    with open(lock_path, "a+", encoding="utf-8") as fd:
         try:
             fcntl.flock(fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-            locked = True
         except BlockingIOError:
-            fd.close()
             print(
                 "Error: Another SystemUpdater run is already in progress.",
                 file=sys.stderr,
@@ -621,14 +617,11 @@ def acquire_run_lock():
         fd.truncate()
         fd.write(f"{os.getpid()}\n")
         fd.flush()
-        yield
-    finally:
-        if locked:
+        try:
+            yield
+        finally:
             with contextlib.suppress(OSError):
                 fcntl.flock(fd.fileno(), fcntl.LOCK_UN)
-        if not fd.closed:
-            with contextlib.suppress(OSError):
-                fd.close()
 
 
 def _validate_filter_tokens(
@@ -645,7 +638,9 @@ def _validate_filter_tokens(
             known.append(token)
         else:
             unknown.append(token)
-            matches = difflib.get_close_matches(token, sorted(valid_set), n=1, cutoff=0.6)
+            matches = difflib.get_close_matches(
+                token, sorted(valid_set), n=1, cutoff=0.6
+            )
             hint = f" (did you mean '{matches[0]}'?)" if matches else ""
             print(
                 f"Warning: Unknown value '{token}' in {flag_name}{hint}.",
@@ -750,9 +745,7 @@ def main():
     no_snapshot_mode = args.no_snapshot or cfg.no_snapshot
     no_history_mode = args.no_history or cfg.no_history
     reboot_requested_mode = args.reboot if args.reboot is not None else cfg.reboot
-    notify_mode = (
-        args.notify if args.notify is not None else cfg.notifications_enabled
-    )
+    notify_mode = args.notify if args.notify is not None else cfg.notifications_enabled
     self_update_mode = (
         args.self_update if args.self_update is not None else cfg.self_update
     )
@@ -820,7 +813,11 @@ def main():
         known_category_tokens = {
             *(c.lower() for c in CLI_CATEGORIES),
             *(a.lower() for a in CATEGORY_ALIASES),
-            *(getattr(m, "category", "").lower() for m in all_modules if getattr(m, "category", "")),
+            *(
+                getattr(m, "category", "").lower()
+                for m in all_modules
+                if getattr(m, "category", "")
+            ),
         }
 
         if args.retry_failed:
@@ -853,15 +850,15 @@ def main():
             selected_keys = raw_only
             selected_categories = None
         elif args.category:
-            raw_cats = [c.strip().lower() for c in args.category.split(",") if c.strip()]
-            raw_cats = [CATEGORY_ALIASES.get(c, c) for c in raw_cats]
+            raw_cats = [
+                c.strip().lower() for c in args.category.split(",") if c.strip()
+            ]
+            resolved_cats: list[str] = [CATEGORY_ALIASES.get(c) or c for c in raw_cats]
             valid_cat_check = known_category_tokens
             known_cats = [
-                c
-                for c in raw_cats
-                if any(c in tok for tok in valid_cat_check)
+                c for c in resolved_cats if any(c in tok for tok in valid_cat_check)
             ]
-            unknown_cats = [c for c in raw_cats if c not in known_cats]
+            unknown_cats = [c for c in resolved_cats if c not in known_cats]
             for uc in unknown_cats:
                 matches = difflib.get_close_matches(
                     uc, sorted(CLI_CATEGORIES), n=1, cutoff=0.6
@@ -871,14 +868,14 @@ def main():
                     f"Warning: Unknown category '{uc}' in --category{hint}.",
                     file=sys.stderr,
                 )
-            if raw_cats and not known_cats and unknown_cats:
+            if resolved_cats and not known_cats and unknown_cats:
                 print(
                     "Error: No valid categories specified in --category.",
                     file=sys.stderr,
                 )
                 sys.exit(2)
             selected_keys = None
-            selected_categories = raw_cats
+            selected_categories = resolved_cats
         else:
             selected_keys = cfg.only_keys if cfg.only_keys else None
             selected_categories = (
@@ -887,7 +884,11 @@ def main():
                 else None
             )
 
-        skip_keys = [k.strip().lower() for k in args.skip.split(",") if k.strip()] if args.skip else []
+        skip_keys = (
+            [k.strip().lower() for k in args.skip.split(",") if k.strip()]
+            if args.skip
+            else []
+        )
         if args.skip:
             _validate_filter_tokens(skip_keys, known_module_ids, "--skip")
         if cfg.skip_keys:

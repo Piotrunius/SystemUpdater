@@ -3,10 +3,10 @@
   "modules": [
     {
       "key": "snapshot",
-      "name": "Snapper Btrfs Snapshots",
+      "name": "Snapper / Timeshift Snapshots",
       "aliases": [],
       "category": "System Protection",
-      "description": "Creates a protective Btrfs root snapshot via Snapper before updates",
+      "description": "Creates a protective system snapshot via Snapper or Timeshift before updates",
       "requires_sudo": true,
       "unit_name": "package",
       "unit_name_plural": "packages",
@@ -111,6 +111,36 @@
       "category": "System Core",
       "description": "Updates system packages via XBPS",
       "requires_sudo": true,
+      "unit_name": "package",
+      "unit_name_plural": "packages",
+      "platform": "linux"
+    },
+    {
+      "key": "bootc",
+      "name": "bootc",
+      "aliases": [
+        "system"
+      ],
+      "category": "System Core",
+      "description": "Upgrades bootable container OS image via bootc",
+      "requires_sudo": true,
+      "unit_name": "package",
+      "unit_name_plural": "packages",
+      "platform": "linux"
+    },
+    {
+      "key": "ostree",
+      "name": "rpm-ostree",
+      "aliases": [
+        "rpm-ostree",
+        "silverblue",
+        "kinoite",
+        "bazzite",
+        "system"
+      ],
+      "category": "System Core",
+      "description": "Upgrades immutable Fedora/Silverblue/Bazzite OS via rpm-ostree",
+      "requires_sudo": false,
       "unit_name": "package",
       "unit_name_plural": "packages",
       "platform": "linux"
@@ -711,7 +741,8 @@
     {
       "flags": [
         "-q",
-        "--quiet"
+        "--quiet",
+        "--no-quiet"
       ],
       "description": "Suppress live step progress; show only final summary and errors",
       "category": "Output"
@@ -719,14 +750,16 @@
     {
       "flags": [
         "-v",
-        "--verbose"
+        "--verbose",
+        "--no-verbose"
       ],
       "description": "Stream update command output live; keep internal probes quiet",
       "category": "Output"
     },
     {
       "flags": [
-        "--notify"
+        "--notify",
+        "--no-notify"
       ],
       "description": "Send native desktop notification on completion (Linux notify-send / macOS osascript)",
       "category": "Execution"
@@ -742,7 +775,7 @@
       "flags": [
         "--no-snapshot"
       ],
-      "description": "Skip protective Btrfs snapshot creation before update",
+      "description": "Skip protective system snapshot creation before update",
       "category": "Protection"
     },
     {
@@ -750,7 +783,7 @@
         "-f",
         "--force"
       ],
-      "description": "Force execution (e.g. bypass Btrfs snapshot cooldown)",
+      "description": "Force execution (bypass snapshot cooldown and pre-flight skips)",
       "category": "Protection"
     },
     {
@@ -773,6 +806,13 @@
         "--category <names>"
       ],
       "description": "Comma-separated categories to run (e.g. 'system', 'dev')",
+      "category": "Filtering"
+    },
+    {
+      "flags": [
+        "--retry-failed"
+      ],
+      "description": "Retry only modules that failed or were interrupted in the last run",
       "category": "Filtering"
     },
     {
@@ -807,10 +847,35 @@
     {
       "flags": [
         "-r",
-        "--reboot"
+        "--reboot",
+        "--no-reboot"
       ],
       "description": "Reboot system after update if required by kernel or firmware",
       "category": "Execution"
+    },
+    {
+      "flags": [
+        "--self-update",
+        "--no-self-update"
+      ],
+      "description": "Enable or disable automatic Git checkout self-update",
+      "category": "Execution"
+    },
+    {
+      "flags": [
+        "--skip-on-battery",
+        "--no-skip-on-battery"
+      ],
+      "description": "Skip update run when running on battery power",
+      "category": "Protection"
+    },
+    {
+      "flags": [
+        "--check-network",
+        "--no-check-network"
+      ],
+      "description": "Verify network connectivity before running updates",
+      "category": "Protection"
     },
     {
       "flags": [

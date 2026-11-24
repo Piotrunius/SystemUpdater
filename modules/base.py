@@ -330,9 +330,7 @@ class UpdateContext:
                         t_err.join(timeout=0.5)
                         last_code = 124
                         last_out = "".join(out_chunks)
-                        last_err = (
-                            f"Command timed out after {effective_timeout}s: {shlex.join(cmd)}"
-                        )
+                        last_err = f"Command timed out after {effective_timeout}s: {shlex.join(cmd)}"
                     except KeyboardInterrupt:
                         _stop_process_tree(proc)
                         t_out.join(timeout=0.5)
@@ -390,9 +388,7 @@ class UpdateContext:
                     except subprocess.TimeoutExpired:
                         last_code = 124
                         last_out = ""
-                        last_err = (
-                            f"Command timed out after {effective_timeout}s: {shlex.join(cmd)}"
-                        )
+                        last_err = f"Command timed out after {effective_timeout}s: {shlex.join(cmd)}"
                     except KeyboardInterrupt:
                         self._record_command(
                             cmd,
@@ -459,9 +455,7 @@ class UpdateContext:
                             t_err.join(timeout=0.5)
                             last_code = 124
                             last_out = "".join(out_chunks)
-                            last_err = (
-                                f"Command timed out after {effective_timeout}s: {shlex.join(cmd)}"
-                            )
+                            last_err = f"Command timed out after {effective_timeout}s: {shlex.join(cmd)}"
                         except KeyboardInterrupt:
                             _stop_process_tree(proc)
                             t_out.join(timeout=0.5)

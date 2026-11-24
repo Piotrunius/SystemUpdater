@@ -55,7 +55,9 @@ class ApkModuleTests(unittest.TestCase):
             result = PacmanModule().run(context)
 
         self.assertEqual(result.status, "unchanged")
-        context.run_cmd.assert_called_once_with(["pacman", "-Syu", "--noconfirm"], timeout=600)
+        context.run_cmd.assert_called_once_with(
+            ["pacman", "-Syu", "--noconfirm"], timeout=600
+        )
 
     def test_bootc_and_rpm_ostree_modules(self):
         from unittest.mock import patch
@@ -68,7 +70,11 @@ class ApkModuleTests(unittest.TestCase):
         dnf_mod = SystemPackagesModule()
 
         ctx_ostree = UpdateContext()
-        ctx_ostree.which = Mock(side_effect=lambda b: f"/usr/bin/{b}" if b in ("rpm-ostree", "dnf") else None)
+        ctx_ostree.which = Mock(
+            side_effect=lambda b: (
+                f"/usr/bin/{b}" if b in ("rpm-ostree", "dnf") else None
+            )
+        )
         with patch("os.path.exists", side_effect=lambda p: p == "/run/ostree-booted"):
             self.assertTrue(ostree.is_available(ctx_ostree))
             self.assertFalse(bootc.is_available(ctx_ostree))
@@ -87,15 +93,27 @@ class ApkModuleTests(unittest.TestCase):
         self.assertEqual(res.details, ["kernel", "firefox"])
 
         ctx_bootc = UpdateContext()
-        ctx_bootc.which = Mock(side_effect=lambda b: f"/usr/bin/{b}" if b in ("bootc", "rpm-ostree") else None)
+        ctx_bootc.which = Mock(
+            side_effect=lambda b: (
+                f"/usr/bin/{b}" if b in ("bootc", "rpm-ostree") else None
+            )
+        )
         with patch("os.path.exists", side_effect=lambda p: p == "/run/ostree-booted"):
             self.assertTrue(bootc.is_available(ctx_bootc))
             self.assertFalse(ostree.is_available(ctx_bootc))
 
-        ctx_bootc.run_cmd = Mock(return_value=(0, "No changes in quay.io/fedora/fedora-bootc:latest\n", ""))
+        ctx_bootc.run_cmd = Mock(
+            return_value=(0, "No changes in quay.io/fedora/fedora-bootc:latest\n", "")
+        )
         self.assertEqual(bootc.run(ctx_bootc).status, "unchanged")
 
-        ctx_bootc.run_cmd = Mock(return_value=(0, "Queued for next boot: quay.io/fedora/fedora-bootc:latest\n", ""))
+        ctx_bootc.run_cmd = Mock(
+            return_value=(
+                0,
+                "Queued for next boot: quay.io/fedora/fedora-bootc:latest\n",
+                "",
+            )
+        )
         bootc_res = bootc.run(ctx_bootc)
         self.assertEqual(bootc_res.status, "ok")
         self.assertTrue(bootc_res.reboot_required)

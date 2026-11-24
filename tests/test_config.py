@@ -72,7 +72,13 @@ class ConfigTests(unittest.TestCase):
         with patch.object(
             sys,
             "argv",
-            ["sysupdate", "--no-reboot", "--no-quiet", "--no-self-update", "--retry-failed"],
+            [
+                "sysupdate",
+                "--no-reboot",
+                "--no-quiet",
+                "--no-self-update",
+                "--retry-failed",
+            ],
         ):
             args = parse_args()
             self.assertFalse(args.reboot)

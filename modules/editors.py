@@ -9,9 +9,7 @@ from modules.base import BaseModule, UpdateContext
 from ui import StepResult
 
 
-def _run_vscode_like_update(
-    ctx: UpdateContext, binary: str, label: str
-) -> StepResult:
+def _run_vscode_like_update(ctx: UpdateContext, binary: str, label: str) -> StepResult:
     code, out, err = ctx.run_cmd([binary, "--update-extensions"], timeout=180)
     if code != 0:
         return StepResult(

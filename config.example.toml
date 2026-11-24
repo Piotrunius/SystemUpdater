@@ -21,11 +21,20 @@
 # Skip all modules requiring administrator (sudo) privileges (default: false)
 # no_sudo = false
 
-# Skip protective Btrfs snapshot creation (default: false)
+# Skip protective snapshot creation (Snapper or Timeshift) (default: false)
 # no_snapshot = false
 
 # Do not record update runs in history (default: false)
 # no_history = false
+
+# Fast-forward clean Git checkout before running updates (default: true)
+# self_update = true
+
+# Skip update run when running on battery power (default: false)
+# skip_on_battery = false
+
+# Check for network reachability before running updates (default: false)
+# check_network = false
 
 [notifications]
 # Send desktop notifications on completion (Linux notify-send / macOS osascript)

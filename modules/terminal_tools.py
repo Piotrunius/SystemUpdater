@@ -90,7 +90,11 @@ class ZinitModule(BaseModule):
             return StepResult("error", "zinit update failed", error_output=err or out)
 
         combined = f"{out or ''}\n{err or ''}".lower()
-        if "already up to date" in combined and "updating" not in combined and "fast-forward" not in combined:
+        if (
+            "already up to date" in combined
+            and "updating" not in combined
+            and "fast-forward" not in combined
+        ):
             return StepResult("unchanged")
 
         return StepResult("ok", "updated")

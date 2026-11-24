@@ -292,7 +292,11 @@ Updating cloudflare…
         context = UpdateContext()
         context.run_cmd = Mock(
             side_effect=[
-                (0, "local-dev:latest\t<none>\nghcr.io/pelican/panel:latest\tsha256:abc\n", ""),
+                (
+                    0,
+                    "local-dev:latest\t<none>\nghcr.io/pelican/panel:latest\tsha256:abc\n",
+                    "",
+                ),
                 (0, "Status: Downloaded newer image\n", ""),
             ]
         )
@@ -301,7 +305,9 @@ Updating cloudflare…
         self.assertEqual(result.status, "ok")
         self.assertEqual(result.details, ["ghcr.io/pelican/panel:latest"])
         pull_call = context.run_cmd.call_args_list[1]
-        self.assertEqual(pull_call.args[0], ["docker", "pull", "ghcr.io/pelican/panel:latest"])
+        self.assertEqual(
+            pull_call.args[0], ["docker", "pull", "ghcr.io/pelican/panel:latest"]
+        )
         self.assertEqual(pull_call.kwargs.get("retries"), 1)
 
 

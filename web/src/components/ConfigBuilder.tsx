@@ -12,7 +12,38 @@ import {
   Bell,
   Box,
   Terminal,
+  Layers,
+  FolderGit2,
+  Plus,
+  Trash2,
 } from "lucide-react";
+
+type CommandPhase = "pre_commands" | "commands" | "post_commands";
+
+interface CustomCommandEntry {
+  id: string;
+  phase: CommandPhase;
+  name: string;
+  command: string;
+}
+
+const CANONICAL_CATEGORIES = [
+  "system",
+  "protection",
+  "applications",
+  "gaming",
+  "containers",
+  "dev",
+  "editors",
+  "dotfiles",
+] as const;
+
+function escapeTomlString(value: string): string {
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\r?\n/g, " ");
+}
 
 interface ConfigBuilderProps {
   modules: ModuleMeta[];
@@ -29,10 +60,29 @@ export function ConfigBuilder({ modules, categories }: ConfigBuilderProps) {
   const [noSudo, setNoSudo] = useState(false);
   const [noSnapshot, setNoSnapshot] = useState(false);
   const [noHistory, setNoHistory] = useState(false);
+  const [selfUpdate, setSelfUpdate] = useState(true);
+  const [skipOnBattery, setSkipOnBattery] = useState(false);
+  const [checkNetwork, setCheckNetwork] = useState(false);
 
   // Notifications
   const [notifyEnabled, setNotifyEnabled] = useState(false);
   const [notifyOnlyOnError, setNotifyOnlyOnError] = useState(false);
+
+  // Category filters
+  const [categoryOnly, setCategoryOnly] = useState<Set<string>>(new Set());
+  const [categorySkip, setCategorySkip] = useState<Set<string>>(new Set());
+
+  // Git repositories
+  const [gitRepoInput, setGitRepoInput] = useState("");
+  const [gitRepos, setGitRepos] = useState<string[]>([]);
+
+  // Custom commands
+  const [cmdPhase, setCmdPhase] = useState<CommandPhase>("commands");
+  const [cmdName, setCmdName] = useState("");
+  const [cmdExec, setCmdExec] = useState("");
+  const [customCommands, setCustomCommands] = useState<CustomCommandEntry[]>(
+    [],
+  );
 
   // Module exclusions
   const [disabledModules, setDisabledModules] = useState<Set<string>>(
@@ -54,6 +104,66 @@ export function ConfigBuilder({ modules, categories }: ConfigBuilderProps) {
       }
       return next;
     });
+  };
+
+  const toggleCategoryFilter = (cat: string, mode: "only" | "skip") => {
+    if (mode === "only") {
+      setCategoryOnly((prev) => {
+        const next = new Set(prev);
+        if (next.has(cat)) {
+          next.delete(cat);
+        } else {
+          next.add(cat);
+        }
+        return next;
+      });
+      setCategorySkip((prev) => {
+        if (!prev.has(cat)) return prev;
+        const next = new Set(prev);
+        next.delete(cat);
+        return next;
+      });
+    } else {
+      setCategorySkip((prev) => {
+        const next = new Set(prev);
+        if (next.has(cat)) {
+          next.delete(cat);
+        } else {
+          next.add(cat);
+        }
+        return next;
+      });
+      setCategoryOnly((prev) => {
+        if (!prev.has(cat)) return prev;
+        const next = new Set(prev);
+        next.delete(cat);
+        return next;
+      });
+    }
+  };
+
+  const handleAddGitRepo = () => {
+    const trimmed = gitRepoInput.trim();
+    if (!trimmed || gitRepos.includes(trimmed)) return;
+    setGitRepos((prev) => [...prev, trimmed]);
+    setGitRepoInput("");
+  };
+
+  const handleAddCustomCommand = () => {
+    const name = cmdName.trim();
+    const command = cmdExec.trim();
+    if (!name || !command) return;
+    setCustomCommands((prev) => [
+      ...prev,
+      {
+        id: `${cmdPhase}-${name}-${Date.now()}`,
+        phase: cmdPhase,
+        name,
+        command,
+      },
+    ]);
+    setCmdName("");
+    setCmdExec("");
   };
 
   const filteredModules = useMemo(() => {
@@ -84,6 +194,9 @@ export function ConfigBuilder({ modules, categories }: ConfigBuilderProps) {
       `no_sudo = ${noSudo}`,
       `no_snapshot = ${noSnapshot}`,
       `no_history = ${noHistory}`,
+      `self_update = ${selfUpdate}`,
+      `skip_on_battery = ${skipOnBattery}`,
+      `check_network = ${checkNetwork}`,
       "",
       "[notifications]",
       `enabled = ${notifyEnabled}`,
@@ -95,7 +208,7 @@ export function ConfigBuilder({ modules, categories }: ConfigBuilderProps) {
     if (disabledModules.size > 0) {
       const formatted = Array.from(disabledModules)
         .sort()
-        .map((k) => `"${k}"`)
+        .map((k) => `"${escapeTomlString(k)}"`)
         .join(", ");
       lines.push(`disable = [${formatted}]`);
     } else {
@@ -106,25 +219,80 @@ export function ConfigBuilder({ modules, categories }: ConfigBuilderProps) {
     lines.push("# only = []");
     lines.push("");
     lines.push("[categories]");
-    lines.push("# only = []");
-    lines.push("# skip = []");
+    if (categoryOnly.size > 0) {
+      const formatted = Array.from(categoryOnly)
+        .sort()
+        .map((c) => `"${escapeTomlString(c)}"`)
+        .join(", ");
+      lines.push(`only = [${formatted}]`);
+    } else {
+      lines.push("# only = []");
+    }
+    if (categorySkip.size > 0) {
+      const formatted = Array.from(categorySkip)
+        .sort()
+        .map((c) => `"${escapeTomlString(c)}"`)
+        .join(", ");
+      lines.push(`skip = [${formatted}]`);
+    } else {
+      lines.push("# skip = []");
+    }
     lines.push("");
     lines.push("[git]");
-    lines.push("# repos = [");
-    lines.push('#   "~/dotfiles",');
-    lines.push('#   "~/.config/nvim"');
-    lines.push("# ]");
+    if (gitRepos.length > 0) {
+      lines.push("repos = [");
+      gitRepos.forEach((repo) => {
+        lines.push(`  "${escapeTomlString(repo)}",`);
+      });
+      lines.push("]");
+    } else {
+      lines.push("# repos = [");
+      lines.push('#   "~/dotfiles",');
+      lines.push('#   "~/.config/nvim"');
+      lines.push("# ]");
+    }
+
+    const preCmds = customCommands.filter((c) => c.phase === "pre_commands");
+    const mainCmds = customCommands.filter((c) => c.phase === "commands");
+    const postCmds = customCommands.filter((c) => c.phase === "post_commands");
+
     lines.push("");
     lines.push("[pre_commands]");
-    lines.push('# "Clean temp files" = "rm -rf /tmp/build-cache-*"');
+    if (preCmds.length > 0) {
+      preCmds.forEach((c) => {
+        lines.push(
+          `"${escapeTomlString(c.name)}" = "${escapeTomlString(c.command)}"`,
+        );
+      });
+    } else {
+      lines.push('# "Clean temp files" = "rm -rf /tmp/build-cache-*"');
+    }
+
     lines.push("");
     lines.push("[commands]");
-    lines.push('# "Custom tool" = "my-tool update"');
+    if (mainCmds.length > 0) {
+      mainCmds.forEach((c) => {
+        lines.push(
+          `"${escapeTomlString(c.name)}" = "${escapeTomlString(c.command)}"`,
+        );
+      });
+    } else {
+      lines.push('# "Custom tool" = "my-tool update"');
+    }
+
     lines.push("");
     lines.push("[post_commands]");
-    lines.push(
-      '# "Update desktop DB" = "update-desktop-database ~/.local/share/applications"',
-    );
+    if (postCmds.length > 0) {
+      postCmds.forEach((c) => {
+        lines.push(
+          `"${escapeTomlString(c.name)}" = "${escapeTomlString(c.command)}"`,
+        );
+      });
+    } else {
+      lines.push(
+        '# "Update desktop DB" = "update-desktop-database ~/.local/share/applications"',
+      );
+    }
 
     return lines.join("\n");
   }, [
@@ -136,9 +304,16 @@ export function ConfigBuilder({ modules, categories }: ConfigBuilderProps) {
     noSudo,
     noSnapshot,
     noHistory,
+    selfUpdate,
+    skipOnBattery,
+    checkNetwork,
     notifyEnabled,
     notifyOnlyOnError,
     disabledModules,
+    categoryOnly,
+    categorySkip,
+    gitRepos,
+    customCommands,
   ]);
 
   const generatedBashCommand = useMemo(() => {
@@ -196,7 +371,11 @@ echo "Saved configuration to \${XDG_CONFIG_HOME:-\$HOME/.config}/sysupdate/confi
               <input
                 type="checkbox"
                 checked={quiet}
-                onChange={(e) => setQuiet(e.target.checked)}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setQuiet(checked);
+                  if (checked) setVerbose(false);
+                }}
                 className="h-3.5 w-3.5 rounded border-zinc-700 bg-zinc-900 accent-emerald-500"
               />
             </label>
@@ -213,7 +392,11 @@ echo "Saved configuration to \${XDG_CONFIG_HOME:-\$HOME/.config}/sysupdate/confi
               <input
                 type="checkbox"
                 checked={verbose}
-                onChange={(e) => setVerbose(e.target.checked)}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setVerbose(checked);
+                  if (checked) setQuiet(false);
+                }}
                 className="h-3.5 w-3.5 rounded border-zinc-700 bg-zinc-900 accent-emerald-500"
               />
             </label>
@@ -266,6 +449,55 @@ echo "Saved configuration to \${XDG_CONFIG_HOME:-\$HOME/.config}/sysupdate/confi
                 className="h-3.5 w-3.5 rounded border-zinc-700 bg-zinc-900 accent-emerald-500"
               />
             </label>
+
+            <label className="flex items-center justify-between cursor-pointer py-1 border-t border-zinc-850/60">
+              <div>
+                <span className="font-medium text-zinc-300">
+                  Self-update checkout
+                </span>
+                <p className="text-[11px] text-zinc-500">
+                  Fast-forward clean Git install before updates
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                checked={selfUpdate}
+                onChange={(e) => setSelfUpdate(e.target.checked)}
+                className="h-3.5 w-3.5 rounded border-zinc-700 bg-zinc-900 accent-emerald-500"
+              />
+            </label>
+
+            <label className="flex items-center justify-between cursor-pointer py-1 border-t border-zinc-850/60">
+              <div>
+                <span className="font-medium text-zinc-300">
+                  Skip on battery
+                </span>
+                <p className="text-[11px] text-zinc-500">
+                  Abort run when laptop is on battery power
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                checked={skipOnBattery}
+                onChange={(e) => setSkipOnBattery(e.target.checked)}
+                className="h-3.5 w-3.5 rounded border-zinc-700 bg-zinc-900 accent-emerald-500"
+              />
+            </label>
+
+            <label className="flex items-center justify-between cursor-pointer py-1 border-t border-zinc-850/60">
+              <div>
+                <span className="font-medium text-zinc-300">Check network</span>
+                <p className="text-[11px] text-zinc-500">
+                  Verify network connectivity before updates
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                checked={checkNetwork}
+                onChange={(e) => setCheckNetwork(e.target.checked)}
+                className="h-3.5 w-3.5 rounded border-zinc-700 bg-zinc-900 accent-emerald-500"
+              />
+            </label>
           </div>
         </div>
 
@@ -280,10 +512,10 @@ echo "Saved configuration to \${XDG_CONFIG_HOME:-\$HOME/.config}/sysupdate/confi
             <label className="flex items-center justify-between cursor-pointer">
               <div>
                 <span className="font-medium text-zinc-300">
-                  Skip Btrfs snapshots
+                  Skip protective snapshots
                 </span>
                 <p className="text-[11px] text-zinc-500">
-                  Disable automatic Snapper root snapshot
+                  Disable automatic Snapper or Timeshift snapshot
                 </p>
               </div>
               <input
@@ -301,12 +533,17 @@ echo "Saved configuration to \${XDG_CONFIG_HOME:-\$HOME/.config}/sysupdate/confi
                 </label>
                 <input
                   type="number"
-                  min={1}
+                  min={0}
                   max={72}
                   value={cooldownHours}
-                  onChange={(e) =>
-                    setCooldownHours(Number(e.target.value) || 12)
-                  }
+                  onChange={(e) => {
+                    const parsed = parseInt(e.target.value, 10);
+                    setCooldownHours(
+                      Number.isNaN(parsed)
+                        ? 0
+                        : Math.max(0, Math.min(72, parsed)),
+                    );
+                  }}
                   className="mt-1 w-full rounded border border-zinc-750 bg-zinc-950 px-2 py-1 font-mono text-xs text-zinc-200 outline-none focus:border-zinc-500"
                 />
               </div>
@@ -438,6 +675,220 @@ echo "Saved configuration to \${XDG_CONFIG_HOME:-\$HOME/.config}/sysupdate/confi
               );
             })}
           </div>
+        </div>
+
+        {/* Category Filters */}
+        <div className="rounded border border-zinc-800 bg-[#0c0c0e] p-4 space-y-3">
+          <div className="flex items-center justify-between border-b border-zinc-850 pb-2">
+            <div className="flex items-center gap-2 text-xs font-semibold text-zinc-200">
+              <Layers className="h-3.5 w-3.5 text-cyan-400" />
+              <span>Category Filters</span>
+            </div>
+            <span className="font-mono text-[11px] text-zinc-500">
+              {categoryOnly.size} only / {categorySkip.size} skip
+            </span>
+          </div>
+
+          <div className="space-y-2 text-[11px]">
+            <div>
+              <span className="block font-mono text-zinc-400 mb-1.5">only</span>
+              <div className="flex flex-wrap gap-1.5">
+                {CANONICAL_CATEGORIES.map((cat) => {
+                  const active = categoryOnly.has(cat);
+                  return (
+                    <button
+                      key={`only-${cat}`}
+                      type="button"
+                      onClick={() => toggleCategoryFilter(cat, "only")}
+                      className={`rounded border px-2 py-0.5 font-mono transition-colors ${
+                        active
+                          ? "border-emerald-500/60 bg-emerald-950/50 text-emerald-300"
+                          : "border-zinc-800 bg-zinc-950 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="pt-1 border-t border-zinc-850/60">
+              <span className="block font-mono text-zinc-400 mb-1.5">skip</span>
+              <div className="flex flex-wrap gap-1.5">
+                {CANONICAL_CATEGORIES.map((cat) => {
+                  const active = categorySkip.has(cat);
+                  return (
+                    <button
+                      key={`skip-${cat}`}
+                      type="button"
+                      onClick={() => toggleCategoryFilter(cat, "skip")}
+                      className={`rounded border px-2 py-0.5 font-mono transition-colors ${
+                        active
+                          ? "border-red-500/60 bg-red-950/40 text-red-300"
+                          : "border-zinc-800 bg-zinc-950 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Git Repositories */}
+        <div className="rounded border border-zinc-800 bg-[#0c0c0e] p-4 space-y-3">
+          <div className="flex items-center justify-between border-b border-zinc-850 pb-2">
+            <div className="flex items-center gap-2 text-xs font-semibold text-zinc-200">
+              <FolderGit2 className="h-3.5 w-3.5 text-emerald-400" />
+              <span>Git Repositories</span>
+            </div>
+            <span className="font-mono text-[11px] text-zinc-500">
+              {gitRepos.length} configured
+            </span>
+          </div>
+
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="~/dotfiles or /path/to/repo"
+              value={gitRepoInput}
+              onChange={(e) => setGitRepoInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleAddGitRepo();
+                }
+              }}
+              className="w-full rounded border border-zinc-750 bg-zinc-950 px-2.5 py-1 text-xs text-zinc-200 placeholder-zinc-500 outline-none focus:border-zinc-500 font-mono"
+            />
+            <button
+              type="button"
+              onClick={handleAddGitRepo}
+              className="flex items-center gap-1 rounded border border-zinc-750 bg-zinc-800 px-2.5 py-1 text-xs text-zinc-200 hover:bg-zinc-700 transition-colors shrink-0"
+            >
+              <Plus className="h-3 w-3" />
+              <span>Add</span>
+            </button>
+          </div>
+
+          {gitRepos.length > 0 && (
+            <div className="divide-y divide-zinc-850/60 rounded border border-zinc-800 bg-zinc-950/60 font-mono text-[11px]">
+              {gitRepos.map((repo) => (
+                <div
+                  key={repo}
+                  className="flex items-center justify-between px-2.5 py-1.5"
+                >
+                  <span className="text-zinc-300 truncate">{repo}</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setGitRepos((prev) => prev.filter((r) => r !== repo))
+                    }
+                    aria-label={`Remove ${repo}`}
+                    className="text-zinc-500 hover:text-red-400 transition-colors ml-2"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Custom Commands */}
+        <div className="rounded border border-zinc-800 bg-[#0c0c0e] p-4 space-y-3">
+          <div className="flex items-center justify-between border-b border-zinc-850 pb-2">
+            <div className="flex items-center gap-2 text-xs font-semibold text-zinc-200">
+              <Terminal className="h-3.5 w-3.5 text-purple-400" />
+              <span>Custom Commands</span>
+            </div>
+            <span className="font-mono text-[11px] text-zinc-500">
+              {customCommands.length} configured
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-12">
+            <select
+              value={cmdPhase}
+              onChange={(e) => setCmdPhase(e.target.value as CommandPhase)}
+              className="sm:col-span-4 rounded border border-zinc-800 bg-zinc-900 px-2 py-1 text-[11px] font-mono text-zinc-300 outline-none"
+            >
+              <option value="pre_commands">pre_commands</option>
+              <option value="commands">commands</option>
+              <option value="post_commands">post_commands</option>
+            </select>
+            <input
+              type="text"
+              placeholder="Label (e.g. Refresh cache)"
+              value={cmdName}
+              onChange={(e) => setCmdName(e.target.value)}
+              className="sm:col-span-8 rounded border border-zinc-750 bg-zinc-950 px-2.5 py-1 text-xs text-zinc-200 placeholder-zinc-500 outline-none focus:border-zinc-500"
+            />
+          </div>
+
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Shell command to execute"
+              value={cmdExec}
+              onChange={(e) => setCmdExec(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleAddCustomCommand();
+                }
+              }}
+              className="w-full rounded border border-zinc-750 bg-zinc-950 px-2.5 py-1 text-xs text-zinc-200 placeholder-zinc-500 outline-none focus:border-zinc-500 font-mono"
+            />
+            <button
+              type="button"
+              onClick={handleAddCustomCommand}
+              className="flex items-center gap-1 rounded border border-zinc-750 bg-zinc-800 px-2.5 py-1 text-xs text-zinc-200 hover:bg-zinc-700 transition-colors shrink-0"
+            >
+              <Plus className="h-3 w-3" />
+              <span>Add</span>
+            </button>
+          </div>
+
+          {customCommands.length > 0 && (
+            <div className="divide-y divide-zinc-850/60 rounded border border-zinc-800 bg-zinc-950/60 font-mono text-[11px]">
+              {customCommands.map((entry) => (
+                <div
+                  key={entry.id}
+                  className="flex items-center justify-between gap-2 px-2.5 py-1.5"
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-purple-400">
+                        [{entry.phase}]
+                      </span>
+                      <span className="text-zinc-200 font-sans truncate">
+                        {entry.name}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-zinc-500 truncate">
+                      {entry.command}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCustomCommands((prev) =>
+                        prev.filter((item) => item.id !== entry.id),
+                      )
+                    }
+                    aria-label={`Remove ${entry.name}`}
+                    className="text-zinc-500 hover:text-red-400 transition-colors shrink-0"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

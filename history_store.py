@@ -18,7 +18,7 @@ from reboot import (
     check_packages_require_reboot,
     is_reboot_eligible_module,
 )
-from redaction import redact_text as redact_text
+from redaction import redact_text
 
 RUN_ID_PATTERN = re.compile(r"^\d{8}T\d{6}Z-[0-9a-f]{8}$")
 

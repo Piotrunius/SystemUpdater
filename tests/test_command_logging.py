@@ -97,12 +97,16 @@ class CommandLoggingTests(unittest.TestCase):
                 self.attempt = calls["count"]
                 self.pid = 12345
                 self.returncode = 0
-                self.stdout = FakePipe("Downloaded newer image\n" if self.attempt == 2 else "")
+                self.stdout = FakePipe(
+                    "Downloaded newer image\n" if self.attempt == 2 else ""
+                )
                 self.stderr = FakePipe("")
 
             def wait(self, timeout=None):
                 if self.attempt == 1:
-                    raise real_subprocess.TimeoutExpired(cmd=["docker"], timeout=timeout or 1)
+                    raise real_subprocess.TimeoutExpired(
+                        cmd=["docker"], timeout=timeout or 1
+                    )
                 return 0
 
             def terminate(self):
@@ -112,10 +116,14 @@ class CommandLoggingTests(unittest.TestCase):
                 pass
 
         with (
-            patch("modules.base.subprocess.Popen", side_effect=lambda *a, **kw: FakeProc()),
+            patch(
+                "modules.base.subprocess.Popen", side_effect=lambda *a, **kw: FakeProc()
+            ),
             patch("modules.base._stop_process_tree"),
         ):
-            code, stdout, _ = context.run_cmd(["docker", "pull", "img"], retries=1, retry_delay=0)
+            code, stdout, _ = context.run_cmd(
+                ["docker", "pull", "img"], retries=1, retry_delay=0
+            )
 
         self.assertEqual(code, 0)
         self.assertIn("Downloaded newer image", stdout)

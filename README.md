@@ -2,7 +2,7 @@
 
 SystemUpdater (`sysupdate`) runs updates for supported Linux and macOS package managers, desktop apps, containers, and development tools from one command. It detects installed tools, runs only applicable modules, and reports results in a consistent terminal summary.
 
-Before system package updates, it can create a Btrfs snapshot through Snapper. It also supports selective runs, custom commands, run history, and optional reboot handling.
+Before system package updates, it can create a system snapshot through Snapper or Timeshift. It also supports selective runs, custom commands, run history, and optional reboot handling.
 
 <p align="center">
   <img src="assets/gifs/demo_full_update.gif" alt="SystemUpdater execution demo" width="800" style="border-radius: 10px; border: 1px solid #30363d;" />
@@ -15,7 +15,7 @@ Before system package updates, it can create a Btrfs snapshot through Snapper. I
 - Supports module, category, quiet, and verbose selection.
 - Generates native shell completions for Bash, Zsh, and Fish (`--generate-completion`).
 - Sends native desktop notifications on Linux (`notify-send`) and macOS (`osascript`) upon completion (`--notify`).
-- Creates cooldown-limited Snapper snapshots before updates when available.
+- Creates cooldown-limited Snapper or Timeshift snapshots before updates when available.
 - Detects reboot requirements from updated packages, firmware, macOS system updates, and system reboot markers.
 - Stores up to 30 private run records, with redacted and size-limited command output.
 - Keeps a clean Git checkout updated automatically; Homebrew installations are updated by Homebrew.
@@ -25,15 +25,15 @@ Before system package updates, it can create a Btrfs snapshot through Snapper. I
 
 Availability depends on the operating system and tools installed on the machine. Run `sysupdate --list` to see which modules are available on your system.
 
-| Area                         | Sources                                                                                                                        |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| System                       | DNF/DNF5, APT, Pacman and AUR helpers (yay/paru), Zypper, APK, XBPS, Nobara repository sync, macOS Software Update             |
-| Protection and firmware      | Snapper Btrfs snapshots, Firmware (fwupdmgr)                                                                                   |
-| Apps and gaming              | Flatpak, Nuvio Desktop, Gear Lever AppImages, ProtonPlus, Distrobox, Mac App Store (mas)                                       |
-| Containers and package tools | Homebrew, Docker images, Podman auto-update, Vagrant boxes, Snap, Nix                                                          |
-| Development tools            | Shell plugins, Tealdeer, Rust, Python tools, Node.js package managers, Composer, Ruby gems, Mise, asdf, SDKMAN, GHCup, Flutter |
-| Editors and extensions       | Neovim, Micro, Helix, VS Code, Cursor, VSCodium, Tmux plugins, GitHub CLI extensions, Agent Skills, Antigravity                |
-| User configuration           | Chezmoi, Yadm, configured Git repositories, custom pre/update/post commands                                                    |
+| Area                         | Sources                                                                                                                               |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| System                       | DNF/DNF5, APT, Pacman and AUR helpers (yay/paru), Zypper, APK, XBPS, bootc, rpm-ostree, Nobara repository sync, macOS Software Update |
+| Protection and firmware      | Snapper / Timeshift snapshots, Firmware (fwupdmgr)                                                                                    |
+| Apps and gaming              | Flatpak, Nuvio Desktop, Gear Lever AppImages, ProtonPlus, Distrobox, Mac App Store (mas)                                              |
+| Containers and package tools | Homebrew, Docker images, Podman auto-update, Vagrant boxes, Snap, Nix                                                                 |
+| Development tools            | Shell plugins, Tealdeer, Rust, Python tools, Node.js package managers, Composer, Ruby gems, Mise, asdf, SDKMAN, GHCup, Flutter        |
+| Editors and extensions       | Neovim, Micro, Helix, VS Code, Cursor, VSCodium, Tmux plugins, GitHub CLI extensions, Agent Skills, Antigravity                       |
+| User configuration           | Chezmoi, Yadm, configured Git repositories, custom pre/update/post commands                                                           |
 
 ## Requirements
 
@@ -98,27 +98,31 @@ alias update="sysupdate"
 
 ## Usage
 
-| Option                        | Description                                                                        |
-| ----------------------------- | ---------------------------------------------------------------------------------- |
-| `-h`, `--help`                | Show command help                                                                  |
-| `--version`                   | Show installed and latest available versions                                       |
-| `-f`, `--force`               | Bypass safeguards such as the snapshot cooldown                                    |
-| `-q`, `--quiet`               | Hide live progress; show the final summary and errors                              |
-| `-v`, `--verbose`             | Stream update command output                                                       |
-| `--notify`                    | Send desktop notification on completion (Linux `notify-send` / macOS `osascript`)  |
-| `--generate-completion SHELL` | Generate shell completions for `bash`, `zsh`, or `fish`                            |
-| `--only KEYS`                 | Run only comma-separated module keys or aliases                                    |
-| `--skip KEYS`                 | Skip comma-separated module keys                                                   |
-| `-c`, `--category CATEGORIES` | Run comma-separated categories, such as `system`, `containers`, `dev`, or `gaming` |
-| `--no-sudo`                   | Skip modules requiring administrator privileges                                    |
-| `--no-snapshot`               | Skip the protective Btrfs snapshot                                                 |
-| `--config PATH`               | Use a configuration file at a custom path                                          |
-| `--edit-config`               | Open the configuration file in `$EDITOR`                                           |
-| `-l`, `--list`                | List registered modules and check availability                                     |
-| `-r`, `--reboot`              | Reboot after the summary and history are saved if updates require it               |
-| `--no-history`                | Do not record this run or its command logs in history                              |
-| `--history [COUNT]`           | List recent runs (default 10, maximum 30)                                          |
-| `--show-log RUN_ID`           | Show the saved details for a run                                                   |
+| Option                                      | Description                                                                        |
+| ------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `-h`, `--help`                              | Show command help                                                                  |
+| `--version`                                 | Show installed and latest available versions                                       |
+| `-f`, `--force`                             | Bypass safeguards such as the snapshot cooldown                                    |
+| `-q`, `--quiet`, `--no-quiet`               | Hide live progress; show the final summary and errors                              |
+| `-v`, `--verbose`, `--no-verbose`           | Stream update command output                                                       |
+| `--notify`, `--no-notify`                   | Send desktop notification on completion (Linux `notify-send` / macOS `osascript`)  |
+| `--generate-completion SHELL`               | Generate shell completions for `bash`, `zsh`, or `fish`                            |
+| `--only KEYS`                               | Run only comma-separated module keys or aliases                                    |
+| `--skip KEYS`                               | Skip comma-separated module keys                                                   |
+| `--retry-failed`                            | Re-run only modules that failed in the latest recorded run                         |
+| `-c`, `--category CATEGORIES`               | Run comma-separated categories, such as `system`, `containers`, `dev`, or `gaming` |
+| `--no-sudo`                                 | Skip modules requiring administrator privileges                                    |
+| `--no-snapshot`                             | Skip the protective system snapshot                                                |
+| `--self-update`, `--no-self-update`         | Enable or skip Git checkout self-update before running updates                     |
+| `--skip-on-battery`, `--no-skip-on-battery` | Abort the update run if the system is running on battery power                     |
+| `--check-network`, `--no-check-network`     | Abort the update run if no network interface/route is reachable                    |
+| `--config PATH`                             | Use a configuration file at a custom path                                          |
+| `--edit-config`                             | Open the configuration file in `$EDITOR`                                           |
+| `-l`, `--list`                              | List registered modules and check availability                                     |
+| `-r`, `--reboot`, `--no-reboot`             | Reboot after the summary and history are saved if updates require it               |
+| `--no-history`                              | Do not record this run or its command logs in history                              |
+| `--history [COUNT]`                         | List recent runs (default 10, maximum 30)                                          |
+| `--show-log RUN_ID`                         | Show the saved details for a run                                                   |
 
 Use `sysupdate --help` for the options supported by the installed version.
 
@@ -189,11 +193,20 @@ The default configuration file is `${XDG_CONFIG_HOME:-$HOME/.config}/sysupdate/c
 # Skip all modules requiring administrator (sudo) privileges (default: false)
 # no_sudo = false
 
-# Skip protective Btrfs snapshot creation (default: false)
+# Skip protective snapshot creation (Snapper or Timeshift) (default: false)
 # no_snapshot = false
 
 # Do not record update runs in history (default: false)
 # no_history = false
+
+# Fast-forward clean Git checkout before running updates (default: true)
+# self_update = true
+
+# Skip update run when running on battery power (default: false)
+# skip_on_battery = false
+
+# Check for network reachability before running updates (default: false)
+# check_network = false
 
 [notifications]
 # Send desktop notifications on completion (Linux notify-send / macOS osascript)

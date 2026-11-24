@@ -56,32 +56,32 @@ def suppress_terminal_echo():
 
 
 from colors import Colors, colors_enabled, get_status_marker
-from reboot import (
-    CORE_SYSTEM_KEYWORDS as CORE_SYSTEM_KEYWORDS,
-    DEV_TOOLS_KEYWORDS as DEV_TOOLS_KEYWORDS,
-    EXACT_SHORT_KEYWORDS as EXACT_SHORT_KEYWORDS,
-    REBOOT_TRIGGER_PATTERNS as REBOOT_TRIGGER_PATTERNS,
-    check_packages_require_reboot as check_packages_require_reboot,
-    check_system_reboot_required as check_system_reboot_required,
-    extract_package_name as extract_package_name,
-    format_package_list as format_package_list,
-    format_package_list_inline as format_package_list_inline,
-    get_reboot_trigger_details as get_reboot_trigger_details,
-    get_reboot_trigger_packages as get_reboot_trigger_packages,
-    is_reboot_eligible_module as is_reboot_eligible_module,
-    package_importance_score as package_importance_score,
+from reboot import (  # noqa: F401
+    CORE_SYSTEM_KEYWORDS,
+    DEV_TOOLS_KEYWORDS,
+    EXACT_SHORT_KEYWORDS,
+    REBOOT_TRIGGER_PATTERNS,
+    check_packages_require_reboot,
+    check_system_reboot_required,
+    extract_package_name,
+    format_package_list,
+    format_package_list_inline,
+    get_reboot_trigger_details,
+    get_reboot_trigger_packages,
+    is_reboot_eligible_module,
+    package_importance_score,
 )
-from redaction import (
-    ANSI_ESCAPE_PATTERN as ANSI_ESCAPE_PATTERN,
-    ASSIGNMENT_SECRET_PATTERN as ASSIGNMENT_SECRET_PATTERN,
-    BASIC_AUTH_PATTERN as BASIC_AUTH_PATTERN,
-    BEARER_PATTERN as BEARER_PATTERN,
-    FLAG_SECRET_PATTERN as FLAG_SECRET_PATTERN,
-    PRIVATE_KEY_PATTERN as PRIVATE_KEY_PATTERN,
-    TERMINAL_CONTROL_PATTERN as TERMINAL_CONTROL_PATTERN,
-    TOKEN_PATTERN as TOKEN_PATTERN,
-    URL_CREDENTIAL_PATTERN as URL_CREDENTIAL_PATTERN,
-    redact_text as redact_text,
+from redaction import (  # noqa: F401
+    ANSI_ESCAPE_PATTERN,
+    ASSIGNMENT_SECRET_PATTERN,
+    BASIC_AUTH_PATTERN,
+    BEARER_PATTERN,
+    FLAG_SECRET_PATTERN,
+    PRIVATE_KEY_PATTERN,
+    TERMINAL_CONTROL_PATTERN,
+    TOKEN_PATTERN,
+    URL_CREDENTIAL_PATTERN,
+    redact_text,
 )
 
 RUNNING_FRAMES = [
@@ -241,7 +241,9 @@ class UI:
         prefix = f"── {title} ─ {time_str} "
         dashes = "─" * max(0, width - len(prefix))
         print()
-        print(f"{self._c(Colors.BOLD)}{self._c(Colors.CYAN)}{prefix}{dashes}{self._c(Colors.RESET)}")
+        print(
+            f"{self._c(Colors.BOLD)}{self._c(Colors.CYAN)}{prefix}{dashes}{self._c(Colors.RESET)}"
+        )
 
     def _downgrade_transient_error(
         self, res: StepResult, module: Any | None = None

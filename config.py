@@ -108,7 +108,9 @@ class Config:
             return
         for key in section_data:
             if key not in allowed:
-                matches = difflib.get_close_matches(key, sorted(allowed), n=1, cutoff=0.6)
+                matches = difflib.get_close_matches(
+                    key, sorted(allowed), n=1, cutoff=0.6
+                )
                 hint = f" (did you mean '{matches[0]}'?)" if matches else ""
                 self.warnings.append(
                     f"Unknown configuration key '{section_name}.{key}'{hint}"

@@ -795,7 +795,9 @@ class UvModule(BaseModule):
                 re.findall(r"^\s*Updated\s+([\w\.\-_]+)", tools_combined, re.MULTILINE)
             )
         )
-        tools_unchanged = "Nothing to upgrade" in tools_combined or not tools_combined.strip()
+        tools_unchanged = (
+            "Nothing to upgrade" in tools_combined or not tools_combined.strip()
+        )
         if tools_unchanged and not self_updated and not upgraded_tools:
             return StepResult("unchanged")
 
@@ -1004,17 +1006,18 @@ class ComposerModule(BaseModule):
                 )
         else:
             self_combined = f"{self_out}\n{self_err}".lower()
-            if "already using" not in self_combined and "up to date" not in self_combined and self_combined.strip():
+            if (
+                "already using" not in self_combined
+                and "up to date" not in self_combined
+                and self_combined.strip()
+            ):
                 self_updated = True
 
         combined = f"{out or ''}\n{err or ''}"
-        if (
-            not self_updated
-            and (
-                "Nothing to modify in lock file" in combined
-                or "Nothing to install" in combined
-                or not combined.strip()
-            )
+        if not self_updated and (
+            "Nothing to modify in lock file" in combined
+            or "Nothing to install" in combined
+            or not combined.strip()
         ):
             return StepResult("unchanged")
 
@@ -1115,7 +1118,9 @@ class GemModule(BaseModule):
         errors: list[str] = []
 
         if not pm_managed:
-            s_code, s_out, s_err = ctx.run_cmd([gem_bin, "update", "--system"], timeout=180)
+            s_code, s_out, s_err = ctx.run_cmd(
+                [gem_bin, "update", "--system"], timeout=180
+            )
             s_combined = (s_out or "") + "\n" + (s_err or "")
             if (
                 "Gem::FilePermissionError" in s_combined
@@ -1240,17 +1245,18 @@ class MiseModule(BaseModule):
                 )
         else:
             self_combined = f"{self_out}\n{self_err}".lower()
-            if self_combined.strip() and "already up to date" not in self_combined and "already on the latest" not in self_combined:
+            if (
+                self_combined.strip()
+                and "already up to date" not in self_combined
+                and "already on the latest" not in self_combined
+            ):
                 self_updated = True
 
         combined = f"{out or ''}\n{err or ''}".lower()
-        if (
-            not self_updated
-            and (
-                not combined.strip()
-                or "all tools are up to date" in combined
-                or "nothing to upgrade" in combined
-            )
+        if not self_updated and (
+            not combined.strip()
+            or "all tools are up to date" in combined
+            or "nothing to upgrade" in combined
         ):
             return StepResult("unchanged")
 
@@ -1301,8 +1307,12 @@ class AsdfModule(BaseModule):
                 "error", "asdf plugin update failed", error_output=err or out
             )
 
-        lines = [line.strip().lower() for line in (out or "").splitlines() if line.strip()]
-        if not lines or all("already up to date" in line or "up-to-date" in line for line in lines):
+        lines = [
+            line.strip().lower() for line in (out or "").splitlines() if line.strip()
+        ]
+        if not lines or all(
+            "already up to date" in line or "up-to-date" in line for line in lines
+        ):
             return StepResult("unchanged")
 
         return StepResult("ok", "updated")

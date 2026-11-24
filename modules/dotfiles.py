@@ -31,9 +31,7 @@ class ChezmoiModule(BaseModule):
         return self.format_availability(self._availability(ctx))
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        code, out, err = ctx.run_cmd(
-            ["chezmoi", "update", "--no-tty"], timeout=120
-        )
+        code, out, err = ctx.run_cmd(["chezmoi", "update", "--no-tty"], timeout=120)
         if code != 0:
             return StepResult("error", "chezmoi update failed", error_output=err or out)
 

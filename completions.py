@@ -16,9 +16,7 @@ from cli_spec import CLI_CATEGORIES, CLI_FLAGS
 
 CATEGORIES = list(CLI_CATEGORIES)
 
-OPTIONS = [
-    (item["short"], item["long"], item["completion_desc"]) for item in CLI_FLAGS
-]
+OPTIONS = [(item["short"], item["long"], item["completion_desc"]) for item in CLI_FLAGS]
 
 
 def _all_cli_flags() -> str:
@@ -179,12 +177,22 @@ def generate_fish_completion(modules: list[BaseModule]) -> str:
         "complete -c sysupdate -s h -l help -d 'Show command help'",
         ("complete -c sysupdate -l version -d 'Show installed and latest version'"),
         ("complete -c sysupdate -s f -l force -d 'Bypass snapshot safeguards'"),
-        ("complete -c sysupdate -s q -l quiet -d 'Hide live progress, show summary only'"),
+        (
+            "complete -c sysupdate -s q -l quiet -d 'Hide live progress, show summary only'"
+        ),
         ("complete -c sysupdate -l no-quiet -d 'Show live step progress'"),
-        ("complete -c sysupdate -s v -l verbose -d 'Stream update command output live'"),
-        ("complete -c sysupdate -l no-verbose -d 'Disable live command output streaming'"),
-        ("complete -c sysupdate -l notify -d 'Send desktop notification on completion'"),
-        ("complete -c sysupdate -l no-notify -d 'Disable desktop notification on completion'"),
+        (
+            "complete -c sysupdate -s v -l verbose -d 'Stream update command output live'"
+        ),
+        (
+            "complete -c sysupdate -l no-verbose -d 'Disable live command output streaming'"
+        ),
+        (
+            "complete -c sysupdate -l notify -d 'Send desktop notification on completion'"
+        ),
+        (
+            "complete -c sysupdate -l no-notify -d 'Disable desktop notification on completion'"
+        ),
         (
             f"complete -c sysupdate -l only -x -a '{module_keys}' -d 'Run only"
             " specified modules'"
@@ -197,15 +205,27 @@ def generate_fish_completion(modules: list[BaseModule]) -> str:
             f"complete -c sysupdate -s c -l category -x -a '{categories}' -d"
             " 'Run specified categories'"
         ),
-        ("complete -c sysupdate -l retry-failed -d 'Retry failed modules from last run'"),
-        ("complete -c sysupdate -l no-sudo -d 'Skip modules requiring root privileges'"),
+        (
+            "complete -c sysupdate -l retry-failed -d 'Retry failed modules from last run'"
+        ),
+        (
+            "complete -c sysupdate -l no-sudo -d 'Skip modules requiring root privileges'"
+        ),
         ("complete -c sysupdate -l no-snapshot -d 'Skip protective system snapshot'"),
         ("complete -c sysupdate -l self-update -d 'Enable automatic Git self-update'"),
-        ("complete -c sysupdate -l no-self-update -d 'Disable automatic Git self-update'"),
-        ("complete -c sysupdate -l skip-on-battery -d 'Skip update run on battery power'"),
+        (
+            "complete -c sysupdate -l no-self-update -d 'Disable automatic Git self-update'"
+        ),
+        (
+            "complete -c sysupdate -l skip-on-battery -d 'Skip update run on battery power'"
+        ),
         ("complete -c sysupdate -l no-skip-on-battery -d 'Run even on battery power'"),
-        ("complete -c sysupdate -l check-network -d 'Check network before running updates'"),
-        ("complete -c sysupdate -l no-check-network -d 'Skip network connectivity check'"),
+        (
+            "complete -c sysupdate -l check-network -d 'Check network before running updates'"
+        ),
+        (
+            "complete -c sysupdate -l no-check-network -d 'Skip network connectivity check'"
+        ),
         ("complete -c sysupdate -l config -r -d 'Path to custom config file'"),
         ("complete -c sysupdate -l edit-config -d 'Open configuration in $EDITOR'"),
         (
@@ -213,7 +233,9 @@ def generate_fish_completion(modules: list[BaseModule]) -> str:
             " and availability'"
         ),
         ("complete -c sysupdate -s r -l reboot -d 'Reboot after updates if required'"),
-        ("complete -c sysupdate -l no-reboot -d 'Do not reboot automatically after updates'"),
+        (
+            "complete -c sysupdate -l no-reboot -d 'Do not reboot automatically after updates'"
+        ),
         (
             "complete -c sysupdate -l history -x -d 'List recent update runs"
             " (default: 10)'"

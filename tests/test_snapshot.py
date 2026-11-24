@@ -37,7 +37,9 @@ class SnapshotTests(unittest.TestCase):
         module = SnapshotModule(cooldown_hours=6)
         context = UpdateContext()
         context.which = Mock(
-            side_effect=lambda name: "/usr/bin/timeshift" if name == "timeshift" else None
+            side_effect=lambda name: (
+                "/usr/bin/timeshift" if name == "timeshift" else None
+            )
         )
         context.run_cmd = Mock(return_value=(0, "Snapshot created", ""))
 

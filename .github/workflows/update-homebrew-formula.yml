@@ -10,6 +10,10 @@ on:
       - ".github/**"
       - "tests/**"
       - "assets/**"
+      - "web/**"
+      - ".agents/**"
+      - ".prettierignore"
+      - "check.sh"
 
 permissions:
   contents: write
@@ -306,6 +310,7 @@ jobs:
               def install
                 libexec.install Dir["*.py"]
                 libexec.install "modules"
+                libexec.install "config.example.toml"
                 (libexec/".homebrew-install").write("homebrew\\n")
                 (libexec/"VERSION").write("{v_ver}\\n")
 

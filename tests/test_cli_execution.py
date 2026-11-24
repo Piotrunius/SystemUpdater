@@ -13,8 +13,14 @@ class CliExecutionTests(unittest.TestCase):
     def test_unknown_only_exits_with_code_2(self):
         with tempfile.TemporaryDirectory() as tmp:
             with (
-                patch("sys.argv", ["sysupdate", "--no-self-update", "--only", "nonexistent_tool"]),
-                patch("main.HistoryStore", return_value=HistoryStore(Path(tmp) / "history")),
+                patch(
+                    "sys.argv",
+                    ["sysupdate", "--no-self-update", "--only", "nonexistent_tool"],
+                ),
+                patch(
+                    "main.HistoryStore",
+                    return_value=HistoryStore(Path(tmp) / "history"),
+                ),
                 patch("main.acquire_run_lock") as mock_lock,
                 patch("sys.stderr", new_callable=io.StringIO) as err_buf,
             ):
@@ -25,6 +31,10 @@ class CliExecutionTests(unittest.TestCase):
             self.assertIn("Unknown value 'nonexistent_tool'", err_buf.getvalue())
 
     def test_category_flag_overrides_config_only_and_supports_apps_alias(self):
+        from modules.flatpak import FlatpakModule
+        from modules.universal import SnapModule
+        from ui import StepResult
+
         with tempfile.TemporaryDirectory() as tmp:
             cfg_path = Path(tmp) / "config.toml"
             cfg_path.write_text('[modules]\nonly = ["snap"]\n', encoding="utf-8")
@@ -44,21 +54,28 @@ class CliExecutionTests(unittest.TestCase):
                         "apps",
                     ],
                 ),
-                patch("main.HistoryStore", return_value=HistoryStore(Path(tmp) / "history")),
+                patch(
+                    "main.HistoryStore",
+                    return_value=HistoryStore(Path(tmp) / "history"),
+                ),
+                patch(
+                    "main.get_all_modules",
+                    return_value=[FlatpakModule(), SnapModule()],
+                ),
                 patch("main.acquire_run_lock") as mock_lock,
                 patch("modules.flatpak.FlatpakModule.is_available", return_value=True),
                 patch("modules.flatpak.FlatpakModule.run") as mock_flatpak_run,
+                patch("modules.universal.SnapModule.run") as mock_snap_run,
                 patch("sys.stdout", out),
+                self.assertRaises(SystemExit) as exc,
             ):
-                from ui import StepResult
-
                 mock_lock.return_value.__enter__.return_value = None
                 mock_flatpak_run.return_value = StepResult("unchanged")
-                with self.assertRaises(SystemExit) as exc:
-                    main.main()
+                main.main()
 
             self.assertEqual(exc.exception.code, 0)
             mock_flatpak_run.assert_called_once()
+            mock_snap_run.assert_not_called()
 
     def test_retry_failed_runs_only_failed_or_interrupted_modules(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -126,7 +143,9 @@ class CliExecutionTests(unittest.TestCase):
 
             def fake_isfile(path):
                 if str(path).startswith("/sys/class/power_supply/"):
-                    return orig_isfile(str(path).replace("/sys/class/power_supply", str(ps_root)))
+                    return orig_isfile(
+                        str(path).replace("/sys/class/power_supply", str(ps_root))
+                    )
                 return orig_isfile(path)
 
             def fake_open(path, *args, **kwargs):
@@ -151,15 +170,15 @@ class CliExecutionTests(unittest.TestCase):
             self.assertFalse(main.is_network_available(timeout=0.1))
 
     def test_acquire_run_lock_exits_when_already_locked(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            with (
-                patch.dict(os.environ, {"XDG_RUNTIME_DIR": tmp}),
-                patch("fcntl.flock", side_effect=BlockingIOError),
-                patch("sys.stderr", new_callable=io.StringIO) as err_buf,
-            ):
-                with self.assertRaises(SystemExit) as exc:
-                    with main.acquire_run_lock():
-                        pass
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.dict(os.environ, {"XDG_RUNTIME_DIR": tmp}),
+            patch("fcntl.flock", side_effect=BlockingIOError),
+            patch("sys.stderr", new_callable=io.StringIO) as err_buf,
+            self.assertRaises(SystemExit) as exc,
+        ):
+            with main.acquire_run_lock():
+                pass
             self.assertEqual(exc.exception.code, 1)
             self.assertIn("already in progress", err_buf.getvalue())
 
@@ -180,7 +199,10 @@ class CliExecutionTests(unittest.TestCase):
                         "--reboot",
                     ],
                 ),
-                patch("main.HistoryStore", return_value=HistoryStore(Path(tmp) / "history")),
+                patch(
+                    "main.HistoryStore",
+                    return_value=HistoryStore(Path(tmp) / "history"),
+                ),
                 patch("main.acquire_run_lock") as mock_lock,
                 patch("modules.flatpak.FlatpakModule.is_available", return_value=True),
                 patch("modules.flatpak.FlatpakModule.run") as mock_flatpak_run,

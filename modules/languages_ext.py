@@ -79,8 +79,10 @@ class SdkmanModule(BaseModule):
 
         combined = f"{out or ''}\n{err or ''}".lower()
         if (
-            "no new version" in combined or "already up to date" in combined
-        ) and "installing:" not in combined and "upgrading" not in combined:
+            ("no new version" in combined or "already up to date" in combined)
+            and "installing:" not in combined
+            and "upgrading" not in combined
+        ):
             return StepResult("unchanged")
 
         return StepResult("ok", "updated")

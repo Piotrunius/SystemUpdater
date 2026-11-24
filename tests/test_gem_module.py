@@ -61,7 +61,12 @@ class GemModuleTests(unittest.TestCase):
         self.assertEqual(result.message, "1 gem updated")
         self.assertEqual(result.details, ["solargraph"])
         context.run_cmd.assert_called_once_with(
-            ["/home/linuxbrew/.linuxbrew/bin/gem", "update", "--user-install", "--no-document"],
+            [
+                "/home/linuxbrew/.linuxbrew/bin/gem",
+                "update",
+                "--user-install",
+                "--no-document",
+            ],
             timeout=180,
         )
 

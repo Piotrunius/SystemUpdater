@@ -43,9 +43,8 @@ class SnapshotModule(BaseModule):
             and os.path.isfile("/etc/snapper/configs/root")
         ):
             return "snapper"
-        if (
-            ctx.which("timeshift") is not None
-            and os.path.isfile("/etc/timeshift/timeshift.json")
+        if ctx.which("timeshift") is not None and os.path.isfile(
+            "/etc/timeshift/timeshift.json"
         ):
             return "timeshift"
         return None
