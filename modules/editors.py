@@ -43,12 +43,7 @@ class VsCodeModule(BaseModule):
         return self._availability(ctx) in ("active", "unavailable")
 
     def availability_status(self, ctx: UpdateContext) -> str:
-        return {
-            "not-installed": "[Not Installed]",
-            "no-targets": "[No Targets]",
-            "unavailable": "[Unavailable]",
-            "active": "[Active]",
-        }[self._availability(ctx)]
+        return self.format_availability(self._availability(ctx))
 
     def run(self, ctx: UpdateContext) -> StepResult:
         code, out, err = ctx.run_cmd(["code", "--update-extensions"], timeout=180)
@@ -95,12 +90,7 @@ class CursorModule(BaseModule):
         return self._availability(ctx) in ("active", "unavailable")
 
     def availability_status(self, ctx: UpdateContext) -> str:
-        return {
-            "not-installed": "[Not Installed]",
-            "no-targets": "[No Targets]",
-            "unavailable": "[Unavailable]",
-            "active": "[Active]",
-        }[self._availability(ctx)]
+        return self.format_availability(self._availability(ctx))
 
     def run(self, ctx: UpdateContext) -> StepResult:
         code, out, err = ctx.run_cmd(["cursor", "--update-extensions"], timeout=180)
@@ -147,12 +137,7 @@ class VscodiumModule(BaseModule):
         return self._availability(ctx) in ("active", "unavailable")
 
     def availability_status(self, ctx: UpdateContext) -> str:
-        return {
-            "not-installed": "[Not Installed]",
-            "no-targets": "[No Targets]",
-            "unavailable": "[Unavailable]",
-            "active": "[Active]",
-        }[self._availability(ctx)]
+        return self.format_availability(self._availability(ctx))
 
     def run(self, ctx: UpdateContext) -> StepResult:
         code, out, err = ctx.run_cmd(["codium", "--update-extensions"], timeout=180)

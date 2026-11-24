@@ -55,13 +55,42 @@ def suppress_terminal_echo():
         _restore_terminal()
 
 
-from colors import Colors, get_status_marker
+from colors import Colors, colors_enabled, get_status_marker
+from reboot import (
+    CORE_SYSTEM_KEYWORDS as CORE_SYSTEM_KEYWORDS,
+    DEV_TOOLS_KEYWORDS as DEV_TOOLS_KEYWORDS,
+    EXACT_SHORT_KEYWORDS as EXACT_SHORT_KEYWORDS,
+    REBOOT_TRIGGER_PATTERNS as REBOOT_TRIGGER_PATTERNS,
+    check_packages_require_reboot as check_packages_require_reboot,
+    check_system_reboot_required as check_system_reboot_required,
+    extract_package_name as extract_package_name,
+    format_package_list as format_package_list,
+    format_package_list_inline as format_package_list_inline,
+    get_reboot_trigger_details as get_reboot_trigger_details,
+    get_reboot_trigger_packages as get_reboot_trigger_packages,
+    is_reboot_eligible_module as is_reboot_eligible_module,
+    package_importance_score as package_importance_score,
+)
+from redaction import (
+    ANSI_ESCAPE_PATTERN as ANSI_ESCAPE_PATTERN,
+    ASSIGNMENT_SECRET_PATTERN as ASSIGNMENT_SECRET_PATTERN,
+    BASIC_AUTH_PATTERN as BASIC_AUTH_PATTERN,
+    BEARER_PATTERN as BEARER_PATTERN,
+    FLAG_SECRET_PATTERN as FLAG_SECRET_PATTERN,
+    PRIVATE_KEY_PATTERN as PRIVATE_KEY_PATTERN,
+    TERMINAL_CONTROL_PATTERN as TERMINAL_CONTROL_PATTERN,
+    TOKEN_PATTERN as TOKEN_PATTERN,
+    URL_CREDENTIAL_PATTERN as URL_CREDENTIAL_PATTERN,
+    redact_text as redact_text,
+)
 
 RUNNING_FRAMES = [
     f"{Colors.DIM}[{Colors.RESET}{Colors.CYAN}|{Colors.RESET}{Colors.DIM}]{Colors.RESET}",
     f"{Colors.DIM}[{Colors.RESET}{Colors.CYAN}/{Colors.RESET}{Colors.DIM}]{Colors.RESET}",
     f"{Colors.DIM}[{Colors.RESET}{Colors.CYAN}\\{Colors.RESET}{Colors.DIM}]{Colors.RESET}",
 ]
+
+PLAIN_RUNNING_FRAMES = ["[|]", "[/]", "[\\]"]
 
 DIAGNOSTIC_LINE_PATTERN = re.compile(
     r"\b(warn(?:ing)?|deprecated|error|failed|failure|unable|could not|cannot|denied|"
@@ -85,80 +114,6 @@ IGNORED_DIAGNOSTIC_SUBSTRINGS = (
     "/private/tmp/cask-",
     "Some casks with `auto_updates true`",
 )
-
-REBOOT_TRIGGER_PATTERNS = re.compile(
-    r"(^|[\-_])(kernel|linux|systemd|glibc|libc6|musl|grub|shim|nvidia|microcode|ucode|firmware|dbus|kmod|akmod|dracut)([\-_]|$)",
-    re.IGNORECASE,
-)
-
-ANSI_ESCAPE_PATTERN = re.compile(
-    r"\x1B(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1B\\)|[@-Z\\-_])"
-)
-TERMINAL_CONTROL_PATTERN = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
-
-PRIVATE_KEY_PATTERN = re.compile(
-    r"-----BEGIN (?:[A-Z0-9_\-]+ )?PRIVATE KEY(?: BLOCK)?-----[\s\S]*?-----END (?:[A-Z0-9_\-]+ )?PRIVATE KEY(?: BLOCK)?-----"
-)
-BEARER_PATTERN = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+")
-BASIC_AUTH_PATTERN = re.compile(
-    r"(?i)\b((?:Proxy-)?Authorization\s*:\s*Basic\s+)[A-Za-z0-9+/=]+"
-)
-URL_CREDENTIAL_PATTERN = re.compile(r"([a-zA-Z][a-zA-Z0-9+.-]*://)([^/@\s\r\n]+@)")
-TOKEN_PATTERN = re.compile(
-    r"(?i)\b(?:"
-    r"gh[pousr]_[A-Za-z0-9_]{20,}|"
-    r"github_pat_[A-Za-z0-9_]{20,}|"
-    r"glpat-[A-Za-z0-9_\-]{20,}|"
-    r"glcbt-[A-Za-z0-9_\-]{20,}|"
-    r"xox[baprs]-[0-9a-zA-Z]{10,}|"
-    r"AKIA[0-9A-Z]{16}|"
-    r"sk-[A-Za-z0-9_\-]{20,}|"
-    r"sk-ant-[A-Za-z0-9_\-]{20,}|"
-    r"pypi-[A-Za-z0-9_\-]{50,}|"
-    r"npm_[A-Za-z0-9]{36}|"
-    r"hf_[A-Za-z0-9]{34,}"
-    r")\b"
-)
-ASSIGNMENT_SECRET_PATTERN = re.compile(
-    r"(?i)(\b[\"\']?(?:token|password|passwd|secret|key|api[_-]?key|auth[_-]?token|access[_-]?token|refresh[_-]?token|client[_-]?secret|api[_-]?secret|private[_-]?key|secret[_-]?key|ssh[_-]?key|deploy[_-]?key|credential|credentials|session[_-]?token)[\"\']?)(\s*[=:]\s*)(\"[^\"\r\n]*\"|'[^'\r\n]*'|[^\s,;]+)"
-)
-FLAG_SECRET_PATTERN = re.compile(
-    r"(?i)(--(?:token|password|passwd|secret|api[_-]?key|auth[_-]?token|access[_-]?token|client[_-]?secret|api[_-]?secret|private[_-]?key)(?:=|\s+))(\"[^\"\r\n]*\"|'[^'\r\n]*'|[^\s]+)"
-)
-
-
-def redact_text(value: str) -> str:
-    """Remove terminal control sequences and mask common credentials."""
-    if not isinstance(value, str):
-        return "" if value is None else str(value)
-    safe_value = ANSI_ESCAPE_PATTERN.sub("", value)
-    safe_value = TERMINAL_CONTROL_PATTERN.sub("", safe_value)
-    redacted = PRIVATE_KEY_PATTERN.sub("[REDACTED_PRIVATE_KEY]", safe_value)
-    redacted = BASIC_AUTH_PATTERN.sub(r"\1[REDACTED]", redacted)
-    redacted = BEARER_PATTERN.sub("Bearer [REDACTED]", redacted)
-    redacted = URL_CREDENTIAL_PATTERN.sub(r"\1[REDACTED]@", redacted)
-    redacted = TOKEN_PATTERN.sub("[REDACTED_TOKEN]", redacted)
-
-    def _sub_assign(m: re.Match[str]) -> str:
-        prefix = m.group(1)
-        sep = m.group(2)
-        val = m.group(3)
-        if val.startswith(('"', "'")) and len(val) >= 2 and val[-1] == val[0]:
-            q = val[0]
-            return f"{prefix}{sep}{q}[REDACTED]{q}"
-        return f"{prefix}{sep}[REDACTED]"
-
-    redacted = ASSIGNMENT_SECRET_PATTERN.sub(_sub_assign, redacted)
-
-    def _sub_flag(m: re.Match[str]) -> str:
-        prefix = m.group(1)
-        val = m.group(2)
-        if val.startswith(('"', "'")) and len(val) >= 2 and val[-1] == val[0]:
-            q = val[0]
-            return f"{prefix}{q}[REDACTED]{q}"
-        return f"{prefix}[REDACTED]"
-
-    return FLAG_SECRET_PATTERN.sub(_sub_flag, redacted)
 
 
 NON_FATAL_PATTERNS = [
@@ -227,146 +182,6 @@ def detect_warning(text: str) -> str | None:
     return None
 
 
-def check_packages_require_reboot(
-    package_lines: list[str],
-) -> tuple[bool, str | None]:
-    """Check if any package in the upgraded list requires a system reboot."""
-    for line in package_lines:
-        clean = str(line).strip()
-        name = clean.split(":")[0].split("->")[0].split()[0].lower().strip()
-        short_name = name.split("/")[-1].split("@")[0]
-        if REBOOT_TRIGGER_PATTERNS.search(name) or REBOOT_TRIGGER_PATTERNS.search(
-            short_name
-        ):
-            return True, name
-    return False, None
-
-
-def extract_package_name(item: str) -> str:
-    clean = str(item).strip()
-    if ":" in clean:
-        clean = clean.split(":", 1)[0].strip()
-    if "->" in clean:
-        clean = clean.split("->", 1)[0].strip()
-    if "(" in clean:
-        clean = clean.split("(", 1)[0].strip()
-    parts = clean.split()
-    if len(parts) > 1 and any(c.isdigit() for c in parts[-1]):
-        clean = " ".join(parts[:-1]).strip()
-    return clean
-
-
-def get_reboot_trigger_packages(package_lines: list[str]) -> list[str]:
-    """Return all package lines that triggered a reboot requirement."""
-    matched = []
-    seen = set()
-    for line in package_lines:
-        clean = str(line).strip()
-        if not clean or clean.startswith(("... and ", "... ", "and ", "(+")):
-            continue
-        pkg_name = extract_package_name(clean)
-        name = pkg_name.lower()
-        short_name = name.split("/")[-1].split("@")[0]
-        if (
-            REBOOT_TRIGGER_PATTERNS.search(name)
-            or REBOOT_TRIGGER_PATTERNS.search(short_name)
-        ) and pkg_name not in seen:
-            seen.add(pkg_name)
-            matched.append(pkg_name)
-    return matched
-
-
-def is_reboot_eligible_module(module: Any) -> bool:
-    """Return True if the module is capable of requiring a host machine reboot."""
-    if module is None:
-        return True
-
-    if getattr(module, "can_trigger_reboot", False):
-        return True
-    if isinstance(module, dict) and module.get("can_trigger_reboot"):
-        return True
-
-    cat = (
-        str(
-            getattr(module, "category", "")
-            or (module.get("category", "") if isinstance(module, dict) else "")
-        )
-        .strip()
-        .lower()
-    )
-    key = (
-        str(
-            getattr(module, "key", "")
-            or (module.get("key", "") if isinstance(module, dict) else "")
-        )
-        .strip()
-        .lower()
-    )
-
-    non_system_categories = {
-        "containers & packages",
-        "applications & gaming",
-        "development environment",
-        "shell & dotfiles",
-        "system protection",
-        "app store",
-    }
-    if cat in non_system_categories:
-        return False
-
-    if cat in ("system core", "firmware"):
-        return True
-    return key in (
-        "system",
-        "apt",
-        "pacman",
-        "zypper",
-        "apk",
-        "xbps",
-        "macos",
-        "firmware",
-    )
-
-
-def check_system_reboot_required(
-    ctx: Any | None = None,
-    upgraded_packages: list[str] | None = None,
-    module: Any | None = None,
-) -> tuple[bool, str | None]:
-    """
-    Dynamically detect whether the host operating system requires a reboot.
-    Combines filesystem markers, running kernel state verification,
-    and package pattern fallbacks.
-    """
-    # 1. Standard Linux distro reboot marker files
-    for marker_path in (
-        "/run/reboot-required",
-        "/var/run/reboot-required",
-        "/run/reboot-needed",
-        "/var/run/reboot-needed",
-    ):
-        if os.path.exists(marker_path):
-            return True, f"marker file {marker_path} present"
-
-    # 2. Kernel module directory removal check (universal across Linux, e.g. Arch, Alpine, Void)
-    if sys.platform.startswith("linux") and hasattr(os, "uname"):
-        try:
-            running_release = os.uname().release
-            modules_dir = f"/lib/modules/{running_release}"
-            if os.path.isdir("/lib/modules") and not os.path.exists(modules_dir):
-                return True, f"running kernel {running_release} modules removed"
-        except OSError:
-            pass
-
-    # 3. Fallback package name heuristics for system packages
-    if upgraded_packages:
-        needed, pkg = check_packages_require_reboot(upgraded_packages)
-        if needed:
-            return True, f"core package updated ({pkg})"
-
-    return False, None
-
-
 class StepResult:
     def __init__(
         self,
@@ -393,6 +208,7 @@ class UI:
         is_interactive: bool | None = None,
         quiet: bool = False,
         verbose: bool = False,
+        use_color: bool | None = None,
     ):
         self.is_tty = (
             is_interactive if is_interactive is not None else sys.stdout.isatty()
@@ -400,9 +216,16 @@ class UI:
         self.terminal_width = self._get_width()
         self.quiet = quiet
         self.verbose = verbose
+        self.use_color = colors_enabled() if use_color is None else use_color
         self.last_interrupted_result: StepResult | None = None
         self._last_step_multiline: bool = False
         self._category_has_output: bool = False
+
+    def _c(self, code: str) -> str:
+        return code if self.use_color else ""
+
+    def _marker(self, status_or_symbol: str) -> str:
+        return get_status_marker(status_or_symbol, plain=not self.use_color)
 
     def _get_width(self) -> int:
         try:
@@ -418,7 +241,7 @@ class UI:
         prefix = f"── {title} ─ {time_str} "
         dashes = "─" * max(0, width - len(prefix))
         print()
-        print(f"{Colors.BOLD}{Colors.CYAN}{prefix}{dashes}{Colors.RESET}")
+        print(f"{self._c(Colors.BOLD)}{self._c(Colors.CYAN)}{prefix}{dashes}{self._c(Colors.RESET)}")
 
     def run_step(
         self,
@@ -469,8 +292,10 @@ class UI:
                     commands_printed = True
                     if self._category_has_output:
                         print()
-                    frame = get_status_marker(":")
-                    print(f"  {frame} {Colors.BOLD}{label}{Colors.RESET}...")
+                    frame = self._marker(":")
+                    print(
+                        f"  {frame} {self._c(Colors.BOLD)}{label}{self._c(Colors.RESET)}..."
+                    )
                     self._last_step_multiline = True
                     self._category_has_output = True
 
@@ -495,11 +320,13 @@ class UI:
                 )
                 self.last_interrupted_result = res
                 dur_val = max(0.1, res.duration)
-                time_tag = f"{Colors.GRAY}({dur_val:.1f}s){Colors.RESET}"
+                time_tag = (
+                    f"{self._c(Colors.GRAY)}({dur_val:.1f}s){self._c(Colors.RESET)}"
+                )
                 if commands_printed:
                     self._last_step_multiline = True
                     self._category_has_output = True
-                    marker = get_status_marker("~")
+                    marker = self._marker("~")
                     print(f"      {marker} interrupted {time_tag}")
                 else:
                     self._print_static_result(label, res, module=module)
@@ -534,11 +361,13 @@ class UI:
                 self._last_step_multiline = True
                 self._category_has_output = True
                 dur_val = max(0.1, res.duration)
-                time_tag = f"{Colors.GRAY}({dur_val:.1f}s){Colors.RESET}"
+                time_tag = (
+                    f"{self._c(Colors.GRAY)}({dur_val:.1f}s){self._c(Colors.RESET)}"
+                )
                 sym, msg = self._resolve_step_display(
                     label, res, module=module, verbose=self.verbose
                 )
-                marker = get_status_marker(sym)
+                marker = self._marker(sym)
                 print(f"      {marker} {msg} {time_tag}")
             else:
                 self._print_static_result(label, res, module=module)
@@ -691,9 +520,13 @@ class UI:
                         if line.strip()
                     ]
                     if lines:
-                        print(f"        {Colors.DIM}{stream_name}:{Colors.RESET}")
+                        print(
+                            f"        {self._c(Colors.DIM)}{stream_name}:{self._c(Colors.RESET)}"
+                        )
                         for line in lines:
-                            print(f"          {Colors.DIM}{line}{Colors.RESET}")
+                            print(
+                                f"          {self._c(Colors.DIM)}{line}{self._c(Colors.RESET)}"
+                            )
 
     def _spinner_worker(
         self,
@@ -702,11 +535,12 @@ class UI:
         ctx: Any | None = None,
     ):
         frame_idx = 0
+        frames = RUNNING_FRAMES if self.use_color else PLAIN_RUNNING_FRAMES
         while not stop_event.is_set():
             last_activity = getattr(ctx, "last_activity_time", None) if ctx else None
             now = time.monotonic()
             is_active = (last_activity is None) or ((now - last_activity) < 1.5)
-            frame = RUNNING_FRAMES[frame_idx % len(RUNNING_FRAMES)]
+            frame = frames[frame_idx % len(frames)]
             text = status["text"]
             sys.stdout.write(f"\r\033[K  {frame} {text}...")
             sys.stdout.flush()
@@ -720,9 +554,9 @@ class UI:
         width = min(self.terminal_width, 80)
         print()
         print(
-            f"{Colors.BOLD}{Colors.CYAN}── {title} "
+            f"{self._c(Colors.BOLD)}{self._c(Colors.CYAN)}── {title} "
             + "─" * max(0, width - len(title) - 4)
-            + Colors.RESET
+            + self._c(Colors.RESET)
         )
         self._last_step_multiline = False
         self._category_has_output = False
@@ -834,13 +668,15 @@ class UI:
         self._category_has_output = True
         dur_val = max(0.1, res.duration)
         time_tag = (
-            f" {Colors.GRAY}({dur_val:.1f}s){Colors.RESET}" if show_duration else ""
+            f" {self._c(Colors.GRAY)}({dur_val:.1f}s){self._c(Colors.RESET)}"
+            if show_duration
+            else ""
         )
 
         sym, msg = self._resolve_step_display(
             label, res, module=module, verbose=self.verbose
         )
-        marker = get_status_marker(sym)
+        marker = self._marker(sym)
         if sym in ("✓", "^") and (not msg or msg.lower() == label.lower()):
             msg_part = ""
         else:
@@ -866,12 +702,12 @@ class UI:
         width = min(self.terminal_width, 80)
         prefix = "── Interrupted "
         fill = "─" * max(0, width - len(prefix))
-        marker = get_status_marker("~")
+        marker = self._marker("~")
         print()
-        print(f"{Colors.BOLD_CYAN}{prefix}{fill}{Colors.RESET}")
+        print(f"{self._c(Colors.BOLD_CYAN)}{prefix}{fill}{self._c(Colors.RESET)}")
         print(f"  {marker} Update cancelled by user.")
         print()
-        print(f"{Colors.CYAN}" + "─" * width + f"{Colors.RESET}")
+        print(f"{self._c(Colors.CYAN)}" + "─" * width + f"{self._c(Colors.RESET)}")
 
     def print_summary(
         self,
@@ -927,17 +763,17 @@ class UI:
         def print_diagnostic_heading(title: str):
             prefix = f"── {title} "
             fill = "─" * max(0, width - len(prefix))
-            print(f"{Colors.BOLD_CYAN}{prefix}{fill}{Colors.RESET}")
+            print(f"{self._c(Colors.BOLD_CYAN)}{prefix}{fill}{self._c(Colors.RESET)}")
 
         # ── 1. Summary Section ────────────────────────────────────────────────
         summary_prefix = f"── Summary ─ {duration_str} "
         summary_dashes = "─" * max(0, width - len(summary_prefix))
         print()
         print(
-            f"{Colors.BOLD}{Colors.CYAN}{summary_prefix}{summary_dashes}{Colors.RESET}"
+            f"{self._c(Colors.BOLD)}{self._c(Colors.CYAN)}{summary_prefix}{summary_dashes}{self._c(Colors.RESET)}"
         )
         if package_updates:
-            marker = get_status_marker("✓")
+            marker = self._marker("✓")
             print(f"  {marker} Updated components:")
             for item in package_updates:
                 res = item["result"]
@@ -966,7 +802,7 @@ class UI:
                     for detail in formatted_details:
                         print(f"      - {detail}")
         else:
-            marker = get_status_marker("—")
+            marker = self._marker("—")
             print(f"  {marker} All components are up to date.")
 
         reboot_items = [
@@ -975,7 +811,7 @@ class UI:
         if reboot_items:
             print()
             print_diagnostic_heading("Reboot")
-            marker = get_status_marker("^")
+            marker = self._marker("^")
             print(f"  {marker} Reboot required:")
             for item in reboot_items:
                 triggers = get_reboot_trigger_details(item)
@@ -993,7 +829,7 @@ class UI:
         if warning_items:
             print()
             print_diagnostic_heading("Warnings")
-            marker = get_status_marker("!")
+            marker = self._marker("!")
             print(f"  {marker} Component warnings:")
             for item in warning_items:
                 res = item["result"]
@@ -1025,7 +861,7 @@ class UI:
         if error_items:
             print()
             print_diagnostic_heading("Errors")
-            marker = get_status_marker("✗")
+            marker = self._marker("✗")
             print(f"  {marker} Failed components:")
             for item in error_items:
                 res = item["result"]
@@ -1045,11 +881,11 @@ class UI:
         if is_interrupted:
             print()
             print_diagnostic_heading("Interrupted")
-            interrupted_marker = get_status_marker("~")
+            interrupted_marker = self._marker("~")
             print(f"  {interrupted_marker} Update cancelled by user.")
 
         print()
-        print(f"{Colors.CYAN}" + "─" * width + f"{Colors.RESET}")
+        print(f"{self._c(Colors.CYAN)}" + "─" * width + f"{self._c(Colors.RESET)}")
 
 
 SINGLE_ENTITY_NAMES = {
@@ -1069,8 +905,6 @@ SINGLE_ENTITY_NAMES = {
     "pyenv runtimes",
     "sdkman",
     "sdkman (java/jvm)",
-    "manual pages db",
-    "manual pages database",
 }
 
 SINGLE_ENTITY_KEYS = {
@@ -1083,8 +917,6 @@ SINGLE_ENTITY_KEYS = {
     "flutter",
     "pyenv",
     "sdkman",
-    "maintenance",
-    "mandb",
 }
 
 MODULE_UNIT_NAMES: dict[str, tuple[str, str]] = {
@@ -1203,277 +1035,3 @@ def is_single_entity_module(item: dict[str, Any]) -> bool:
 def extract_single_entity_version(details: list[str], message: str) -> str:
     """Return standard status label for single-purpose modules."""
     return "updated"
-
-
-CORE_SYSTEM_KEYWORDS = {
-    "kernel",
-    "linux",
-    "systemd",
-    "glibc",
-    "libc6",
-    "musl",
-    "grub",
-    "shim",
-    "mesa",
-    "nvidia",
-    "xorg",
-    "wayland",
-    "pipewire",
-    "wireplumber",
-    "openssl",
-    "ca-certificates",
-    "networkmanager",
-    "firewalld",
-    "systemupdater",
-    "sudo",
-    "openssh",
-    "ssh",
-    "dbus",
-    "polkit",
-    "pam",
-    "microcode",
-    "ucode",
-    "dracut",
-    "kmod",
-    "akmod",
-    "nobara",
-}
-
-DEV_TOOLS_KEYWORDS = {
-    "python",
-    "python3",
-    "node",
-    "nodejs",
-    "rust",
-    "rustc",
-    "gcc",
-    "llvm",
-    "clang",
-    "golang",
-    "ruby",
-    "bun",
-    "deno",
-    "git",
-    "docker",
-    "containerd",
-    "podman",
-    "moby",
-    "runc",
-    "antigravity",
-    "ripgrep",
-    "tmux",
-    "zsh",
-    "bash",
-    "fish",
-    "curl",
-    "wget",
-    "wget2",
-    "cursor",
-    "neovim",
-    "nvim",
-    "helix",
-    "vim",
-    "fzf",
-    "bat",
-    "eza",
-    "jq",
-    "yq",
-    "socat",
-    "rsync",
-    "7zip",
-    "brave",
-    "firefox",
-    "chrome",
-}
-
-EXACT_SHORT_KEYWORDS = {"go", "gh", "code", "tar"}
-
-
-def package_importance_score(pkg_line: str) -> int:
-    clean = pkg_line.strip()
-    name = clean.split(":")[0].split("->")[0].split()[0].lower().strip()
-    short_name = name.split("/")[-1].split("@")[0]
-    tokens = set(re.split(r"[-_.]", short_name))
-
-    is_selinux = (
-        "selinux" in tokens
-        or short_name.endswith("-selinux")
-        or short_name.startswith("selinux-")
-    )
-    is_sub_firmware = short_name.endswith("-firmware") and short_name not in (
-        "linux-firmware",
-        "nvidia-gpu-firmware",
-        "amd-gpu-firmware",
-        "intel-gpu-firmware",
-    )
-
-    score = 50
-    # Core system check
-    matched_core = False
-    for kw in CORE_SYSTEM_KEYWORDS:
-        if kw == "linux" and is_selinux:
-            continue
-        if kw in tokens or (len(kw) >= 5 and (kw in short_name or kw in name)):
-            score = 100
-            matched_core = True
-            break
-
-    if not matched_core:
-        if short_name.endswith("-firmware") or "firmware" in tokens:
-            score = 75
-        else:
-            for kw in DEV_TOOLS_KEYWORDS:
-                if kw in tokens or (len(kw) >= 5 and (kw in short_name or kw in name)):
-                    score = 80
-                    break
-            else:
-                if any(kw in tokens for kw in EXACT_SHORT_KEYWORDS):
-                    score = 80
-
-    if is_selinux:
-        score = min(score, 60)
-    elif is_sub_firmware:
-        score = min(score, 70)
-
-    # Penalize subpackages / secondary components
-    if short_name.endswith(
-        (
-            "-server",
-            "-client",
-            "-clients",
-            "-askpass",
-            "-whence",
-            "-plugin",
-            "-plugins",
-        )
-    ):
-        score = max(10, score - 5)
-
-    if (
-        short_name.startswith(("lib", "@types/"))
-        or short_name.endswith(
-            (
-                "-devel",
-                "-headers",
-                "-libs",
-                "-common",
-                "-static",
-                "-matched",
-                "-tools",
-                "-doc",
-                "-dbg",
-                "-debuginfo",
-                "-filesystem",
-                "-macros",
-                "-qt",
-                "-qt5",
-                "-qt6",
-                "-gtk",
-                "-gtk3",
-                "-gtk4",
-            )
-        )
-        or "-plugins-" in short_name
-        or "-plugin-" in short_name
-    ):
-        score = max(10, score - 20)
-
-    return score
-
-
-def format_package_list(
-    details: list[str], msg_text: str = "", limit: int = 10
-) -> list[str]:
-    cleaned = []
-    seen = set()
-    for item in details:
-        line = str(item).strip()
-        if not line or line.startswith(("... and ", "... ", "and ", "(+")):
-            continue
-        pkg_name = extract_package_name(line)
-        if pkg_name and pkg_name not in seen:
-            seen.add(pkg_name)
-            cleaned.append(pkg_name)
-
-    total = len(cleaned)
-    if total == 0:
-        return []
-
-    sorted_items = sorted(cleaned, key=package_importance_score, reverse=True)
-
-    if total <= limit:
-        return sorted_items
-
-    displayed = sorted_items[:limit]
-    remaining = total - limit
-    pkg_word = "package" if remaining == 1 else "packages"
-    remainder_line = f"(+{remaining} more {pkg_word})"
-    return displayed + [remainder_line]
-
-
-def format_package_list_inline(details: list[str], limit: int = 5) -> str:
-    cleaned = []
-    seen = set()
-    for item in details:
-        line = str(item).strip()
-        if not line or line.startswith(("... and ", "... ", "and ", "(+")):
-            continue
-        pkg_name = extract_package_name(line)
-        if pkg_name and pkg_name not in seen:
-            seen.add(pkg_name)
-            cleaned.append(pkg_name)
-
-    total = len(cleaned)
-    if total == 0:
-        return ""
-
-    sorted_items = sorted(cleaned, key=package_importance_score, reverse=True)
-
-    if total <= limit:
-        return ", ".join(sorted_items)
-
-    displayed = sorted_items[:limit]
-    remaining = total - limit
-    pkg_word = "package" if remaining == 1 else "packages"
-    remainder_line = f"(+{remaining} more {pkg_word})"
-    return ", ".join(displayed + [remainder_line])
-
-
-def get_reboot_trigger_details(item: dict[str, Any]) -> list[str]:
-    """Return the list of packages or reasons triggering a reboot for a module."""
-    res = item.get("result")
-    if not res or not getattr(res, "reboot_required", False):
-        return []
-
-    # First check if specific packages matched the reboot trigger
-    triggers = get_reboot_trigger_packages(res.details)
-    if triggers:
-        return triggers
-
-    # For Debian/Ubuntu, check if /run/reboot-required.pkgs lists packages
-    if os.path.exists("/run/reboot-required.pkgs"):
-        with (
-            contextlib.suppress(OSError),
-            open("/run/reboot-required.pkgs", encoding="utf-8") as f,
-        ):
-            pkgs = [line.strip() for line in f if line.strip()]
-            if pkgs:
-                return pkgs
-
-    # For modules with details where items are relevant (e.g. firmware or macos update)
-    mod_key = str(item.get("key") or getattr(item.get("module"), "key", "")).lower()
-    if mod_key in ("firmware", "device_firmware", "macos_update", "system"):
-        valid = []
-        seen = set()
-        for d in res.details:
-            s = str(d).strip()
-            if not s or s.startswith(("... and ", "... ", "and ", "(+")):
-                continue
-            name = extract_package_name(s)
-            if name and name not in seen:
-                seen.add(name)
-                valid.append(name)
-        if valid:
-            return valid
-
-    return []

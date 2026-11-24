@@ -12,69 +12,23 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from modules.base import BaseModule
 
-CATEGORIES = [
-    "system",
-    "protection",
-    "apps",
-    "gaming",
-    "containers",
-    "dev",
-    "editors",
-]
+from cli_spec import CLI_CATEGORIES, CLI_FLAGS
+
+CATEGORIES = list(CLI_CATEGORIES)
 
 OPTIONS = [
-    ("-h", "--help", "Show command help"),
-    ("", "--version", "Show installed version and latest available version"),
-    ("-f", "--force", "Force execution (bypass snapshot cooldown)"),
-    (
-        "-q",
-        "--quiet",
-        "Suppress live step progress, display only summary and errors",
-    ),
-    ("-v", "--verbose", "Stream update command output live"),
-    ("", "--notify", "Send a desktop notification on completion"),
-    (
-        "",
-        "--only",
-        "Comma-separated list of module keys or aliases to run",
-    ),
-    ("", "--skip", "Comma-separated list of module keys to skip"),
-    (
-        "-c",
-        "--category",
-        "Comma-separated list of categories to run",
-    ),
-    (
-        "",
-        "--no-sudo",
-        "Skip all modules requiring administrator (sudo) privileges",
-    ),
-    ("", "--no-snapshot", "Skip protective Btrfs snapshot"),
-    ("", "--config", "Path to custom configuration TOML file"),
-    ("", "--edit-config", "Open configuration file in $EDITOR"),
-    (
-        "-l",
-        "--list",
-        "List all registered modules and check their availability",
-    ),
-    (
-        "-r",
-        "--reboot",
-        "Reboot the system after updates if required by any module",
-    ),
-    (
-        "",
-        "--history",
-        "List the most recent update runs (default: 10, maximum: 30)",
-    ),
-    ("", "--show-log", "Show the saved command output for a run listed by --history"),
-    ("", "--no-history", "Do not record this run or its command logs in history"),
-    (
-        "",
-        "--generate-completion",
-        "Generate shell completion script (bash, zsh, fish)",
-    ),
+    (item["short"], item["long"], item["completion_desc"]) for item in CLI_FLAGS
 ]
+
+
+def _all_cli_flags() -> str:
+    flags: set[str] = set()
+    for item in CLI_FLAGS:
+        for key in ("short", "long", "negated"):
+            val = str(item.get(key, "")).strip()
+            if val:
+                flags.add(val)
+    return " ".join(sorted(flags))
 
 
 def _collect_module_identifiers(modules: list[BaseModule]) -> list[str]:
@@ -92,16 +46,7 @@ def _collect_module_identifiers(modules: list[BaseModule]) -> list[str]:
 def generate_bash_completion(modules: list[BaseModule]) -> str:
     module_keys = " ".join(_collect_module_identifiers(modules))
     categories = " ".join(CATEGORIES)
-    all_flags = " ".join(
-        sorted(
-            {
-                flag
-                for short, long, _ in OPTIONS
-                for flag in (short, long)
-                if flag.strip()
-            }
-        )
-    )
+    all_flags = _all_cli_flags()
 
     return f"""# bash completion for sysupdate
 _sysupdate() {{
@@ -188,18 +133,29 @@ _sysupdate() {{
         '(-h --help)'{{-h,--help}}'[Show command help]'
         '--version[Show installed version and latest available version]'
         '(-f --force)'{{-f,--force}}'[Force execution (bypass snapshot cooldown)]'
-        '(-q --quiet)'{{-q,--quiet}}'[Suppress live step progress, display only summary and errors]'
-        '(-v --verbose)'{{-v,--verbose}}'[Stream update command output live]'
-        '--notify[Send a desktop notification on completion]'
+        '(-q --quiet --no-quiet)'{{-q,--quiet}}'[Suppress live step progress, display only summary and errors]'
+        '(-q --quiet --no-quiet)--no-quiet[Show live step progress]'
+        '(-v --verbose --no-verbose)'{{-v,--verbose}}'[Stream update command output live]'
+        '(-v --verbose --no-verbose)--no-verbose[Disable live command output streaming]'
+        '(--notify --no-notify)--notify[Send a desktop notification on completion]'
+        '(--notify --no-notify)--no-notify[Disable desktop notification on completion]'
         '--only=[Comma-separated list of module keys or aliases to run]:module:_values -s , "module" $module_keys'
         '--skip=[Comma-separated list of module keys to skip]:module:_values -s , "module" $module_keys'
         '(-c --category)'{{-c,--category}}'=[Comma-separated list of categories to run]:category:_values -s , "category" $categories'
+        '--retry-failed[Retry failed or interrupted modules from the last run]'
         '--no-sudo[Skip all modules requiring administrator (sudo) privileges]'
-        '--no-snapshot[Skip protective Btrfs snapshot]'
+        '--no-snapshot[Skip protective system snapshot]'
+        '(--self-update --no-self-update)--self-update[Enable automatic Git self-update]'
+        '(--self-update --no-self-update)--no-self-update[Disable automatic Git self-update]'
+        '(--skip-on-battery --no-skip-on-battery)--skip-on-battery[Skip update run when running on battery power]'
+        '(--skip-on-battery --no-skip-on-battery)--no-skip-on-battery[Run even when on battery power]'
+        '(--check-network --no-check-network)--check-network[Verify network connectivity before running updates]'
+        '(--check-network --no-check-network)--no-check-network[Skip network connectivity check]'
         '--config=[Path to custom configuration TOML file]:file:_files -g "*.toml"'
         '--edit-config[Open configuration file in $EDITOR]'
         '(-l --list)'{{-l,--list}}'[List all registered modules and check their availability]'
-        '(-r --reboot)'{{-r,--reboot}}'[Reboot the system after updates if required by any module]'
+        '(-r --reboot --no-reboot)'{{-r,--reboot}}'[Reboot the system after updates if required by any module]'
+        '(-r --reboot --no-reboot)--no-reboot[Do not reboot automatically after updates]'
         '--history=[List the most recent update runs]:count:'
         '--show-log=[Show the saved command output for a run listed by --history]:run_id:'
         '--no-history[Do not record this run or its command logs in history]'
@@ -223,18 +179,12 @@ def generate_fish_completion(modules: list[BaseModule]) -> str:
         "complete -c sysupdate -s h -l help -d 'Show command help'",
         ("complete -c sysupdate -l version -d 'Show installed and latest version'"),
         ("complete -c sysupdate -s f -l force -d 'Bypass snapshot safeguards'"),
-        (
-            "complete -c sysupdate -s q -l quiet -d 'Hide live progress, show"
-            " summary only'"
-        ),
-        (
-            "complete -c sysupdate -s v -l verbose -d 'Stream update command"
-            " output live'"
-        ),
-        (
-            "complete -c sysupdate -l notify -d 'Send desktop notification on"
-            " completion'"
-        ),
+        ("complete -c sysupdate -s q -l quiet -d 'Hide live progress, show summary only'"),
+        ("complete -c sysupdate -l no-quiet -d 'Show live step progress'"),
+        ("complete -c sysupdate -s v -l verbose -d 'Stream update command output live'"),
+        ("complete -c sysupdate -l no-verbose -d 'Disable live command output streaming'"),
+        ("complete -c sysupdate -l notify -d 'Send desktop notification on completion'"),
+        ("complete -c sysupdate -l no-notify -d 'Disable desktop notification on completion'"),
         (
             f"complete -c sysupdate -l only -x -a '{module_keys}' -d 'Run only"
             " specified modules'"
@@ -247,11 +197,15 @@ def generate_fish_completion(modules: list[BaseModule]) -> str:
             f"complete -c sysupdate -s c -l category -x -a '{categories}' -d"
             " 'Run specified categories'"
         ),
-        (
-            "complete -c sysupdate -l no-sudo -d 'Skip modules requiring root"
-            " privileges'"
-        ),
-        ("complete -c sysupdate -l no-snapshot -d 'Skip protective Btrfs snapshot'"),
+        ("complete -c sysupdate -l retry-failed -d 'Retry failed modules from last run'"),
+        ("complete -c sysupdate -l no-sudo -d 'Skip modules requiring root privileges'"),
+        ("complete -c sysupdate -l no-snapshot -d 'Skip protective system snapshot'"),
+        ("complete -c sysupdate -l self-update -d 'Enable automatic Git self-update'"),
+        ("complete -c sysupdate -l no-self-update -d 'Disable automatic Git self-update'"),
+        ("complete -c sysupdate -l skip-on-battery -d 'Skip update run on battery power'"),
+        ("complete -c sysupdate -l no-skip-on-battery -d 'Run even on battery power'"),
+        ("complete -c sysupdate -l check-network -d 'Check network before running updates'"),
+        ("complete -c sysupdate -l no-check-network -d 'Skip network connectivity check'"),
         ("complete -c sysupdate -l config -r -d 'Path to custom config file'"),
         ("complete -c sysupdate -l edit-config -d 'Open configuration in $EDITOR'"),
         (
@@ -259,6 +213,7 @@ def generate_fish_completion(modules: list[BaseModule]) -> str:
             " and availability'"
         ),
         ("complete -c sysupdate -s r -l reboot -d 'Reboot after updates if required'"),
+        ("complete -c sysupdate -l no-reboot -d 'Do not reboot automatically after updates'"),
         (
             "complete -c sysupdate -l history -x -d 'List recent update runs"
             " (default: 10)'"

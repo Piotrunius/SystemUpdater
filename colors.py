@@ -1,5 +1,12 @@
 """Terminal ANSI escape codes for SystemUpdater."""
 
+import os
+
+
+def colors_enabled() -> bool:
+    """Return True when ANSI colors are not disabled via NO_COLOR."""
+    return os.environ.get("NO_COLOR") is None
+
 
 class Colors:
     RESET = "\033[0m"
@@ -51,9 +58,10 @@ STATUS_SYMBOL_MAP: dict[str, str] = {
 }
 
 
-def get_status_marker(status_or_symbol: str, plain: bool = False) -> str:
+def get_status_marker(status_or_symbol: str, plain: bool | None = None) -> str:
     """Return the styled status marker for any status or symbol."""
+    use_plain = (not colors_enabled()) if plain is None else plain
     sym = STATUS_SYMBOL_MAP.get(status_or_symbol, status_or_symbol)
-    if plain:
+    if use_plain:
         return f"[{sym}]"
     return STATUS_MARKERS.get(sym, f"{Colors.DIM}[{sym}]{Colors.RESET}")

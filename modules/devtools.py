@@ -73,12 +73,7 @@ class RustupModule(BaseModule):
         return self._availability(ctx) in ("active", "unavailable")
 
     def availability_status(self, ctx: UpdateContext) -> str:
-        return {
-            "not-installed": "[Not Installed]",
-            "no-targets": "[No Targets]",
-            "unavailable": "[Unavailable]",
-            "active": "[Active]",
-        }[self._availability(ctx)]
+        return self.format_availability(self._availability(ctx))
 
     def run(self, ctx: UpdateContext) -> StepResult:
         def filter_rust_output(text: str) -> str:
@@ -195,12 +190,7 @@ class NpmModule(BaseModule):
         return self._availability(ctx) in ("active", "unavailable")
 
     def availability_status(self, ctx: UpdateContext) -> str:
-        return {
-            "not-installed": "[Not Installed]",
-            "no-targets": "[No Targets]",
-            "unavailable": "[Unavailable]",
-            "active": "[Active]",
-        }[self._availability(ctx)]
+        return self.format_availability(self._availability(ctx))
 
     def run(self, ctx: UpdateContext) -> StepResult:
         code, out, err = ctx.run_cmd(
@@ -262,12 +252,7 @@ class PnpmModule(BaseModule):
         return self._availability(ctx) in ("active", "unavailable")
 
     def availability_status(self, ctx: UpdateContext) -> str:
-        return {
-            "not-installed": "[Not Installed]",
-            "no-targets": "[No Targets]",
-            "unavailable": "[Unavailable]",
-            "active": "[Active]",
-        }[self._availability(ctx)]
+        return self.format_availability(self._availability(ctx))
 
     def run(self, ctx: UpdateContext) -> StepResult:
         ls_code, ls_out, ls_err = ctx.run_cmd(["pnpm", "ls", "-g"])
@@ -328,12 +313,7 @@ class BunModule(BaseModule):
         return self._availability(ctx) in ("active", "unavailable")
 
     def availability_status(self, ctx: UpdateContext) -> str:
-        return {
-            "not-installed": "[Not Installed]",
-            "no-targets": "[No Targets]",
-            "unavailable": "[Unavailable]",
-            "active": "[Active]",
-        }[self._availability(ctx)]
+        return self.format_availability(self._availability(ctx))
 
     def run(self, ctx: UpdateContext) -> StepResult:
         code, out, err = ctx.run_cmd(["bun", "update", "-g"])
@@ -404,12 +384,7 @@ class MicroModule(BaseModule):
         return self._availability(ctx) in ("active", "unavailable")
 
     def availability_status(self, ctx: UpdateContext) -> str:
-        return {
-            "not-installed": "[Not Installed]",
-            "no-targets": "[No Targets]",
-            "unavailable": "[Unavailable]",
-            "active": "[Active]",
-        }[self._availability(ctx)]
+        return self.format_availability(self._availability(ctx))
 
     def run(self, ctx: UpdateContext) -> StepResult:
         code, out, err = ctx.run_cmd(["micro", "-plugin", "update"])
@@ -475,12 +450,7 @@ class GhExtensionsModule(BaseModule):
         return self._availability(ctx) in ("active", "unavailable")
 
     def availability_status(self, ctx: UpdateContext) -> str:
-        return {
-            "not-installed": "[Not Installed]",
-            "no-targets": "[No Targets]",
-            "unavailable": "[Unavailable]",
-            "active": "[Active]",
-        }[self._availability(ctx)]
+        return self.format_availability(self._availability(ctx))
 
     def run(self, ctx: UpdateContext) -> StepResult:
         code, out, err = ctx.run_cmd(["gh", "extension", "upgrade", "--all"])
@@ -566,12 +536,7 @@ class SkillsModule(BaseModule):
         return self._availability(ctx) in ("active", "unavailable")
 
     def availability_status(self, ctx: UpdateContext) -> str:
-        return {
-            "not-installed": "[Not Installed]",
-            "no-targets": "[No Targets]",
-            "unavailable": "[Unavailable]",
-            "active": "[Active]",
-        }[self._availability(ctx)]
+        return self.format_availability(self._availability(ctx))
 
     def run(self, ctx: UpdateContext) -> StepResult:
         lock_file = self._find_lock_file()
@@ -670,12 +635,7 @@ class AntigravityModule(BaseModule):
         return self._availability(ctx) in ("active", "unavailable")
 
     def availability_status(self, ctx: UpdateContext) -> str:
-        return {
-            "not-installed": "[Not Installed]",
-            "no-targets": "[No Targets]",
-            "unavailable": "[Unavailable]",
-            "active": "[Active]",
-        }[self._availability(ctx)]
+        return self.format_availability(self._availability(ctx))
 
     def run(self, ctx: UpdateContext) -> StepResult:
         code, out, err = ctx.run_cmd(["antigravity", "--update-extensions"])
@@ -763,12 +723,7 @@ class YarnModule(BaseModule):
         return self._availability(ctx) in ("active", "unavailable")
 
     def availability_status(self, ctx: UpdateContext) -> str:
-        return {
-            "not-installed": "[Not Installed]",
-            "no-targets": "[No Targets]",
-            "unavailable": "[Unavailable]",
-            "active": "[Active]",
-        }[self._availability(ctx)]
+        return self.format_availability(self._availability(ctx))
 
     def run(self, ctx: UpdateContext) -> StepResult:
         code, out, err = ctx.run_cmd(["yarn", "global", "upgrade"], timeout=180)
@@ -853,12 +808,7 @@ class PipxModule(BaseModule):
         return self._availability(ctx) in ("active", "unavailable")
 
     def availability_status(self, ctx: UpdateContext) -> str:
-        return {
-            "not-installed": "[Not Installed]",
-            "no-targets": "[No Targets]",
-            "unavailable": "[Unavailable]",
-            "active": "[Active]",
-        }[self._availability(ctx)]
+        return self.format_availability(self._availability(ctx))
 
     def run(self, ctx: UpdateContext) -> StepResult:
         code, out, err = ctx.run_cmd(["pipx", "upgrade-all"], timeout=300)
@@ -945,12 +895,7 @@ class CargoUpdateModule(BaseModule):
         return self._availability(ctx) in ("active", "unavailable")
 
     def availability_status(self, ctx: UpdateContext) -> str:
-        return {
-            "not-installed": "[Not Installed]",
-            "no-targets": "[No Targets]",
-            "unavailable": "[Unavailable]",
-            "active": "[Active]",
-        }[self._availability(ctx)]
+        return self.format_availability(self._availability(ctx))
 
     def run(self, ctx: UpdateContext) -> StepResult:
         code, out, err = ctx.run_cmd(["cargo", "install-update", "-a"], timeout=600)
@@ -1049,12 +994,7 @@ class GemModule(BaseModule):
         return self._availability(ctx) in ("active", "unavailable")
 
     def availability_status(self, ctx: UpdateContext) -> str:
-        return {
-            "not-installed": "[Not Installed]",
-            "no-targets": "[No Targets]",
-            "unavailable": "[Unavailable]",
-            "active": "[Active]",
-        }[self._availability(ctx)]
+        return self.format_availability(self._availability(ctx))
 
     def run(self, ctx: UpdateContext) -> StepResult:
         code, out, err = ctx.run_cmd(["gem", "update", "--system"], timeout=180)
@@ -1141,12 +1081,7 @@ class AsdfModule(BaseModule):
         return self._availability(ctx) in ("active", "unavailable")
 
     def availability_status(self, ctx: UpdateContext) -> str:
-        return {
-            "not-installed": "[Not Installed]",
-            "no-targets": "[No Targets]",
-            "unavailable": "[Unavailable]",
-            "active": "[Active]",
-        }[self._availability(ctx)]
+        return self.format_availability(self._availability(ctx))
 
     def run(self, ctx: UpdateContext) -> StepResult:
         code, out, err = ctx.run_cmd(["asdf", "plugin", "update", "--all"], timeout=120)

@@ -12,6 +12,7 @@ import re
 from typing import ClassVar
 
 from modules.base import BaseModule, UpdateContext, get_os_release
+from reboot import check_system_reboot_required
 from ui import StepResult
 
 
@@ -194,19 +195,7 @@ class PacmanModule(BaseModule):
         upgraded = list(dict.fromkeys(upgraded))
         if upgraded:
             count = len(upgraded)
-            running_rel = (
-                getattr(os.uname(), "release", "") if hasattr(os, "uname") else ""
-            )
-            kernel_removed = bool(
-                running_rel
-                and os.path.isdir("/lib/modules")
-                and not os.path.exists(f"/lib/modules/{running_rel}")
-            )
-            reboot_needed = (
-                kernel_removed
-                or os.path.exists("/run/reboot-needed")
-                or os.path.exists("/var/run/reboot-needed")
-            )
+            reboot_needed, _ = check_system_reboot_required(upgraded_packages=upgraded)
             return StepResult(
                 "ok",
                 f"{count} package{'s' if count != 1 else ''} upgraded",
@@ -286,19 +275,7 @@ class ZypperModule(BaseModule):
         upgraded = list(dict.fromkeys(upgraded))
         if upgraded:
             count = len(upgraded)
-            running_rel = (
-                getattr(os.uname(), "release", "") if hasattr(os, "uname") else ""
-            )
-            kernel_removed = bool(
-                running_rel
-                and os.path.isdir("/lib/modules")
-                and not os.path.exists(f"/lib/modules/{running_rel}")
-            )
-            reboot_needed = (
-                kernel_removed
-                or os.path.exists("/run/reboot-needed")
-                or os.path.exists("/var/run/reboot-needed")
-            )
+            reboot_needed, _ = check_system_reboot_required(upgraded_packages=upgraded)
             return StepResult(
                 "ok",
                 f"{count} package{'s' if count != 1 else ''} upgraded",
@@ -348,19 +325,7 @@ class ApkModule(BaseModule):
         upgraded = list(dict.fromkeys(upgraded))
         if upgraded:
             count = len(upgraded)
-            running_rel = (
-                getattr(os.uname(), "release", "") if hasattr(os, "uname") else ""
-            )
-            kernel_removed = bool(
-                running_rel
-                and os.path.isdir("/lib/modules")
-                and not os.path.exists(f"/lib/modules/{running_rel}")
-            )
-            reboot_needed = (
-                kernel_removed
-                or os.path.exists("/run/reboot-needed")
-                or os.path.exists("/var/run/reboot-needed")
-            )
+            reboot_needed, _ = check_system_reboot_required(upgraded_packages=upgraded)
             return StepResult(
                 "ok",
                 f"{count} package{'s' if count != 1 else ''} upgraded",
@@ -408,19 +373,7 @@ class XbpsModule(BaseModule):
         upgraded = list(dict.fromkeys(upgraded))
         if upgraded:
             count = len(upgraded)
-            running_rel = (
-                getattr(os.uname(), "release", "") if hasattr(os, "uname") else ""
-            )
-            kernel_removed = bool(
-                running_rel
-                and os.path.isdir("/lib/modules")
-                and not os.path.exists(f"/lib/modules/{running_rel}")
-            )
-            reboot_needed = (
-                kernel_removed
-                or os.path.exists("/run/reboot-needed")
-                or os.path.exists("/var/run/reboot-needed")
-            )
+            reboot_needed, _ = check_system_reboot_required(upgraded_packages=upgraded)
             return StepResult(
                 "ok",
                 f"{count} package{'s' if count != 1 else ''} upgraded",

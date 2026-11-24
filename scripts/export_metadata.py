@@ -17,6 +17,7 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
+from cli_spec import CLI_FLAGS
 from config import Config
 from modules import get_all_modules
 
@@ -99,100 +100,11 @@ def export_metadata(output_path: str | None = None) -> dict[str, Any]:
 
     cli_flags = [
         {
-            "flags": ["--help", "-h"],
-            "description": "Show help message and exit",
-            "category": "General",
-        },
-        {
-            "flags": ["--version"],
-            "description": "Show installed version and check for latest available release",
-            "category": "General",
-        },
-        {
-            "flags": ["-q", "--quiet"],
-            "description": "Suppress live step progress; show only final summary and errors",
-            "category": "Output",
-        },
-        {
-            "flags": ["-v", "--verbose"],
-            "description": "Stream update command output live; keep internal probes quiet",
-            "category": "Output",
-        },
-        {
-            "flags": ["--notify"],
-            "description": "Send native desktop notification on completion (Linux notify-send / macOS osascript)",
-            "category": "Execution",
-        },
-        {
-            "flags": ["--no-sudo"],
-            "description": "Skip all modules requiring administrator (sudo) privileges",
-            "category": "Execution",
-        },
-        {
-            "flags": ["--no-snapshot"],
-            "description": "Skip protective Btrfs snapshot creation before update",
-            "category": "Protection",
-        },
-        {
-            "flags": ["-f", "--force"],
-            "description": "Force execution (e.g. bypass Btrfs snapshot cooldown)",
-            "category": "Protection",
-        },
-        {
-            "flags": ["--only <modules>"],
-            "description": "Comma-separated module keys or aliases to run (e.g. 'dnf,brew')",
-            "category": "Filtering",
-        },
-        {
-            "flags": ["--skip <modules>"],
-            "description": "Comma-separated module keys to skip",
-            "category": "Filtering",
-        },
-        {
-            "flags": ["-c", "--category <names>"],
-            "description": "Comma-separated categories to run (e.g. 'system', 'dev')",
-            "category": "Filtering",
-        },
-        {
-            "flags": ["-l", "--list"],
-            "description": "List all registered modules and check their system availability",
-            "category": "Discovery",
-        },
-        {
-            "flags": ["--history [COUNT]"],
-            "description": "List recent update runs (default: 10, maximum: 30)",
-            "category": "History",
-        },
-        {
-            "flags": ["--show-log <ID>"],
-            "description": "Show saved command output for a run listed by --history",
-            "category": "History",
-        },
-        {
-            "flags": ["--no-history"],
-            "description": "Do not record this run or its command logs in history",
-            "category": "History",
-        },
-        {
-            "flags": ["-r", "--reboot"],
-            "description": "Reboot system after update if required by kernel or firmware",
-            "category": "Execution",
-        },
-        {
-            "flags": ["--generate-completion [SHELL]"],
-            "description": "Install shell completions for bash, zsh, or fish",
-            "category": "General",
-        },
-        {
-            "flags": ["--edit-config"],
-            "description": "Open configuration file in $EDITOR",
-            "category": "Configuration",
-        },
-        {
-            "flags": ["--config <PATH>"],
-            "description": "Path to custom configuration TOML file",
-            "category": "Configuration",
-        },
+            "flags": item["flags"],
+            "description": item["description"],
+            "category": item["category"],
+        }
+        for item in CLI_FLAGS
     ]
 
     data = {

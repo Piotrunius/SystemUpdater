@@ -29,6 +29,7 @@ if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 
 import sudo
+from colors import colors_enabled
 from completions import (
     generate_bash_completion,
     generate_fish_completion,
@@ -41,12 +42,13 @@ from history_store import (
     classify_run_status,
     print_history,
     print_run_log,
-    redact_text,
 )
 from modules import get_all_modules
 from modules.base import BaseModule, UpdateContext
 from notifications import send_notification
-from ui import UI, StepResult, get_reboot_trigger_details, suppress_terminal_echo
+from reboot import get_reboot_trigger_details
+from redaction import redact_text
+from ui import UI, StepResult, suppress_terminal_echo
 
 
 def git_output(*args, timeout=3):
@@ -167,7 +169,7 @@ class VersionAction(argparse.Action):
             if is_homebrew_install()
             else latest_upstream_version()
         )
-        ui = UI()
+        ui = UI(use_color=sys.stdout.isatty() and colors_enabled())
         ui.print_header("System Updater")
         ui.print_category("Version")
         ui.print_result(
@@ -593,7 +595,8 @@ def main():
     reboot_requested_mode = args.reboot or cfg.reboot
     notify_mode = args.notify or cfg.notifications_enabled
 
-    ctx = UpdateContext(force=args.force, verbose=False)
+    use_color = sys.stdout.isatty() and colors_enabled()
+    ctx = UpdateContext(force=args.force, verbose=False, use_color=use_color)
     all_modules: list[BaseModule] = get_all_modules(cfg)
 
     # List modules mode
@@ -673,7 +676,7 @@ def main():
         sys.exit(130)
 
     ctx.verbose = verbose_mode
-    ui = UI(quiet=quiet_mode, verbose=verbose_mode)
+    ui = UI(quiet=quiet_mode, verbose=verbose_mode, use_color=use_color)
     ui.print_header("System Updater")
 
     results = []

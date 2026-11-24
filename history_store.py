@@ -14,7 +14,11 @@ from typing import Any
 
 from colors import Colors, get_status_marker
 from config import xdg_directory
-from ui import check_packages_require_reboot, is_reboot_eligible_module, redact_text
+from reboot import (
+    check_packages_require_reboot,
+    is_reboot_eligible_module,
+)
+from redaction import redact_text as redact_text
 
 RUN_ID_PATTERN = re.compile(r"^\d{8}T\d{6}Z-[0-9a-f]{8}$")
 
@@ -296,7 +300,6 @@ KNOWN_CATEGORIES: dict[str, str] = {
     "system_packages": "System Core",
     "firmware": "System Core",
     "device_firmware": "System Core",
-    "maintenance": "System Core",
     "apt": "System Core",
     "apt_packages": "System Core",
     "pacman": "System Core",

@@ -37,12 +37,7 @@ class MasModule(BaseModule):
         return self._availability(ctx) in ("active", "unavailable")
 
     def availability_status(self, ctx: UpdateContext) -> str:
-        return {
-            "not-installed": "[Not Installed]",
-            "no-targets": "[No Targets]",
-            "unavailable": "[Unavailable]",
-            "active": "[Active]",
-        }[self._availability(ctx)]
+        return self.format_availability(self._availability(ctx))
 
     def run(self, ctx: UpdateContext) -> StepResult:
         # Check for outdated applications first

@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 if TYPE_CHECKING:
     from ui import StepResult
 
-from colors import Colors
+from colors import Colors, colors_enabled
 from ui import detect_warning
 
 
@@ -134,11 +134,16 @@ def is_linux() -> bool:
 
 class UpdateContext:
     def __init__(
-        self, dry_run: bool = False, force: bool = False, verbose: bool = False
+        self,
+        dry_run: bool = False,
+        force: bool = False,
+        verbose: bool = False,
+        use_color: bool | None = None,
     ):
         self.dry_run = dry_run
         self.force = force
         self.verbose = verbose
+        self.use_color = colors_enabled() if use_color is None else use_color
         self.env = os.environ.copy()
         # Ensure non-interactive environment for all tools
         self.env["DEBIAN_FRONTEND"] = "noninteractive"
@@ -191,14 +196,15 @@ class UpdateContext:
         attempts = 1 + max(0, retries)
         show_live_output = True if display_output is None else display_output
         is_verbose = self.verbose and show_live_output and not sensitive_output
+        c_dim = Colors.DIM if self.use_color else ""
+        c_bold = Colors.BOLD if self.use_color else ""
+        c_reset = Colors.RESET if self.use_color else ""
         if is_verbose:
             self.notify_command_started()
-            from history_store import redact_text
+            from redaction import redact_text
 
             printable_command = shlex.join([redact_text(str(arg)) for arg in cmd])
-            print(
-                f"      {Colors.DIM}${Colors.RESET} {Colors.BOLD}{printable_command}{Colors.RESET}"
-            )
+            print(f"      {c_dim}${c_reset} {c_bold}{printable_command}{c_reset}")
 
         last_code = 1
         last_out = ""
@@ -240,7 +246,7 @@ class UpdateContext:
                         headers=stream_printed_header,
                         current=active_stream,
                     ):
-                        from history_store import redact_text
+                        from redaction import redact_text
 
                         pending_blank = False
                         try:
@@ -259,7 +265,7 @@ class UpdateContext:
                                         else:
                                             if stream_name not in headers:
                                                 print(
-                                                    f"        {Colors.DIM}{stream_name}:{Colors.RESET}",
+                                                    f"        {c_dim}{stream_name}:{c_reset}",
                                                     flush=True,
                                                 )
                                                 headers.add(stream_name)
@@ -267,7 +273,7 @@ class UpdateContext:
                                                 pending_blank = False
                                             elif current[0] != stream_name:
                                                 print(
-                                                    f"        {Colors.DIM}{stream_name}:{Colors.RESET}",
+                                                    f"        {c_dim}{stream_name}:{c_reset}",
                                                     flush=True,
                                                 )
                                                 current[0] = stream_name
@@ -275,12 +281,12 @@ class UpdateContext:
 
                                             if pending_blank:
                                                 print(
-                                                    f"          {Colors.DIM}{Colors.RESET}",
+                                                    f"          {c_dim}{c_reset}",
                                                     flush=True,
                                                 )
                                                 pending_blank = False
                                             print(
-                                                f"          {Colors.DIM}{clean_line}{Colors.RESET}",
+                                                f"          {c_dim}{clean_line}{c_reset}",
                                                 flush=True,
                                             )
                         except OSError:
@@ -522,7 +528,7 @@ class UpdateContext:
         started: float,
         output_streamed: bool = False,
     ) -> None:
-        from history_store import redact_text
+        from redaction import redact_text
 
         def limited_output(value: str) -> str:
             redacted = redact_text(value)
@@ -567,6 +573,17 @@ class BaseModule:
     is_single_entity: bool = False
     unit_name: str = "package"
     unit_name_plural: str = "packages"
+
+    AVAILABILITY_LABELS: ClassVar[dict[str, str]] = {
+        "not-installed": "[Not Installed]",
+        "no-targets": "[No Targets]",
+        "no-project": "[No Project]",
+        "unavailable": "[Unavailable]",
+        "active": "[Active]",
+    }
+
+    def format_availability(self, state: str) -> str:
+        return self.AVAILABILITY_LABELS.get(state, "[Unavailable]")
 
     def is_available(self, ctx: UpdateContext) -> bool:
         return True
