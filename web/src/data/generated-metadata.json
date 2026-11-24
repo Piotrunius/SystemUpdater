@@ -188,7 +188,7 @@
       "name": "Nuvio Desktop",
       "aliases": [],
       "category": "Applications & Gaming",
-      "description": "Checks GitHub releases for Nuvio, installs RPM, and applies Coil3 Linux image patch",
+      "description": "Checks GitHub releases for Nuvio and installs RPM updates",
       "requires_sudo": true,
       "unit_name": "package",
       "unit_name_plural": "packages",

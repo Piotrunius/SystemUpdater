@@ -1,10 +1,9 @@
 """
-Unified Nuvio Desktop updater and high-quality image bytecode patcher.
-Consolidates check_update.py, update_nuvio.sh, and patch_nuvio.py.
+Nuvio Desktop updater module.
+Checks GitHub releases for NuvioDesktop and installs RPM updates.
 """
 
 import contextlib
-import glob
 import json
 import os
 import platform
@@ -12,7 +11,6 @@ import re
 import tempfile
 import urllib.error
 import urllib.request
-import zipfile
 from typing import Any
 
 from config import xdg_directory
@@ -25,16 +23,13 @@ TAG_FILE = os.path.join(
     "nuvio",
     "installed_release_tag",
 )
-TARGET_DIR = "/opt/nuvio/lib/app"
-CLASS_PATH = "com/nuvio/app/core/ui/AsyncImage_desktopKt.class"
-PATCH_SIGNATURE = b"\x57\x57\x00\x00\x00\x00\x00\x04\xb3"
 
 
 class NuvioModule(BaseModule):
     name = "Nuvio Desktop"
     key = "nuvio"
     category = "Applications & Gaming"
-    description = "Checks GitHub releases for Nuvio, installs RPM, and applies Coil3 Linux image patch"
+    description = "Checks GitHub releases for Nuvio and installs RPM updates"
     requires_sudo = True
     is_single_entity = True
 
@@ -89,16 +84,6 @@ class NuvioModule(BaseModule):
 
         # Check if update is available
         if installed_tag and latest_key <= installed_key:
-            target_jar = self._find_target_jar()
-            if not target_jar:
-                return StepResult(
-                    "warning",
-                    "Nuvio application JAR was not found; image patch was skipped",
-                )
-            # Verify and ensure patch is applied on current jar
-            patch_applied = self._ensure_patched(ctx)
-            if patch_applied:
-                return StepResult("ok", "updated")
             return StepResult("unchanged")
 
         # Update is available
@@ -138,8 +123,7 @@ class NuvioModule(BaseModule):
                         error_output=up_err or up_out,
                     )
 
-            # Record the installed release before patching so a patch failure does not
-            # cause the next run to reinstall the same RPM.
+            # Record the installed release tag
             try:
                 os.makedirs(os.path.dirname(TAG_FILE), exist_ok=True)
                 with open(TAG_FILE, "w") as f:
@@ -148,13 +132,6 @@ class NuvioModule(BaseModule):
                 raise RuntimeError(
                     f"Could not save installed Nuvio release tag: {error}"
                 ) from error
-
-            # Apply the image patch after recording the package upgrade.
-            if not self._ensure_patched(ctx, force=True):
-                return StepResult(
-                    "warning",
-                    "Updated Nuvio, but its application JAR was not found; image patch was skipped",
-                )
 
             return StepResult("ok", "updated")
 
@@ -278,79 +255,3 @@ class NuvioModule(BaseModule):
         req = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(req, timeout=5) as resp:
             return json.loads(resp.read().decode())
-
-    def _find_target_jar(self) -> str | None:
-        matches = glob.glob(os.path.join(TARGET_DIR, "composeApp-desktop-*.jar"))
-        matches = [m for m in matches if not m.endswith(".bak")]
-        return max(matches, key=os.path.getmtime) if matches else None
-
-    def _is_jar_patched(self, jar_path: str) -> bool:
-        try:
-            with zipfile.ZipFile(jar_path, "r") as z:
-                data = z.read(CLASS_PATH)
-                return PATCH_SIGNATURE in data
-        except (OSError, KeyError, zipfile.BadZipFile):
-            return False
-
-    def _patch_bytecode(self, data: bytearray) -> bytearray:
-        if PATCH_SIGNATURE in data:
-            return data
-
-        pattern = re.compile(rb"\x04\xb8..\xa7\x00\x04\x03\xb3", re.DOTALL)
-        match = pattern.search(data)
-        if not match:
-            raise ValueError(
-                "Could not locate AsyncImage_desktopKt.<clinit> bytecode pattern"
-            )
-
-        start = match.start()
-        data[start : start + 8] = bytes(
-            [0x57, 0x57, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04]
-        )
-        return data
-
-    def _ensure_patched(self, ctx: UpdateContext, force: bool = False) -> bool:
-        target_jar = self._find_target_jar()
-        if not target_jar:
-            return False
-
-        if not force and self._is_jar_patched(target_jar):
-            return False
-
-        # Generate a private temporary jar instead of using a predictable /tmp path.
-        fd, temp_patched = tempfile.mkstemp(prefix="nuvio-patched-", suffix=".jar")
-        os.close(fd)
-
-        try:
-            with zipfile.ZipFile(target_jar, "r") as zin:
-                raw_class = bytearray(zin.read(CLASS_PATH))
-                patched_class = self._patch_bytecode(raw_class)
-
-                with zipfile.ZipFile(
-                    temp_patched, "w", compression=zipfile.ZIP_DEFLATED
-                ) as zout:
-                    for item in zin.infolist():
-                        if item.filename == CLASS_PATH:
-                            zout.writestr(item, patched_class)
-                        else:
-                            zout.writestr(item, zin.read(item.filename))
-
-            # Backup original if not backed up
-            backup_path = f"{target_jar}.bak"
-            if not os.path.exists(backup_path):
-                code, out, err = ctx.run_cmd(
-                    ["sudo", "cp", "-p", target_jar, backup_path]
-                )
-                if code != 0:
-                    raise RuntimeError(f"Could not back up Nuvio jar: {err or out}")
-
-            # Replace with patched jar
-            code, out, err = ctx.run_cmd(["sudo", "cp", "-f", temp_patched, target_jar])
-            if code != 0:
-                raise RuntimeError(f"Could not install patched Nuvio jar: {err or out}")
-            # Clear coil cache
-            ctx.run_cmd(["rm", "-rf", "/tmp/coil3_disk_cache"])
-            return True
-        finally:
-            with contextlib.suppress(FileNotFoundError):
-                os.remove(temp_patched)
