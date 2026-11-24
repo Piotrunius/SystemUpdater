@@ -596,7 +596,12 @@ def main():
     notify_mode = args.notify or cfg.notifications_enabled
 
     use_color = sys.stdout.isatty() and colors_enabled()
-    ctx = UpdateContext(force=args.force, verbose=False, use_color=use_color)
+    ctx = UpdateContext(
+        force=args.force,
+        verbose=False,
+        use_color=use_color,
+        default_timeout=cfg.command_timeout,
+    )
     all_modules: list[BaseModule] = get_all_modules(cfg)
 
     # List modules mode

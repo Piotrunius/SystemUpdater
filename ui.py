@@ -243,6 +243,19 @@ class UI:
         print()
         print(f"{self._c(Colors.BOLD)}{self._c(Colors.CYAN)}{prefix}{dashes}{self._c(Colors.RESET)}")
 
+    def _downgrade_transient_error(
+        self, res: StepResult, module: Any | None = None
+    ) -> None:
+        if res.status == "error":
+            is_core = (
+                module is not None and getattr(module, "category", "") == "System Core"
+            )
+            if not is_core:
+                warn_reason = detect_warning(f"{res.message}\n{res.error_output}")
+                if warn_reason:
+                    res.status = "warning"
+                    res.message = warn_reason
+
     def run_step(
         self,
         label: str,
@@ -264,22 +277,17 @@ class UI:
                     duration=time.time() - start_time,
                 )
                 self.last_interrupted_result = res
-                self._complete_step(res, ctx, command_start, note_start=note_start)
+                self._complete_step(
+                    res, ctx, command_start, note_start=note_start, module=module
+                )
                 raise
             except Exception as e:  # noqa: BLE001
                 res = StepResult("error", str(e), error_output=str(e))
-            if res.status == "error":
-                is_core = (
-                    module is not None
-                    and getattr(module, "category", "") == "System Core"
-                )
-                if not is_core:
-                    warn_reason = detect_warning(f"{res.message}\n{res.error_output}")
-                    if warn_reason:
-                        res.status = "warning"
-                        res.message = warn_reason
+            self._downgrade_transient_error(res, module)
             res.duration = time.time() - start_time
-            self._complete_step(res, ctx, command_start, note_start=note_start)
+            self._complete_step(
+                res, ctx, command_start, note_start=note_start, module=module
+            )
             return res
 
         is_verbose = ctx is not None and getattr(ctx, "verbose", False)
@@ -317,6 +325,7 @@ class UI:
                     command_start,
                     note_start=note_start,
                     show_command_output=is_verbose,
+                    module=module,
                 )
                 self.last_interrupted_result = res
                 dur_val = max(0.1, res.duration)
@@ -337,17 +346,7 @@ class UI:
                 if ctx is not None:
                     ctx._on_command_start = None
 
-            if res.status == "error":
-                is_core = (
-                    module is not None
-                    and getattr(module, "category", "") == "System Core"
-                )
-                if not is_core:
-                    warn_reason = detect_warning(f"{res.message}\n{res.error_output}")
-                    if warn_reason:
-                        res.status = "warning"
-                        res.message = warn_reason
-
+            self._downgrade_transient_error(res, module)
             res.duration = time.time() - start_time
             self._complete_step(
                 res,
@@ -355,6 +354,7 @@ class UI:
                 command_start,
                 note_start=note_start,
                 show_command_output=is_verbose,
+                module=module,
             )
 
             if commands_printed:
@@ -417,6 +417,7 @@ class UI:
             sys.stdout.write("\r\033[K")
             sys.stdout.flush()
 
+        self._downgrade_transient_error(res, module)
         res.duration = time.time() - start_time
         self._complete_step(
             res, ctx, command_start, note_start=note_start, module=module
@@ -424,16 +425,6 @@ class UI:
         # Clear the status line
         sys.stdout.write("\r\033[K")
         sys.stdout.flush()
-
-        if res.status == "error":
-            is_core = (
-                module is not None and getattr(module, "category", "") == "System Core"
-            )
-            if not is_core:
-                warn_reason = detect_warning(f"{res.message}\n{res.error_output}")
-                if warn_reason:
-                    res.status = "warning"
-                    res.message = warn_reason
 
         self._print_static_result(label, res, module=module)
         return res

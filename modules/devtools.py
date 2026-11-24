@@ -996,28 +996,138 @@ class GemModule(BaseModule):
     def availability_status(self, ctx: UpdateContext) -> str:
         return self.format_availability(self._availability(ctx))
 
-    def run(self, ctx: UpdateContext) -> StepResult:
-        code, out, err = ctx.run_cmd(["gem", "update", "--system"], timeout=180)
+    @staticmethod
+    def _is_package_manager_managed(gem_bin: str) -> bool:
+        candidates = [gem_bin]
+        try:
+            candidates.append(os.path.realpath(gem_bin))
+        except OSError:
+            pass
+        for path in candidates:
+            lowered = path.lower()
+            if (
+                "linuxbrew" in lowered
+                or "/opt/homebrew/" in lowered
+                or "/usr/local/cellar/" in lowered
+                or "/usr/local/opt/ruby" in lowered
+            ):
+                return True
+            if platform.system() == "Linux" and path == "/usr/bin/gem":
+                return True
+        return False
 
-        combined = (out or "") + "\n" + (err or "")
-        if (
-            "Gem::FilePermissionError" in combined
-            or "write permissions" in combined.lower()
-            or "permission denied" in combined.lower()
-        ):
+    @staticmethod
+    def _parse_updated_gems(output: str) -> list[str]:
+        updated: list[str] = []
+        for line in output.splitlines():
+            line_s = line.strip()
+            if not line_s:
+                continue
+            m_sys = re.search(r"Installing RubyGems\s+", line_s)
+            if m_sys:
+                updated.append("rubygems-update")
+                continue
+            m_upd = re.match(r"Updating\s+([\w\.\-_]+)\s*$", line_s)
+            if m_upd and m_upd.group(1).lower() != "installed":
+                updated.append(m_upd.group(1))
+                continue
+            m_list = re.match(r"Gems updated:\s*(.+)$", line_s)
+            if m_list:
+                for token in m_list.group(1).split():
+                    cleaned = token.strip(",")
+                    if cleaned:
+                        updated.append(cleaned)
+        return list(dict.fromkeys(updated))
+
+    def run(self, ctx: UpdateContext) -> StepResult:
+        gem_bin = ctx.which("gem") or "gem"
+        pm_managed = self._is_package_manager_managed(gem_bin)
+
+        outputs: list[str] = []
+        errors: list[str] = []
+
+        if not pm_managed:
+            s_code, s_out, s_err = ctx.run_cmd([gem_bin, "update", "--system"], timeout=180)
+            s_combined = (s_out or "") + "\n" + (s_err or "")
+            if (
+                "Gem::FilePermissionError" in s_combined
+                or "write permissions" in s_combined.lower()
+                or "permission denied" in s_combined.lower()
+            ):
+                return StepResult(
+                    "warning",
+                    "RubyGems directory is not writable (permission denied)",
+                    error_output=s_err or s_out,
+                )
+            if s_code != 0:
+                return StepResult(
+                    "error", "gem update failed", error_output=s_err or s_out
+                )
+            outputs.append(s_out or "")
+
+            g_code, g_out, g_err = ctx.run_cmd(
+                [gem_bin, "update", "--no-document"], timeout=180
+            )
+            g_combined = (g_out or "") + "\n" + (g_err or "")
+            if (
+                "Gem::FilePermissionError" in g_combined
+                or "write permissions" in g_combined.lower()
+                or "permission denied" in g_combined.lower()
+            ):
+                return StepResult(
+                    "warning",
+                    "RubyGems directory is not writable (permission denied)",
+                    error_output=g_err or g_out,
+                )
+            if g_code != 0:
+                errors.append(g_err or g_out)
+            else:
+                outputs.append(g_out or "")
+        else:
+            # Homebrew or distro-managed Ruby: never run `gem update --system` as it
+            # overwrites Cellar/system files and breaks package manager linking.
+            g_code, g_out, g_err = ctx.run_cmd(
+                [gem_bin, "update", "--user-install", "--no-document"], timeout=180
+            )
+            g_combined = (g_out or "") + "\n" + (g_err or "")
+            if (
+                "Gem::FilePermissionError" in g_combined
+                or "write permissions" in g_combined.lower()
+                or "permission denied" in g_combined.lower()
+            ):
+                return StepResult(
+                    "warning",
+                    "RubyGems directory is not writable (permission denied)",
+                    error_output=g_err or g_out,
+                )
+            if g_code != 0:
+                errors.append(g_err or g_out)
+            else:
+                outputs.append(g_out or "")
+
+        if errors:
             return StepResult(
-                "warning",
-                "RubyGems directory is not writable (permission denied)",
-                error_output=err or out,
+                "error", "gem update failed", error_output="\n".join(errors)
             )
 
-        if code != 0:
-            return StepResult("error", "gem update failed", error_output=err or out)
+        combined_out = "\n".join(outputs)
+        updated = self._parse_updated_gems(combined_out)
+        if updated:
+            count = len(updated)
+            return StepResult(
+                "ok",
+                f"{count} gem{'s' if count != 1 else ''} updated",
+                details=updated,
+            )
 
-        if "Latest version already installed" in out:
+        if (
+            "Latest version already installed" in combined_out
+            or "Nothing to update" in combined_out
+            or not combined_out.strip()
+        ):
             return StepResult("unchanged")
 
-        return StepResult("ok", "1 gem updated", details=["rubygems-update"])
+        return StepResult("unchanged")
 
 
 class MiseModule(BaseModule):

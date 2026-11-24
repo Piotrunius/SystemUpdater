@@ -767,6 +767,34 @@ class SummaryFormattingTests(unittest.TestCase):
         self.assertIn("        \033[2mstdout:\033[0m", raw)
         self.assertIn("          \033[2mhello world\033[0m", raw)
 
+    def test_run_step_quiet_and_verbose_do_not_trigger_reboot_for_homebrew(self):
+        from modules.brew import BrewModule
+
+        brew_mod = BrewModule()
+        for quiet, verbose in ((True, False), (False, True)):
+            res = StepResult("ok", "1 package upgraded", details=["systemd"])
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                completed = UI(
+                    is_interactive=False, quiet=quiet, verbose=verbose
+                ).run_step("Homebrew", lambda r=res: r, module=brew_mod)
+            self.assertFalse(completed.reboot_required)
+
+    def test_no_color_disables_ansi_escape_codes_in_ui(self):
+        import os
+        from unittest.mock import patch
+
+        with patch.dict(os.environ, {"NO_COLOR": "1"}):
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                ui = UI(is_interactive=False, verbose=False)
+                ui.print_header("System Updater")
+                ui.print_result("Flatpak", StepResult("unchanged", "up to date"))
+                ui.print_summary([], 1.0)
+            rendered = out.getvalue()
+            self.assertNotIn("\033[", rendered)
+            self.assertIn("[—] Flatpak: up to date", rendered)
+
 
 if __name__ == "__main__":
     unittest.main()

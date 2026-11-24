@@ -102,25 +102,41 @@ class SoftwareUpdateModule(BaseModule):
     def _parse_available(self, output: str) -> tuple[list[str], bool]:
         items: list[str] = []
         needs_restart = False
+        has_pending_item = False
 
         for line in output.splitlines():
             line_str = line.strip()
-            if not line_str.startswith("*"):
+            if not line_str:
                 continue
 
-            if "action: restart" in line_str.lower():
-                needs_restart = True
+            if line_str.startswith("*"):
+                has_pending_item = False
+                if "action: restart" in line_str.lower():
+                    needs_restart = True
 
-            # Extract Title or Label
-            m_title = re.search(r"Title:\s*([^,]+)", line_str)
-            m_label = re.search(r"\*\s*(?:Label:\s*)?([^,]+)", line_str)
+                m_title = re.search(r"Title:\s*([^,]+)", line_str)
+                m_label = re.search(r"\*\s*(?:Label:\s*)?([^,]+)", line_str)
 
-            if m_title:
-                name = m_title.group(1).strip()
-                items.append(name)
-            elif m_label:
-                name = m_label.group(1).strip()
-                if name.lower() not in ["title", "label"]:
-                    items.append(name)
+                if m_title:
+                    items.append(m_title.group(1).strip())
+                    has_pending_item = True
+                elif m_label:
+                    name = m_label.group(1).strip()
+                    if name.lower() not in ["title", "label"]:
+                        items.append(name)
+                        has_pending_item = True
+                continue
+
+            if has_pending_item and (
+                "title:" in line_str.lower()
+                or "action:" in line_str.lower()
+                or "version:" in line_str.lower()
+                or "recommended:" in line_str.lower()
+            ):
+                if "action: restart" in line_str.lower():
+                    needs_restart = True
+                m_title = re.search(r"Title:\s*([^,]+)", line_str)
+                if m_title and items:
+                    items[-1] = m_title.group(1).strip()
 
         return list(dict.fromkeys(items)), needs_restart

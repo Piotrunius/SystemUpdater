@@ -8,13 +8,12 @@ from modules.devtools import GemModule
 class GemModuleTests(unittest.TestCase):
     def test_gem_module_reports_single_package_updated_with_version_diff(self):
         context = UpdateContext()
-        context.which = Mock(return_value="/usr/bin/gem")
+        context.which = Mock(return_value="/home/user/.rbenv/shims/gem")
         context.run_cmd = Mock(
-            return_value=(
-                0,
-                "Installing RubyGems 4.0.22\nRubyGems 4.0.22 installed\n",
-                "",
-            )
+            side_effect=[
+                (0, "Installing RubyGems 4.0.22\nRubyGems 4.0.22 installed\n", ""),
+                (0, "Nothing to update\n", ""),
+            ]
         )
 
         result = GemModule().run(context)
@@ -24,9 +23,12 @@ class GemModuleTests(unittest.TestCase):
 
     def test_gem_module_reports_unchanged_when_already_latest(self):
         context = UpdateContext()
-        context.which = Mock(return_value="/usr/bin/gem")
+        context.which = Mock(return_value="/home/user/.rbenv/shims/gem")
         context.run_cmd = Mock(
-            return_value=(0, "Latest version already installed. Done.\n", "")
+            side_effect=[
+                (0, "Latest version already installed. Done.\n", ""),
+                (0, "Nothing to update\n", ""),
+            ]
         )
 
         result = GemModule().run(context)
@@ -34,7 +36,7 @@ class GemModuleTests(unittest.TestCase):
 
     def test_gem_permission_error_returns_warning(self):
         context = UpdateContext()
-        context.which = Mock(return_value="/usr/bin/gem")
+        context.which = Mock(return_value="/home/user/.rbenv/shims/gem")
         context.run_cmd = Mock(
             return_value=(
                 1,
@@ -46,6 +48,22 @@ class GemModuleTests(unittest.TestCase):
         result = GemModule().run(context)
         self.assertEqual(result.status, "warning")
         self.assertIn("not writable", result.message)
+
+    def test_gem_homebrew_ruby_skips_system_update_and_updates_user_gems(self):
+        context = UpdateContext()
+        context.which = Mock(return_value="/home/linuxbrew/.linuxbrew/bin/gem")
+        context.run_cmd = Mock(
+            return_value=(0, "Updating solargraph\nGems updated: solargraph\n", "")
+        )
+
+        result = GemModule().run(context)
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.message, "1 gem updated")
+        self.assertEqual(result.details, ["solargraph"])
+        context.run_cmd.assert_called_once_with(
+            ["/home/linuxbrew/.linuxbrew/bin/gem", "update", "--user-install", "--no-document"],
+            timeout=180,
+        )
 
     def test_gem_macos_system_ruby_availability_returns_no_targets(self):
         from unittest.mock import patch

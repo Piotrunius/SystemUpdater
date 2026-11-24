@@ -139,17 +139,23 @@ class UpdateContext:
         force: bool = False,
         verbose: bool = False,
         use_color: bool | None = None,
+        default_timeout: int | None = None,
     ):
         self.dry_run = dry_run
         self.force = force
         self.verbose = verbose
         self.use_color = colors_enabled() if use_color is None else use_color
+        self.default_timeout = default_timeout
         self.env = os.environ.copy()
-        # Ensure non-interactive environment for all tools
+        # Ensure non-interactive, English-locale environment for reliable parsing
         self.env["DEBIAN_FRONTEND"] = "noninteractive"
         self.env["CI"] = "1"
         self.env["NONINTERACTIVE"] = "1"
         self.env["HOMEBREW_NO_ENV_HINTS"] = "1"
+        if self.env.get("LC_ALL") not in (None, "", "C", "C.UTF-8", "POSIX"):
+            self.env.pop("LC_ALL", None)
+        self.env["LC_MESSAGES"] = "C"
+        self.env["LANGUAGE"] = "C"
         self.status_updater = None
         self.command_log: list[dict[str, Any]] = []
         self.deferred_notes: list[str] = []
@@ -175,7 +181,7 @@ class UpdateContext:
     def run_cmd(
         self,
         cmd: list[str],
-        timeout: int | None = 180,
+        timeout: int | None = None,
         env_extra: dict[str, str] | None = None,
         read_only: bool = False,
         retries: int = 0,
@@ -192,6 +198,14 @@ class UpdateContext:
         run_env = self.env.copy()
         if env_extra:
             run_env.update(env_extra)
+
+        if self.default_timeout is not None:
+            if read_only and timeout is not None:
+                effective_timeout = min(timeout, self.default_timeout)
+            else:
+                effective_timeout = self.default_timeout
+        else:
+            effective_timeout = timeout if timeout is not None else 180
 
         attempts = 1 + max(0, retries)
         show_live_output = True if display_output is None else display_output
@@ -309,7 +323,7 @@ class UpdateContext:
                     output_was_streamed = True
 
                     try:
-                        proc.wait(timeout=timeout)
+                        proc.wait(timeout=effective_timeout)
                     except subprocess.TimeoutExpired:
                         _stop_process_tree(proc)
                         t_out.join(timeout=0.5)
@@ -317,19 +331,8 @@ class UpdateContext:
                         last_code = 124
                         last_out = "".join(out_chunks)
                         last_err = (
-                            f"Command timed out after {timeout}s: {shlex.join(cmd)}"
+                            f"Command timed out after {effective_timeout}s: {shlex.join(cmd)}"
                         )
-                        self._record_command(
-                            cmd,
-                            last_code,
-                            last_out,
-                            last_err,
-                            read_only,
-                            attempt,
-                            started,
-                            output_streamed=True,
-                        )
-                        return last_code, last_out, last_err
                     except KeyboardInterrupt:
                         _stop_process_tree(proc)
                         t_out.join(timeout=0.5)
@@ -346,14 +349,15 @@ class UpdateContext:
                             attempt,
                             started,
                             output_streamed=True,
+                            withhold_output=sensitive_output,
                         )
                         raise
-
-                    t_out.join(timeout=1.0)
-                    t_err.join(timeout=1.0)
-                    last_code = proc.returncode
-                    last_out = "".join(out_chunks)
-                    last_err = "".join(err_chunks)
+                    else:
+                        t_out.join(timeout=1.0)
+                        t_err.join(timeout=1.0)
+                        last_code = proc.returncode
+                        last_out = "".join(out_chunks)
+                        last_err = "".join(err_chunks)
                 except OSError as e:
                     last_code = 1
                     last_out = ""
@@ -370,7 +374,7 @@ class UpdateContext:
                             text=True,
                             errors="replace",
                             env=run_env,
-                            timeout=timeout,
+                            timeout=effective_timeout,
                         )
                         last_code = proc.returncode
                         last_out = (
@@ -387,7 +391,7 @@ class UpdateContext:
                         last_code = 124
                         last_out = ""
                         last_err = (
-                            f"Command timed out after {timeout}s: {shlex.join(cmd)}"
+                            f"Command timed out after {effective_timeout}s: {shlex.join(cmd)}"
                         )
                     except KeyboardInterrupt:
                         self._record_command(
@@ -398,6 +402,7 @@ class UpdateContext:
                             read_only,
                             attempt,
                             started,
+                            withhold_output=sensitive_output,
                         )
                         raise
                     except OSError as e:
@@ -447,7 +452,7 @@ class UpdateContext:
                         t_err.start()
 
                         try:
-                            proc.wait(timeout=timeout)
+                            proc.wait(timeout=effective_timeout)
                         except subprocess.TimeoutExpired:
                             _stop_process_tree(proc)
                             t_out.join(timeout=0.5)
@@ -455,18 +460,8 @@ class UpdateContext:
                             last_code = 124
                             last_out = "".join(out_chunks)
                             last_err = (
-                                f"Command timed out after {timeout}s: {shlex.join(cmd)}"
+                                f"Command timed out after {effective_timeout}s: {shlex.join(cmd)}"
                             )
-                            self._record_command(
-                                cmd,
-                                last_code,
-                                last_out,
-                                last_err,
-                                read_only,
-                                attempt,
-                                started,
-                            )
-                            return last_code, last_out, last_err
                         except KeyboardInterrupt:
                             _stop_process_tree(proc)
                             t_out.join(timeout=0.5)
@@ -482,14 +477,15 @@ class UpdateContext:
                                 read_only,
                                 attempt,
                                 started,
+                                withhold_output=sensitive_output,
                             )
                             raise
-
-                        t_out.join(timeout=1.0)
-                        t_err.join(timeout=1.0)
-                        last_code = proc.returncode
-                        last_out = "".join(out_chunks)
-                        last_err = "".join(err_chunks)
+                        else:
+                            t_out.join(timeout=1.0)
+                            t_err.join(timeout=1.0)
+                            last_code = proc.returncode
+                            last_out = "".join(out_chunks)
+                            last_err = "".join(err_chunks)
                     except OSError as e:
                         last_code = 1
                         last_out = ""
@@ -504,6 +500,7 @@ class UpdateContext:
                 attempt,
                 started,
                 output_streamed=output_was_streamed,
+                withhold_output=sensitive_output,
             )
             if last_code == 0:
                 return 0, last_out, last_err
@@ -527,6 +524,7 @@ class UpdateContext:
         attempt: int,
         started: float,
         output_streamed: bool = False,
+        withhold_output: bool = False,
     ) -> None:
         from redaction import redact_text
 
@@ -550,9 +548,9 @@ class UpdateContext:
             {
                 "command": [redact_text(str(arg)) for arg in cmd],
                 "returncode": returncode,
-                "stdout": limited_output(stdout),
-                "stderr": limited_output(stderr),
-                "output_withheld": False,
+                "stdout": "" if withhold_output else limited_output(stdout),
+                "stderr": "" if withhold_output else limited_output(stderr),
+                "output_withheld": withhold_output,
                 "output_streamed": output_streamed,
                 "attempt": attempt + 1,
                 "duration": round(time.monotonic() - started, 3),

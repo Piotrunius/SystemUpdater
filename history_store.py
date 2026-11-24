@@ -507,9 +507,7 @@ def print_run_log(run: dict[str, Any]) -> None:
             command_text = shlex.join(command.get("command", []))
             print(f"      {c_dim}${c_reset} {c_bold}{command_text}{c_reset}")
             if command.get("output_withheld"):
-                print(
-                    f"        {c_dim}[output withheld for a read-only command]{c_reset}"
-                )
+                print(f"        {c_dim}[output withheld]{c_reset}")
             for stream_name in ("stdout", "stderr"):
                 output = command.get(stream_name, "")
                 if output and output.strip():
