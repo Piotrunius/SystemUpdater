@@ -107,6 +107,22 @@ def _module_requires_reboot(module: dict[str, Any]) -> bool:
     return False
 
 
+def _classify_module_display_status(module: dict[str, Any]) -> str:
+    """Classify a single module's display status using the unified priority hierarchy."""
+    status = str(module.get("status", "unknown"))
+    if status in ("interrupted", "cancelled"):
+        return status
+    if status == "error":
+        return "error"
+    if _module_requires_reboot(module):
+        return "reboot"
+    if status == "warning" or (
+        status != "skipped" and bool(_warning_signatures(module))
+    ):
+        return "warning"
+    return status
+
+
 def classify_run_status(
     run: dict[str, Any], previous_runs: list[dict[str, Any]]
 ) -> str:
@@ -416,11 +432,7 @@ def print_run_log(run: dict[str, Any]) -> None:
     mod_prefix = "── Modules "
     print(f"\n{c_cyan}{mod_prefix}{'─' * max(0, width - len(mod_prefix))}{c_reset}")
     for module in modules:
-        module_status = str(module.get("status", "unknown"))
-        if module_status == "unchanged" and module.get("warnings"):
-            module_status = "warning"
-        elif _module_requires_reboot(module):
-            module_status = "reboot"
+        module_status = _classify_module_display_status(module)
         _, module_label = _status_label(module_status)
         dur_str = f"{float(module.get('duration', 0)):.1f}s"
         print(
@@ -444,11 +456,7 @@ def print_run_log(run: dict[str, Any]) -> None:
             )
 
         message = str(module.get("message", "")).strip()
-        module_status = str(module.get("status", "unknown"))
-        if module_status == "unchanged" and module.get("warnings"):
-            module_status = "warning"
-        elif _module_requires_reboot(module):
-            module_status = "reboot"
+        module_status = _classify_module_display_status(module)
         _, module_label = _status_label(module_status)
         commands = module.get("commands", [])
         error_output = module.get("error_output", "")

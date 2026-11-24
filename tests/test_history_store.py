@@ -630,6 +630,104 @@ class HistoryStoreTests(unittest.TestCase):
         }
         self.assertEqual(classify_run_status(run, []), "updated")
 
+    def test_print_run_log_marks_updated_module_with_warnings_as_warning(self):
+        run = {
+            "id": "20261124T202950Z-2b5a9def",
+            "started_at": "2026-11-24T20:29:50+00:00",
+            "duration": 66.7,
+            "status": "warning",
+            "modules": [
+                {
+                    "name": "Ruby",
+                    "key": "gem",
+                    "category": "Development Environment",
+                    "status": "ok",
+                    "duration": 40.7,
+                    "details": ["date", "json"],
+                    "warnings": ["WARNING: You don't have bin in your PATH"],
+                    "commands": [
+                        {
+                            "command": ["gem", "update", "--user-install"],
+                            "returncode": 0,
+                            "stdout": "Gems updated: date json\n",
+                            "stderr": "WARNING: You don't have bin in your PATH\n",
+                        }
+                    ],
+                }
+            ],
+        }
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            print_run_log(run)
+        rendered = output.getvalue()
+        self.assertIn("[!] Ruby                           warning", rendered)
+        self.assertIn("[!] Ruby · warning", rendered)
+        self.assertIn("- date", rendered)
+        self.assertIn("- json", rendered)
+
+    def test_print_run_log_follows_strict_module_status_priority_hierarchy(self):
+        run = {
+            "id": "20261124T210000Z-abcdef01",
+            "duration": 12.0,
+            "status": "error",
+            "modules": [
+                {
+                    "name": "CancelledMod",
+                    "key": "mod_a",
+                    "category": "System Core",
+                    "status": "interrupted",
+                    "reboot_required": True,
+                    "warnings": ["Warn"],
+                    "duration": 1.0,
+                },
+                {
+                    "name": "ErrorMod",
+                    "key": "mod_b",
+                    "category": "System Core",
+                    "status": "error",
+                    "reboot_required": True,
+                    "warnings": ["Warn"],
+                    "duration": 1.0,
+                },
+                {
+                    "name": "RebootMod",
+                    "key": "system",
+                    "category": "System Core",
+                    "status": "ok",
+                    "reboot_required": True,
+                    "warnings": ["Warn"],
+                    "duration": 2.0,
+                },
+                {
+                    "name": "IgnoredNoiseMod",
+                    "key": "dnf",
+                    "category": "System Core",
+                    "status": "ok",
+                    "warnings": [
+                        "[RPM] file /tmp/x: remove failed: No such file or directory"
+                    ],
+                    "duration": 1.0,
+                },
+                {
+                    "name": "SkippedMod",
+                    "key": "mod_c",
+                    "category": "Containers & Packages",
+                    "status": "skipped",
+                    "warnings": ["Skipped note"],
+                    "duration": 0.1,
+                },
+            ],
+        }
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            print_run_log(run)
+        rendered = output.getvalue()
+        self.assertIn("[~] CancelledMod", rendered)
+        self.assertIn("[✗] ErrorMod", rendered)
+        self.assertIn("[^] RebootMod                      reboot", rendered)
+        self.assertIn("[✓] IgnoredNoiseMod                updated", rendered)
+        self.assertIn("[—] SkippedMod                     skipped", rendered)
+
 
 if __name__ == "__main__":
     unittest.main()
