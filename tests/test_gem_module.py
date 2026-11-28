@@ -49,7 +49,7 @@ class GemModuleTests(unittest.TestCase):
         self.assertEqual(result.status, "warning")
         self.assertIn("not writable", result.message)
 
-    def test_gem_homebrew_ruby_skips_system_update_and_updates_user_gems(self):
+    def test_gem_homebrew_ruby_skips_system_update_and_updates_homebrew_gems(self):
         context = UpdateContext()
         context.which = Mock(return_value="/home/linuxbrew/.linuxbrew/bin/gem")
         context.run_cmd = Mock(
@@ -64,9 +64,26 @@ class GemModuleTests(unittest.TestCase):
             [
                 "/home/linuxbrew/.linuxbrew/bin/gem",
                 "update",
-                "--user-install",
                 "--no-document",
             ],
+            timeout=180,
+        )
+
+    def test_gem_linux_system_ruby_uses_user_install(self):
+        from unittest.mock import patch
+
+        context = UpdateContext()
+        context.which = Mock(return_value="/usr/bin/gem")
+        context.run_cmd = Mock(
+            return_value=(0, "Updating solargraph\nGems updated: solargraph\n", "")
+        )
+
+        with patch("platform.system", return_value="Linux"):
+            result = GemModule().run(context)
+
+        self.assertEqual(result.status, "ok")
+        context.run_cmd.assert_called_once_with(
+            ["/usr/bin/gem", "update", "--user-install", "--no-document"],
             timeout=180,
         )
 

@@ -122,6 +122,21 @@ class ModuleAvailabilityTests(unittest.TestCase):
             "[No Targets]",
         )
         self.assertFalse(
+            bun.is_available(
+                FakeContext(
+                    output="/home/user/.bun/install/global node_modules (0 installed)"
+                )
+            )
+        )
+        self.assertEqual(
+            bun.availability_status(
+                FakeContext(
+                    output="/home/user/.bun/install/global node_modules (0 installed)"
+                )
+            ),
+            "[No Targets]",
+        )
+        self.assertFalse(
             pnpm.is_available(FakeContext(output="No global packages found"))
         )
         self.assertEqual(

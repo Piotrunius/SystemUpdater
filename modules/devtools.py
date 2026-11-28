@@ -79,18 +79,33 @@ class RustupModule(BaseModule):
         def filter_rust_output(text: str) -> str:
             return re.sub(r"\s*\([0-9a-f]{7,12}(?:\s+\d{4}-\d{2}-\d{2})?\)", "", text)
 
+        self_updated = False
+        s_code, s_out, s_err = ctx.run_cmd(
+            ["rustup", "self", "update"],
+            timeout=120,
+            output_filter=filter_rust_output,
+        )
+        s_combined = f"{s_out}\n{s_err}"
+        s_lower = s_combined.lower()
+        if s_code == 0 and (
+            re.search(r"\brustup updated\b", s_combined)
+            or ("rustup" in s_lower and "updated -" in s_lower)
+        ):
+            self_updated = True
+
         code, out, err = ctx.run_cmd(
             ["rustup", "update"], output_filter=filter_rust_output
         )
         if code != 0:
             return StepResult("error", "rustup update failed", error_output=err or out)
 
-        if "unchanged" in out and "update available" not in out:
-            return StepResult("unchanged")
+        details = re.findall(r"([\w\.\-]+)\s+updated\s+-", out)
+        if (self_updated or re.search(r"\brustup updated\b", out)) and (
+            "rustup" not in details
+        ):
+            details.append("rustup")
 
-        matches = re.findall(r"([\w\.\-]+)\s+updated\s+-", out)
-        if matches:
-            details = matches
+        if details:
             count = len(details)
             return StepResult(
                 "ok",
@@ -98,13 +113,8 @@ class RustupModule(BaseModule):
                 details=details,
             )
 
-        m_self = re.search(r"\brustup updated\b", out)
-        if m_self:
-            return StepResult(
-                "ok",
-                "1 toolchain updated",
-                details=["rustup"],
-            )
+        if "unchanged" in out and "update available" not in out:
+            return StepResult("unchanged")
 
         return StepResult("ok", "toolchain updated")
 
@@ -113,8 +123,9 @@ class PipModule(BaseModule):
     name = "Pip"
     key = "pip"
     category = "Development Environment"
-    description = "Upgrades pip user installation to the latest version"
-    is_single_entity = True
+    description = "Upgrades pip and user-installed Python packages"
+    unit_name = "package"
+    unit_name_plural = "packages"
 
     def _get_target(self, ctx: UpdateContext) -> list[str] | None:
         # 1. Standalone pip binary (user pip in ~/.local/bin or system pip)
@@ -151,6 +162,8 @@ class PipModule(BaseModule):
         if not target:
             return StepResult("skipped", "pip not available or externally managed")
 
+        updated: list[str] = []
+
         code, out, err = ctx.run_cmd(target + ["install", "--upgrade", "pip"])
         if code != 0:
             combined = f"{out}\n{err}".lower()
@@ -158,10 +171,52 @@ class PipModule(BaseModule):
                 return StepResult("unchanged")
             return StepResult("error", "pip upgrade failed", error_output=err or out)
 
-        if "Requirement already satisfied" in out:
+        if "Requirement already satisfied" not in out and out.strip():
+            updated.append("pip")
+
+        list_code, list_out, _ = ctx.run_cmd(
+            target + ["list", "--user", "--outdated", "--format=json"],
+            timeout=60,
+            read_only=True,
+        )
+        outdated_names: list[str] = []
+        if list_code == 0 and list_out.strip():
+            try:
+                parsed = json.loads(list_out)
+                if isinstance(parsed, list):
+                    for item in parsed:
+                        if isinstance(item, dict):
+                            name = str(item.get("name", "")).strip()
+                            if name and name.lower() != "pip":
+                                outdated_names.append(name)
+            except json.JSONDecodeError:
+                pass
+
+        if outdated_names:
+            u_code, u_out, u_err = ctx.run_cmd(
+                target + ["install", "--user", "--upgrade", *outdated_names],
+                timeout=300,
+            )
+            u_combined = f"{u_out}\n{u_err}".lower()
+            if u_code != 0 and "externally-managed-environment" not in u_combined:
+                return StepResult(
+                    "error",
+                    "pip user package upgrade failed",
+                    error_output=u_err or u_out,
+                )
+            if u_code == 0:
+                updated.extend(outdated_names)
+
+        if not updated:
             return StepResult("unchanged")
 
-        return StepResult("ok", "updated")
+        details = list(dict.fromkeys(updated))
+        count = len(details)
+        return StepResult(
+            "ok",
+            f"{count} package{'s' if count != 1 else ''} updated",
+            details=details,
+        )
 
 
 class NpmModule(BaseModule):
@@ -303,6 +358,8 @@ class BunModule(BaseModule):
         if (
             "no package.json was found" in output
             or "no global packages" in output
+            or "(0 installed)" in output
+            or re.search(r"\b0\s+installed\b", output) is not None
             or not output
             or output == "node_modules"
         ):
@@ -1068,7 +1125,7 @@ class GemModule(BaseModule):
         return self.format_availability(self._availability(ctx))
 
     @staticmethod
-    def _is_package_manager_managed(gem_bin: str) -> bool:
+    def _is_homebrew_managed(gem_bin: str) -> bool:
         candidates = [gem_bin]
         try:
             candidates.append(os.path.realpath(gem_bin))
@@ -1083,9 +1140,24 @@ class GemModule(BaseModule):
                 or "/usr/local/opt/ruby" in lowered
             ):
                 return True
-            if platform.system() == "Linux" and path == "/usr/bin/gem":
-                return True
         return False
+
+    @staticmethod
+    def _is_system_gem(gem_bin: str) -> bool:
+        candidates = [gem_bin]
+        try:
+            candidates.append(os.path.realpath(gem_bin))
+        except OSError:
+            pass
+        return platform.system() == "Linux" and any(
+            path == "/usr/bin/gem" for path in candidates
+        )
+
+    @staticmethod
+    def _is_package_manager_managed(gem_bin: str) -> bool:
+        return GemModule._is_homebrew_managed(gem_bin) or GemModule._is_system_gem(
+            gem_bin
+        )
 
     @staticmethod
     def _parse_updated_gems(output: str) -> list[str]:
@@ -1159,9 +1231,14 @@ class GemModule(BaseModule):
         else:
             # Homebrew or distro-managed Ruby: never run `gem update --system` as it
             # overwrites Cellar/system files and breaks package manager linking.
-            g_code, g_out, g_err = ctx.run_cmd(
-                [gem_bin, "update", "--user-install", "--no-document"], timeout=180
+            # Homebrew gemdir is user-writable so update Homebrew gems directly;
+            # distro /usr/bin/gem requires --user-install.
+            gem_args = (
+                [gem_bin, "update", "--user-install", "--no-document"]
+                if self._is_system_gem(gem_bin)
+                else [gem_bin, "update", "--no-document"]
             )
+            g_code, g_out, g_err = ctx.run_cmd(gem_args, timeout=180)
             g_combined = (g_out or "") + "\n" + (g_err or "")
             if (
                 "Gem::FilePermissionError" in g_combined

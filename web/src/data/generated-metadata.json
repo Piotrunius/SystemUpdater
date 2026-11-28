@@ -400,7 +400,7 @@
       "name": "Pip",
       "aliases": [],
       "category": "Development Environment",
-      "description": "Upgrades pip user installation to the latest version",
+      "description": "Upgrades pip and user-installed Python packages",
       "requires_sudo": false,
       "unit_name": "package",
       "unit_name_plural": "packages",

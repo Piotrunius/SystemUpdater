@@ -50,6 +50,20 @@ class DevtoolsModulesTests(unittest.TestCase):
 
         self.assertEqual(result.status, "unchanged")
 
+    def test_rustup_runs_self_update_and_reports_rustup_when_toolchains_unchanged(self):
+        context = UpdateContext()
+        context.run_cmd = Mock(
+            side_effect=[
+                (0, "info: rustup updated to 1.29.3\n", ""),
+                (0, "stable-x86_64-unknown-linux-gnu unchanged - rustc 1.100.1\n", ""),
+            ]
+        )
+
+        result = RustupModule().run(context)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.details, ["rustup"])
+
     def test_gh_extension_upgrade_parses_extension_names(self):
         context = UpdateContext()
         output = "✓ Upgraded dlvhdr/gh-dash to v3.15.0\n✓ Upgraded seachicken/gh-poi\n"

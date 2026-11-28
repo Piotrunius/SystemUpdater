@@ -58,6 +58,54 @@ class PipModuleTests(unittest.TestCase):
         result = mod.run(context)
         self.assertEqual(result.status, "unchanged")
 
+    def test_pip_module_upgrades_outdated_user_packages(self):
+        context = UpdateContext()
+        context.which = Mock(
+            side_effect=lambda name: (
+                "/home/piotrunius/.local/bin/pip3" if name in ("pip3", "pip") else None
+            )
+        )
+
+        def mock_run_cmd(cmd, **kwargs):
+            if cmd == [
+                "/home/piotrunius/.local/bin/pip3",
+                "install",
+                "--upgrade",
+                "pip",
+            ]:
+                return 0, "Requirement already satisfied: pip\n", ""
+            if cmd == [
+                "/home/piotrunius/.local/bin/pip3",
+                "list",
+                "--user",
+                "--outdated",
+                "--format=json",
+            ]:
+                return (
+                    0,
+                    (
+                        '[{"name": "fastapi", "version": "0.141.1", "latest_version": "0.165.0"}, '
+                        '{"name": "httpx", "version": "0.28.1", "latest_version": "0.29.0"}]'
+                    ),
+                    "",
+                )
+            if cmd == [
+                "/home/piotrunius/.local/bin/pip3",
+                "install",
+                "--user",
+                "--upgrade",
+                "fastapi",
+                "httpx",
+            ]:
+                return 0, "Successfully installed fastapi-0.165.0 httpx-0.29.0\n", ""
+            return 0, "", ""
+
+        context.run_cmd = Mock(side_effect=mock_run_cmd)
+        result = PipModule().run(context)
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.message, "2 packages updated")
+        self.assertEqual(result.details, ["fastapi", "httpx"])
+
 
 if __name__ == "__main__":
     unittest.main()
