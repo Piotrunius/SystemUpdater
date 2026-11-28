@@ -795,6 +795,56 @@ class SummaryFormattingTests(unittest.TestCase):
             self.assertNotIn("\033[", rendered)
             self.assertIn("[—] Flatpak: up to date", rendered)
 
+    def test_complete_step_ignores_json_and_pip_progress_lines_for_deprecated_package(
+        self,
+    ):
+        ctx = UpdateContext(verbose=False)
+        ctx.command_log.append(
+            {
+                "command": ["pip3", "list", "--user", "--outdated", "--format=json"],
+                "returncode": 0,
+                "stdout": '[{"name": "Deprecated", "version": "1.3.1", "latest_version": "3.0.1"}]\n',
+                "stderr": "",
+            }
+        )
+        ctx.command_log.append(
+            {
+                "command": ["pip3", "install", "--user", "--upgrade", "Deprecated"],
+                "returncode": 0,
+                "stdout": (
+                    "Collecting Deprecated\n"
+                    "Downloading deprecated-3.0.1-py3-none-any.whl (22 kB)\n"
+                    "Attempting uninstall: Deprecated\n"
+                    "Successfully uninstalled Deprecated-1.3.1\n"
+                    "Successfully installed Deprecated-3.0.1\n"
+                ),
+                "stderr": "ERROR: pip's dependency resolver conflict\n",
+            }
+        )
+        ui = UI(is_interactive=False, verbose=False)
+        res = StepResult("ok", "1 package updated", details=["Deprecated"])
+        ui._complete_step(res, ctx, 0, 0)
+        self.assertEqual(res.warnings, ["ERROR: pip's dependency resolver conflict"])
+
+    def test_summary_displays_pip_updated_package_details(self):
+        ui = UI(is_interactive=False, verbose=False)
+        results = [
+            {
+                "name": "Pip",
+                "key": "pip",
+                "result": StepResult(
+                    "ok", "2 packages updated", details=["fastapi", "httpx"]
+                ),
+            }
+        ]
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            ui.print_summary(results, 2.0)
+        plain = re.sub(r"\x1b\[[0-9;]*m", "", out.getvalue())
+        self.assertIn("• Pip: 2 packages updated", plain)
+        self.assertIn("- fastapi", plain)
+        self.assertIn("- httpx", plain)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -115,6 +115,31 @@ IGNORED_DIAGNOSTIC_SUBSTRINGS = (
     "Some casks with `auto_updates true`",
 )
 
+IGNORED_DIAGNOSTIC_PREFIXES = (
+    "Requirement already satisfied:",
+    "Collecting ",
+    "Downloading ",
+    "Using cached ",
+    "Installing collected packages:",
+    "Attempting uninstall:",
+    "Found existing installation:",
+    "Uninstalling ",
+    "Successfully uninstalled ",
+    "Successfully installed ",
+    "Gems updated:",
+)
+
+
+def _is_non_diagnostic_progress_line(line: str) -> bool:
+    stripped = line.strip()
+    if not stripped:
+        return True
+    if (stripped.startswith("[{") and stripped.endswith("}]")) or (
+        stripped.startswith("{") and stripped.endswith("}")
+    ):
+        return True
+    return stripped.startswith(IGNORED_DIAGNOSTIC_PREFIXES)
+
 
 NON_FATAL_PATTERNS = [
     (
@@ -470,6 +495,8 @@ class UI:
             for output in outputs:
                 for line in output.splitlines():
                     if any(ign in line for ign in IGNORED_DIAGNOSTIC_SUBSTRINGS):
+                        continue
+                    if _is_non_diagnostic_progress_line(line):
                         continue
                     if DIAGNOSTIC_LINE_PATTERN.search(line):
                         warning_lines.append(line.strip())
@@ -886,8 +913,6 @@ SINGLE_ENTITY_NAMES = {
     "oh my zsh",
     "systemupdater",
     "self update",
-    "pip",
-    "python pip",
     "poetry",
     "python poetry",
     "ghcup",
@@ -904,7 +929,6 @@ SINGLE_ENTITY_KEYS = {
     "nuvio",
     "omz",
     "self_update",
-    "pip",
     "poetry",
     "ghcup",
     "flutter",
