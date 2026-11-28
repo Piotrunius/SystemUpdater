@@ -794,7 +794,7 @@ class YarnModule(BaseModule):
 
 
 class UvModule(BaseModule):
-    name = "uv"
+    name = "Uv"
     key = "uv"
     category = "Development Environment"
     description = "Updates uv executable and all installed uv tools"
@@ -1341,7 +1341,7 @@ class MiseModule(BaseModule):
 
 
 class AsdfModule(BaseModule):
-    name = "asdf"
+    name = "Asdf"
     key = "asdf"
     category = "Development Environment"
     description = "Updates asdf version manager plugins"

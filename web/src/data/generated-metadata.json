@@ -408,7 +408,7 @@
     },
     {
       "key": "uv",
-      "name": "uv",
+      "name": "Uv",
       "aliases": [],
       "category": "Development Environment",
       "description": "Updates uv executable and all installed uv tools",
@@ -463,7 +463,7 @@
     },
     {
       "key": "pyenv",
-      "name": "pyenv",
+      "name": "Pyenv",
       "aliases": [],
       "category": "Development Environment",
       "description": "Updates pyenv and python definitions via pyenv update",
@@ -551,7 +551,7 @@
     },
     {
       "key": "asdf",
-      "name": "asdf",
+      "name": "Asdf",
       "aliases": [],
       "category": "Development Environment",
       "description": "Updates asdf version manager plugins",

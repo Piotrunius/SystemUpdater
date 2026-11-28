@@ -35,7 +35,7 @@ class PipenvModule(BaseModule):
 
 
 class PyenvModule(BaseModule):
-    name = "pyenv"
+    name = "Pyenv"
     key = "pyenv"
     category = "Development Environment"
     description = "Updates pyenv and python definitions via pyenv update"
