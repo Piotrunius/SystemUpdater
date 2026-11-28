@@ -123,6 +123,7 @@ alias update="sysupdate"
 | `--no-history`                              | Do not record this run or its command logs in history                              |
 | `--history [COUNT]`                         | List recent runs (default 10, maximum 30)                                          |
 | `--show-log RUN_ID`                         | Show the saved details for a run                                                   |
+| `--last`                                    | Show the saved details for the most recent run                                     |
 
 Use `sysupdate --help` for the options supported by the installed version.
 
@@ -265,7 +266,7 @@ Run history is stored under `~/.local/state/sysupdate/history/`, or `$XDG_STATE_
 - Developer ecosystem tokens (GitHub PATs, GitLab tokens, Slack, AWS Access Keys, OpenAI/Anthropic/HuggingFace API keys, PyPI, and npm tokens)
 - Quoted and unquoted sensitive flags and environment variable assignments (`--password`, `token=`, `"apiKey":`, etc.)
 
-`sysupdate --history` lists saved runs. Use a run ID with `sysupdate --show-log RUN_ID` to inspect module statuses, commands, exit codes, and captured output. Warning details are included in the relevant module output.
+`sysupdate --history` lists saved runs. Use `sysupdate --last` to inspect the most recent run directly, or pass a run ID with `sysupdate --show-log RUN_ID` to inspect module statuses, commands, exit codes, and captured output. Warning details are included in the relevant module output.
 
 ## Development
 

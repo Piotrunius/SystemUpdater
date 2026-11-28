@@ -511,6 +511,11 @@ Examples:
         metavar="RUN_ID",
         help="Show saved command output for a run listed by --history",
     )
+    history_group.add_argument(
+        "--last",
+        action="store_true",
+        help="Show saved command output for the most recent update run",
+    )
     parser.add_argument(
         "--no-history",
         action="store_true",
@@ -731,6 +736,18 @@ def main():
             run_data["status"] = classify_run_status(
                 run_data, previous_runs[matching_index + 1 :]
             )
+        print_run_log(run_data)
+        sys.exit(0)
+    if args.last:
+        previous_runs = history_store.list_runs(30)
+        if not previous_runs:
+            print("No saved update runs found.", file=sys.stderr)
+            sys.exit(1)
+        latest = previous_runs[0]
+        latest_id = str(latest.get("id", ""))
+        loaded = history_store.load(latest_id) if latest_id else None
+        run_data = dict(loaded if loaded is not None else latest)
+        run_data["status"] = classify_run_status(run_data, previous_runs[1:])
         print_run_log(run_data)
         sys.exit(0)
 

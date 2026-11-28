@@ -223,6 +223,70 @@ class CliExecutionTests(unittest.TestCase):
             self.assertIn("Skipping automatic reboot", err.getvalue())
             mock_subproc.assert_not_called()
 
+    def test_last_flag_prints_most_recent_run_log(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = HistoryStore(Path(tmp) / "history")
+            older_id = "20261127T100000Z-11111111"
+            latest_id = "20261128T120000Z-22222222"
+            store.save(
+                {
+                    "id": older_id,
+                    "started_at": "2026-11-27T10:00:00+00:00",
+                    "duration": 5.0,
+                    "status": "up-to-date",
+                    "modules": [],
+                }
+            )
+            store.save(
+                {
+                    "id": latest_id,
+                    "started_at": "2026-11-28T12:00:00+00:00",
+                    "duration": 12.5,
+                    "status": "updated",
+                    "update_count": 1,
+                    "modules": [
+                        {
+                            "key": "brew",
+                            "name": "Homebrew",
+                            "category": "Containers & Packages",
+                            "status": "ok",
+                            "duration": 12.0,
+                            "details": ["gradle"],
+                        }
+                    ],
+                }
+            )
+
+            out = io.StringIO()
+            with (
+                patch("sys.argv", ["sysupdate", "--last"]),
+                patch("main.HistoryStore", return_value=store),
+                patch("sys.stdout", out),
+                self.assertRaises(SystemExit) as exc,
+            ):
+                main.main()
+
+            self.assertEqual(exc.exception.code, 0)
+            rendered = out.getvalue()
+            self.assertIn(latest_id, rendered)
+            self.assertIn("Homebrew", rendered)
+            self.assertNotIn(older_id, rendered)
+
+    def test_last_flag_exits_with_error_when_history_empty(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = HistoryStore(Path(tmp) / "history")
+            err = io.StringIO()
+            with (
+                patch("sys.argv", ["sysupdate", "--last"]),
+                patch("main.HistoryStore", return_value=store),
+                patch("sys.stderr", err),
+                self.assertRaises(SystemExit) as exc,
+            ):
+                main.main()
+
+            self.assertEqual(exc.exception.code, 1)
+            self.assertIn("No saved update runs found", err.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()

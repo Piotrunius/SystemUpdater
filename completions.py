@@ -156,6 +156,7 @@ _sysupdate() {{
         '(-r --reboot --no-reboot)--no-reboot[Do not reboot automatically after updates]'
         '--history=[List the most recent update runs]:count:'
         '--show-log=[Show the saved command output for a run listed by --history]:run_id:'
+        '--last[Show the saved command output for the most recent update run]'
         '--no-history[Do not record this run or its command logs in history]'
         '--generate-completion=[Generate shell completion script]:shell:(bash zsh fish)'
     )
@@ -241,6 +242,9 @@ def generate_fish_completion(modules: list[BaseModule]) -> str:
             " (default: 10)'"
         ),
         ("complete -c sysupdate -l show-log -x -d 'Show saved details for a run ID'"),
+        (
+            "complete -c sysupdate -l last -d 'Show saved details for the most recent run'"
+        ),
         ("complete -c sysupdate -l no-history -d 'Do not save run record in history'"),
         (
             "complete -c sysupdate -l generate-completion -x -a 'bash zsh"

@@ -146,6 +146,14 @@ CLI_FLAGS: list[dict[str, Any]] = [
         "category": "History",
     },
     {
+        "flags": ["--last"],
+        "short": "",
+        "long": "--last",
+        "description": "Show saved command output for the most recent update run",
+        "completion_desc": "Show the saved command output for the most recent update run",
+        "category": "History",
+    },
+    {
         "flags": ["--no-history"],
         "short": "",
         "long": "--no-history",
