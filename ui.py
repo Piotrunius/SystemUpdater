@@ -113,6 +113,8 @@ IGNORED_DIAGNOSTIC_SUBSTRINGS = (
     "Temporary files retained at",
     "/private/tmp/cask-",
     "Some casks with `auto_updates true`",
+    "already initialized constant RDoc::",
+    "gems/rdoc-",
 )
 
 IGNORED_DIAGNOSTIC_PREFIXES = (

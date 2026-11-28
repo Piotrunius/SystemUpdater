@@ -801,13 +801,40 @@ class UvModule(BaseModule):
     unit_name = "tool"
     unit_name_plural = "tools"
 
+    @staticmethod
+    def _is_package_manager_managed(uv_bin: str | None) -> bool:
+        if not uv_bin:
+            return False
+        candidates = [uv_bin]
+        try:
+            candidates.append(os.path.realpath(uv_bin))
+        except OSError:
+            pass
+        for path in candidates:
+            lowered = path.lower()
+            if (
+                "linuxbrew" in lowered
+                or "/opt/homebrew/" in lowered
+                or "/usr/local/cellar/" in lowered
+                or "/usr/local/opt/uv" in lowered
+            ):
+                return True
+            if platform.system() == "Linux" and path in ("/usr/bin/uv", "/bin/uv"):
+                return True
+        return False
+
     def is_available(self, ctx: UpdateContext) -> bool:
         return ctx.which("uv") is not None
 
     def run(self, ctx: UpdateContext) -> StepResult:
-        self_code, self_out, self_err = ctx.run_cmd(
-            ["uv", "self", "update"], timeout=30
-        )
+        pm_managed = self._is_package_manager_managed(ctx.which("uv"))
+        self_code = 0
+        self_out = ""
+        self_err = ""
+        if not pm_managed:
+            self_code, self_out, self_err = ctx.run_cmd(
+                ["uv", "self", "update"], timeout=30
+            )
         code, out, err = ctx.run_cmd(["uv", "tool", "upgrade", "--all"], timeout=180)
         if code != 0:
             return StepResult(
@@ -815,7 +842,7 @@ class UvModule(BaseModule):
             )
 
         self_updated = False
-        if self_code != 0:
+        if not pm_managed and self_code != 0:
             self_output_combined = (self_err + " " + self_out).lower()
             is_pm_managed = any(
                 phrase in self_output_combined
@@ -833,7 +860,7 @@ class UvModule(BaseModule):
                     "uv tools were checked, but uv itself could not be updated",
                     error_output=self_err or self_out,
                 )
-        else:
+        elif not pm_managed:
             self_combined = f"{self_out}\n{self_err}".lower()
             if self_combined.strip() and not any(
                 phrase in self_combined

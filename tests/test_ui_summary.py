@@ -845,6 +845,30 @@ class SummaryFormattingTests(unittest.TestCase):
         self.assertIn("- fastapi", plain)
         self.assertIn("- httpx", plain)
 
+    def test_complete_step_ignores_homebrew_ruby_rdoc_duplicate_constant_warnings(self):
+        ctx = UpdateContext(verbose=False)
+        ctx.command_log.append(
+            {
+                "command": [
+                    "/home/linuxbrew/.linuxbrew/bin/gem",
+                    "update",
+                    "--no-document",
+                ],
+                "returncode": 0,
+                "stdout": "Updating installed gems\nNothing to update\n",
+                "stderr": (
+                    "/home/linuxbrew/.linuxbrew/Cellar/ruby/4.0.10/lib/ruby/gems/4.0.0/gems/rdoc-7.0.4/lib/rdoc/version.rb:8: "
+                    "warning: already initialized constant RDoc::VERSION\n"
+                    "/home/linuxbrew/.linuxbrew/lib/ruby/gems/4.0.0/gems/rdoc-8.1.0/lib/rdoc/version.rb:8: "
+                    "warning: previous definition of VERSION was here\n"
+                ),
+            }
+        )
+        ui = UI(is_interactive=False, verbose=False)
+        res = StepResult("unchanged")
+        ui._complete_step(res, ctx, 0, 0)
+        self.assertEqual(res.warnings, [])
+
 
 if __name__ == "__main__":
     unittest.main()

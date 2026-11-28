@@ -79,6 +79,7 @@ class DevtoolsModulesTests(unittest.TestCase):
         from modules.devtools import UvModule
 
         context = UpdateContext()
+        context.which = Mock(return_value="/home/user/.local/bin/uv")
         context.run_cmd = Mock(
             side_effect=[
                 (0, "Updating uv from v0.6.0 to v0.6.1\n", ""),
@@ -88,6 +89,19 @@ class DevtoolsModulesTests(unittest.TestCase):
         result = UvModule().run(context)
         self.assertEqual(result.status, "ok")
         self.assertEqual(result.details, ["uv"])
+
+    def test_uv_skips_self_update_when_managed_by_homebrew(self):
+        from modules.devtools import UvModule
+
+        context = UpdateContext()
+        context.which = Mock(return_value="/home/linuxbrew/.linuxbrew/bin/uv")
+        context.run_cmd = Mock(return_value=(0, "", "Nothing to upgrade\n"))
+
+        result = UvModule().run(context)
+        self.assertEqual(result.status, "unchanged")
+        context.run_cmd.assert_called_once_with(
+            ["uv", "tool", "upgrade", "--all"], timeout=180
+        )
 
     def test_mise_composer_poetry_handle_package_manager_managed_self_update(self):
         from modules.devtools import ComposerModule, MiseModule, PoetryModule
